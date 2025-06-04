@@ -130,7 +130,7 @@ public class ResourceWatcher<TEntity>(
         }
     }
 
-    protected virtual async Task OnEventAsync(WatchEventType type, TEntity entity, CancellationToken cancellationToken)
+    protected virtual async Task<Result<TEntity>> OnEventAsync(WatchEventType type, TEntity entity, CancellationToken cancellationToken)
     {
         switch (type)
         {
@@ -138,15 +138,13 @@ public class ResourceWatcher<TEntity>(
                 if (_entityCache.TryAdd(entity.Uid(), entity.Generation() ?? 0))
                 {
                     // Only perform reconciliation if the entity was not already in the cache.
-                    await ReconcileModificationAsync(entity, cancellationToken);
+                    return await ReconcileModificationAsync(entity, cancellationToken);
                 }
-                else
-                {
-                    logger.LogDebug(
-                        """Received ADDED event for entity "{Kind}/{Name}" which was already in the cache. Skip event.""",
-                        entity.Kind,
-                        entity.Name());
-                }
+
+                logger.LogDebug(
+                    """Received ADDED event for entity "{Kind}/{Name}" which was already in the cache. Skip event.""",
+                    entity.Kind,
+                    entity.Name());
 
                 break;
             case WatchEventType.Modified:
@@ -162,22 +160,20 @@ public class ResourceWatcher<TEntity>(
                                 """Entity "{Kind}/{Name}" modification did not modify generation. Skip event.""",
                                 entity.Kind,
                                 entity.Name());
-                            return;
+                            return Result<TEntity>.ForSuccess(entity);
                         }
 
                         // update cached generation since generation now changed
                         _entityCache.TryUpdate(entity.Uid(), entity.Generation() ?? 1, cachedGeneration);
-                        await ReconcileModificationAsync(entity, cancellationToken);
-                        break;
+                        return await ReconcileModificationAsync(entity, cancellationToken);
                     case { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }:
-                        await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
-                        break;
+                        return await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
                 }
 
                 break;
             case WatchEventType.Deleted:
-                await ReconcileDeletionAsync(entity, cancellationToken);
-                break;
+                return await ReconcileDeletionAsync(entity, cancellationToken);
+
             default:
                 logger.LogWarning(
                     """Received unsupported event "{EventType}" for "{Kind}/{Name}".""",
@@ -186,6 +182,8 @@ public class ResourceWatcher<TEntity>(
                     entity.Name());
                 break;
         }
+
+        return Result<TEntity>.ForSuccess(entity);
     }
 
     private async Task WatchClientEventsAsync(CancellationToken stoppingToken)
@@ -220,7 +218,24 @@ public class ResourceWatcher<TEntity>(
 
                     try
                     {
-                        await OnEventAsync(type, entity, stoppingToken);
+                        requeue.Remove(entity);
+                        var result = await OnEventAsync(type, entity, stoppingToken);
+
+                        if (result.RequeueAfter.HasValue)
+                        {
+                            requeue.Enqueue(result.Entity, result.RequeueAfter.Value);
+                        }
+
+                        if (result.IsFailure)
+                        {
+                            logger.LogError(
+                                result.Error,
+                                "Reconciliation of {EventType} for {Kind}/{Name} failed with message '{Message}'.",
+                                type,
+                                entity.Kind,
+                                entity.Name(),
+                                result.ErrorMessage);
+                        }
                     }
                     catch (KubernetesException e) when (e.Status.Code is (int)HttpStatusCode.GatewayTimeout)
                     {
@@ -234,13 +249,8 @@ public class ResourceWatcher<TEntity>(
                     }
                     catch (Exception e)
                     {
-                        LogReconciliationFailed(e);
-                    }
-
-                    void LogReconciliationFailed(Exception exception)
-                    {
                         logger.LogError(
-                            exception,
+                            e,
                             "Reconciliation of {EventType} for {Kind}/{Name} failed.",
                             type,
                             entity.Kind,
@@ -308,26 +318,28 @@ public class ResourceWatcher<TEntity>(
         await Task.Delay(delay);
     }
 
-    private async Task ReconcileDeletionAsync(TEntity entity, CancellationToken cancellationToken)
+    private async Task<Result<TEntity>> ReconcileDeletionAsync(TEntity entity, CancellationToken cancellationToken)
     {
-        requeue.Remove(entity);
-        _entityCache.TryRemove(entity.Uid(), out _);
-
         await using var scope = provider.CreateAsyncScope();
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
-        await controller.DeletedAsync(entity, cancellationToken);
+        var result = await controller.DeletedAsync(entity, cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _entityCache.TryRemove(result.Entity.Uid(), out _);
+        }
+
+        return result;
     }
 
-    private async Task ReconcileFinalizersSequentialAsync(TEntity entity, CancellationToken cancellationToken)
+    private async Task<Result<TEntity>> ReconcileFinalizersSequentialAsync(TEntity entity, CancellationToken cancellationToken)
     {
-        requeue.Remove(entity);
         await using var scope = provider.CreateAsyncScope();
 
-        var identifier = entity.Finalizers().FirstOrDefault();
-        if (identifier is null)
-        {
-            return;
-        }
+        // condition to call ReconcileFinalizersSequentialAsync is:
+        // { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }
+        // which implies that there is at least a single finalizer
+        var identifier = entity.Finalizers()[0];
 
         if (scope.ServiceProvider.GetKeyedService<IEntityFinalizer<TEntity>>(identifier) is not
             { } finalizer)
@@ -337,25 +349,33 @@ public class ResourceWatcher<TEntity>(
                 entity.Kind,
                 entity.Name(),
                 identifier);
-            return;
+            return Result<TEntity>.ForSuccess(entity);
         }
 
-        await finalizer.FinalizeAsync(entity, cancellationToken);
+        var result = await finalizer.FinalizeAsync(entity, cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return result;
+        }
+
+        entity = result.Entity;
         entity.RemoveFinalizer(identifier);
-        await client.UpdateAsync(entity, cancellationToken);
+        entity = await client.UpdateAsync(entity, cancellationToken);
+
         logger.LogInformation(
             """Entity "{Kind}/{Name}" finalized with "{Finalizer}".""",
             entity.Kind,
             entity.Name(),
             identifier);
+
+        return Result<TEntity>.ForSuccess(entity, result.RequeueAfter);
     }
 
-    private async Task ReconcileModificationAsync(TEntity entity, CancellationToken cancellationToken)
+    private async Task<Result<TEntity>> ReconcileModificationAsync(TEntity entity, CancellationToken cancellationToken)
     {
-        // Re-queue should requested in the controller reconcile method. Invalidate any existing queues.
-        requeue.Remove(entity);
         await using var scope = provider.CreateAsyncScope();
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
-        await controller.ReconcileAsync(entity, cancellationToken);
+        return await controller.ReconcileAsync(entity, cancellationToken);
     }
 }

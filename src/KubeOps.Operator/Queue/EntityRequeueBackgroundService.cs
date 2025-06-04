@@ -2,6 +2,7 @@
 using k8s.Models;
 
 using KubeOps.Abstractions.Controller;
+using KubeOps.Abstractions.Finalizer;
 using KubeOps.KubernetesClient;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -118,8 +119,21 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
             return;
         }
 
-        await using var scope = provider.CreateAsyncScope();
-        var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
-        await controller.ReconcileAsync(entity, cancellationToken);
+        if (entity.DeletionTimestamp() is not null)
+        {
+            if (entity.Finalizers()?.Count > 0)
+            {
+                var identifier = entity.Finalizers()[0];
+                await using var scope = provider.CreateAsyncScope();
+                var finalizer = scope.ServiceProvider.GetRequiredKeyedService<IEntityFinalizer<TEntity>>(identifier);
+                await finalizer.FinalizeAsync(entity, cancellationToken);
+            }
+        }
+        else
+        {
+            await using var scope = provider.CreateAsyncScope();
+            var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
+            await controller.ReconcileAsync(entity, cancellationToken);
+        }
     }
 }

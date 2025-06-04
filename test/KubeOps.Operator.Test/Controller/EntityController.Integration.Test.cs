@@ -116,16 +116,16 @@ public class EntityControllerIntegrationTest : IntegrationTestBase
 
     private class TestController(InvocationCounter<V1OperatorIntegrationTestEntity> svc) : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public Task ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<Result<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            return Task.CompletedTask;
+            return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
         }
 
-        public Task DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<Result<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            return Task.CompletedTask;
+            return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
         }
     }
 }

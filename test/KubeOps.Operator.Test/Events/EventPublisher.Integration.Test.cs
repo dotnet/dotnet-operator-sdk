@@ -86,7 +86,7 @@ public class EventPublisherIntegrationTest : IntegrationTestBase
         EventPublisher eventPublisher)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public async Task ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public async Task<Result<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             await eventPublisher(entity, "REASON", "message", cancellationToken: cancellationToken);
             svc.Invocation(entity);
@@ -95,11 +95,11 @@ public class EventPublisherIntegrationTest : IntegrationTestBase
             {
                 requeue(entity, TimeSpan.FromMilliseconds(10));
             }
+
+            return Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity);
         }
 
-        public Task DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
-        {
-            return Task.CompletedTask;
-        }
+        public Task<Result<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
     }
 }
