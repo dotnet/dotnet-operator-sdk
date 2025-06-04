@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.HostedServices;
 
-public class LeaderAwareHostedServiceDisposeIntegrationTest : HostedServiceDisposeIntegrationTest
+public sealed class LeaderAwareHostedServiceDisposeIntegrationTest : HostedServiceDisposeIntegrationTest
 {
     protected override void ConfigureHost(HostApplicationBuilder builder)
     {
@@ -14,12 +14,12 @@ public class LeaderAwareHostedServiceDisposeIntegrationTest : HostedServiceDispo
             .AddController<TestController, V1OperatorIntegrationTestEntity>();
     }
 
-    private class TestController : IEntityController<V1OperatorIntegrationTestEntity>
+    private sealed class TestController : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public Task ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task<Result<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
 
-        public Task DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task<Result<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
     }
 }

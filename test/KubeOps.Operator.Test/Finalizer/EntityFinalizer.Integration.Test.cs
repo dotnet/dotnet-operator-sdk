@@ -209,7 +209,7 @@ public class EntityFinalizerIntegrationTest : IntegrationTestBase
             EntityFinalizerAttacher<SecondFinalizer, V1OperatorIntegrationTestEntity> second)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public async Task ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public async Task<Result<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
             if (entity.Name().Contains("first"))
@@ -221,30 +221,32 @@ public class EntityFinalizerIntegrationTest : IntegrationTestBase
             {
                 await second(entity);
             }
+
+            return Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity);
         }
 
-        public Task DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<Result<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            return Task.CompletedTask;
+            return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
         }
     }
 
     private class FirstFinalizer(InvocationCounter<V1OperatorIntegrationTestEntity> svc) : IEntityFinalizer<V1OperatorIntegrationTestEntity>
     {
-        public Task FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<Result<V1OperatorIntegrationTestEntity>> FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            return Task.CompletedTask;
+            return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
         }
     }
 
     private class SecondFinalizer(InvocationCounter<V1OperatorIntegrationTestEntity> svc) : IEntityFinalizer<V1OperatorIntegrationTestEntity>
     {
-        public Task FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<Result<V1OperatorIntegrationTestEntity>> FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            return Task.CompletedTask;
+            return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
         }
     }
 }

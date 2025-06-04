@@ -45,10 +45,10 @@ public class HostedServiceDisposeIntegrationTest : IntegrationTestBase
 
     private class TestController : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public Task ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task<Result<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
 
-        public Task DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task<Result<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
     }
 }

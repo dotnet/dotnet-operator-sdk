@@ -43,5 +43,5 @@ namespace KubeOps.Abstractions.Queue;
 /// }
 /// </code>
 /// </example>
-public delegate void EntityRequeue<TEntity>(TEntity entity, TimeSpan requeueIn)
+public delegate void EntityRequeue<in TEntity>(TEntity entity, TimeSpan requeueIn)
     where TEntity : IKubernetesObject<V1ObjectMeta>;
