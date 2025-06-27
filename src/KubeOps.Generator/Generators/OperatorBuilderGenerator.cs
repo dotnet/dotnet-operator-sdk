@@ -10,8 +10,10 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace KubeOps.Generator.Generators;
 
 [Generator]
-internal class OperatorBuilderGenerator : ISourceGenerator
+internal sealed class OperatorBuilderGenerator : ISourceGenerator
 {
+    private const string BuilderIdentifier = "builder";
+
     public void Initialize(GeneratorInitializationContext context)
     {
     }
@@ -32,7 +34,7 @@ internal class OperatorBuilderGenerator : ISourceGenerator
                     .WithParameterList(ParameterList(
                         SingletonSeparatedList(
                             Parameter(
-                                    Identifier("builder"))
+                                    Identifier(BuilderIdentifier))
                                 .WithModifiers(
                                     TokenList(
                                         Token(SyntaxKind.ThisKeyword)))
@@ -43,15 +45,15 @@ internal class OperatorBuilderGenerator : ISourceGenerator
                             InvocationExpression(
                                 MemberAccessExpression(
                                     SyntaxKind.SimpleMemberAccessExpression,
-                                    IdentifierName("builder"),
+                                    IdentifierName(BuilderIdentifier),
                                     IdentifierName("RegisterControllers")))),
                         ExpressionStatement(
                             InvocationExpression(
                                 MemberAccessExpression(
                                     SyntaxKind.SimpleMemberAccessExpression,
-                                    IdentifierName("builder"),
+                                    IdentifierName(BuilderIdentifier),
                                     IdentifierName("RegisterFinalizers")))),
-                        ReturnStatement(IdentifierName("builder")))))))
+                        ReturnStatement(IdentifierName(BuilderIdentifier)))))))
             .NormalizeWhitespace();
 
         context.AddSource(
