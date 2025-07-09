@@ -17,6 +17,7 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.6"/>
+        <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.3.0" />
     </ItemGroup>
 
     <ItemGroup>

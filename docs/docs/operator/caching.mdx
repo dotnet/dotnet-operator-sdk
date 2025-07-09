@@ -1,0 +1,73 @@
+---
+title: Caching
+description: Caching - Memory and Distributed
+sidebar_position: 7
+---
+
+## ResourceWatcher
+
+The `ResourceWatcher` uses a cache instance to store the `.metadata.generation` value of each observed resource.
+The key for the cache entry is the resource's unique ID (`metadata.uid`).
+
+The primary purpose of the cache is to skip reconciliation cycles for events that do not represent an actual change to a resource's specification (`.spec`).
+
+1. **`MODIFIED` Event Type**:
+    - Kubernetes only increments the `.metadata.generation` value of a resource when its specification (`.spec`) changes.
+      Updates to status fields (`.status`), while also triggering a `MODIFIED` event, do not increase the `generation`.
+    - When a `MODIFIED` event arrives, the `ResourceWatcher` compares the `generation` of the incoming resource with the value stored in the cache.
+    - If the new `generation` is not greater than the cached one, the reconciliation is skipped.
+      This is a critical optimization, as status updates can occur very frequently (e.g., from other controllers) and typically do not require action from your operator.
+    - Only when the `generation` has increased is the resource forwarded for reconciliation, and the new `generation` value is stored in the cache.
+
+2. **`ADDED` Event Type**:
+    - On an `ADDED` event, the watcher checks if the resource is already present in the cache.
+    - This prevents resources that the operator already knows about (e.g., after a watcher restart) from being incorrectly treated as "new" and reconciled again.
+
+3. **`DELETED` Event Type**:
+    - When a resource is deleted, the watcher removes the corresponding entry from the cache to keep the memory clean.
+
+### Default Configuration: In-Memory (L1) Cache
+
+By default, and without any extra configuration, `KubeOps` uses a simple in-memory cache.
+
+- **Advantages**:
+    - Requires zero configuration.
+    - Very fast, as all data is held in the operator pod's memory.
+
+- **Disadvantages**:
+    - The cache is volatile. If the pod restarts, all stored `generation` values are lost, leading to a full reconciliation of all observed resources.
+
+### Advanced Configuration: Distributed (L2) Cache
+
+For robust use in production or HA environments, it could be essential to extend cache with a distributed L2 cache and a backplane.
+This ensures that all operator instances share a consistent state.
+A common setup for this involves using [**Redis**](https://github.com/redis/redis).
+
+### FusionCache
+
+KubeOps utilizes [`FusionCache`](https://github.com/ZiggyCreatures/FusionCache/blob/main/docs/AGentleIntroduction.md) for seamless support of an L1/L2 cache.
+Via `OperatorSettings.ConfigureResourceWatcherEntityCache`, an `Action` is provided that allows extending the standard configuration or
+overwriting it with a customized version.
+
+Here is an example of what a customized configuration with an L2 cache could look like:
+
+```csharp
+builder
+    .Services
+    .AddKubernetesOperator(settings =>
+    {
+        settings.Name = OperatorName;
+        settings.ConfigureResourceWatcherEntityCache =
+            cacheBuilder =>
+                cacheBuilder
+                    .WithCacheKeyPrefix($"{CacheConstants.CacheNames.ResourceWatcher}:")
+                    .WithSerializer(_ => new FusionCacheSystemTextJsonSerializer())
+                    .WithRegisteredDistributedCache()
+                    .WithDefaultEntryOptions(options =>
+                        options.Duration = TimeSpan.MaxValue);
+    })
+```
+
+For an overview of all of FusionCache's features, we refer you to the corresponding documentation:
+
+https://github.com/ZiggyCreatures/FusionCache/blob/main/docs/CacheLevels.md

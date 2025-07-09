@@ -1,11 +1,13 @@
 using System.Text.RegularExpressions;
 
+using ZiggyCreatures.Caching.Fusion;
+
 namespace KubeOps.Abstractions.Builder;
 
 /// <summary>
 /// Operator settings.
 /// </summary>
-public sealed class OperatorSettings
+public sealed partial class OperatorSettings
 {
     private const string DefaultOperatorName = "KubernetesOperator";
     private const string NonCharReplacement = "-";
@@ -15,7 +17,7 @@ public sealed class OperatorSettings
     /// Defaults to "kubernetesoperator" when not set.
     /// </summary>
     public string Name { get; set; } =
-        new Regex(@"(\W|_)", RegexOptions.CultureInvariant).Replace(
+        OperatorNameRegex().Replace(
                 DefaultOperatorName,
                 NonCharReplacement)
             .ToLowerInvariant();
@@ -59,4 +61,14 @@ public sealed class OperatorSettings
     /// The wait timeout if the lease cannot be acquired.
     /// </summary>
     public TimeSpan LeaderElectionRetryPeriod { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Allows configuration of the FusionCache settings for resource watcher entity caching.
+    /// This property is optional and can be used to customize caching behavior for resource watcher entities.
+    /// If not set, a default cache configuration is applied.
+    /// </summary>
+    public Action<IFusionCacheBuilder>? ConfigureResourceWatcherEntityCache { get; set; }
+
+    [GeneratedRegex(@"(\W|_)", RegexOptions.CultureInvariant)]
+    private static partial Regex OperatorNameRegex();
 }

@@ -111,6 +111,9 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         Services.AddSingleton(_settings);
         Services.AddSingleton(new ActivitySource(_settings.Name));
 
+        // add and configure resource watcher entity cache
+        Services.WithResourceWatcherEntityCaching(_settings);
+
         // Add the default configuration and the client separately. This allows external users to override either
         // just the config (e.g. for integration tests) or to replace the whole client, e.g. with a mock.
         // We also add the k8s.IKubernetes as a singleton service, in order to allow to access internal services

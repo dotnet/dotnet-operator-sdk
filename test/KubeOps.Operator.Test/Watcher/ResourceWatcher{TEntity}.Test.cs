@@ -7,12 +7,15 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Constants;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Watcher;
 
 using Microsoft.Extensions.Logging;
 
 using Moq;
+
+using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Test.Watcher;
 
@@ -28,13 +31,27 @@ public sealed class ResourceWatcherTest
         var timedEntityQueue = new TimedEntityQueue<V1Pod>();
         var operatorSettings = new OperatorSettings { Namespace = "unit-test" };
         var kubernetesClient = Mock.Of<IKubernetesClient>();
+        var cache = Mock.Of<IFusionCache>();
+        var cacheProvider = Mock.Of<IFusionCacheProvider>();
         var labelSelector = new DefaultEntityLabelSelector<V1Pod>();
 
         Mock.Get(kubernetesClient)
             .Setup(client => client.WatchAsync<V1Pod>("unit-test", null, null, true, It.IsAny<CancellationToken>()))
             .Returns<string?, string?, string?, bool?, CancellationToken>((_, _, _, _, cancellationToken) => WaitForCancellationAsync<(WatchEventType, V1Pod)>(cancellationToken));
 
-        var resourceWatcher = new ResourceWatcher<V1Pod>(activitySource, logger, serviceProvider, timedEntityQueue, operatorSettings, labelSelector, kubernetesClient);
+        Mock.Get(cacheProvider)
+            .Setup(cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcher)))
+            .Returns(() => cache);
+
+        var resourceWatcher = new ResourceWatcher<V1Pod>(
+            activitySource,
+            logger,
+            serviceProvider,
+            timedEntityQueue,
+            operatorSettings,
+            labelSelector,
+            cacheProvider,
+            kubernetesClient);
 
         // Act.
         // Start and stop the watcher.

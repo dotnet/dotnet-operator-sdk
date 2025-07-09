@@ -12,6 +12,8 @@ using KubeOps.Operator.Queue;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+using ZiggyCreatures.Caching.Fusion;
+
 namespace KubeOps.Operator.Watcher;
 
 internal sealed class LeaderAwareResourceWatcher<TEntity>(
@@ -21,6 +23,7 @@ internal sealed class LeaderAwareResourceWatcher<TEntity>(
     TimedEntityQueue<TEntity> queue,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
+    IFusionCacheProvider cacheProvider,
     IKubernetesClient client,
     IHostApplicationLifetime hostApplicationLifetime,
     LeaderElector elector)
@@ -31,6 +34,7 @@ internal sealed class LeaderAwareResourceWatcher<TEntity>(
         queue,
         settings,
         labelSelector,
+        cacheProvider,
         client)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
