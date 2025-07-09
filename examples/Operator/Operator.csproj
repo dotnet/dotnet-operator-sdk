@@ -17,7 +17,7 @@
     </ItemGroup>
 
 <!--    <PropertyGroup>-->
-<!--        <KubeOpsCli>dotnet run &#45;&#45;project ../../src/KubeOps.Cli/ &#45;&#45; </KubeOpsCli>-->
+<!--        <KubeOpsCli>dotnet run &#45;&#45;project ../../src/KubeOps.Cli/KubeOps.Cli.csproj &#45;&#45;framework net9.0 &#45;&#45; </KubeOpsCli>-->
 <!--    </PropertyGroup>-->
 <!--    <Import Project="..\..\src\KubeOps.Operator\Build\KubeOps.Operator.targets" />-->
 

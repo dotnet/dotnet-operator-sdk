@@ -41,14 +41,41 @@ You can customize the build process by setting the following MSBuild properties 
 </PropertyGroup>
 ```
 
-### Disabling Automatic Generation
+### Disabling or Forcing Automatic Generation
 
-To disable automatic resource generation during build:
+The `GenerateOperatorResources` property controls when Kubernetes resources are generated during the build:
+
+- **`<GenerateOperatorResources>false</GenerateOperatorResources>`**: Disables automatic resource generation for all build configurations.
+- **`<GenerateOperatorResources>true</GenerateOperatorResources>`**: Forces resource generation for all build configurations (including Debug and Release).
+- **Unset or empty**: Resources are generated **only** for `Release` builds (default behavior).
+
+You can use this property in your project file as follows:
 
 ```xml
 <PropertyGroup>
-    <!-- Disable automatic generation -->
+    <!-- Disable automatic generation completely -->
     <GenerateOperatorResources>false</GenerateOperatorResources>
+</PropertyGroup>
+
+<PropertyGroup>
+    <!-- Force automatic generation for all builds -->
+    <GenerateOperatorResources>true</GenerateOperatorResources>
+</PropertyGroup>
+
+<PropertyGroup>
+    <!-- Only generate in Release (default if not set) -->
+    <!-- <GenerateOperatorResources></GenerateOperatorResources> -->
+</PropertyGroup>
+```
+
+#### Conditional Generation Example
+
+You can also conditionally enable or disable generation based on the build configuration:
+
+```xml
+<PropertyGroup>
+    <!-- Disable automatic generation in Debug mode -->
+    <GenerateOperatorResources Condition="'$(Configuration)' == 'Debug'">false</GenerateOperatorResources>
 </PropertyGroup>
 ```
 
@@ -168,3 +195,33 @@ dotnet tool install KubeOps.Cli
    - Verify the output directory exists
    - Check for permission issues
    - Ensure the path is valid for your OS
+
+## Using with the CRD Installer for Local Development
+
+For local development, you may want to not automatically generate resources in Debug mode and have them installed in your cluster. You can combine `GenerateOperatorResources` with the [CRD Installer utility](./utilities) for this purpose.
+
+For example, in your `Program.cs`:
+
+```csharp
+builder.Services
+    .AddKubernetesOperator()
+#if DEBUG
+    .AddCrdInstaller(c =>
+    {
+        c.OverwriteExisting = true;
+        c.DeleteOnShutdown = true;
+    })
+#endif
+    .RegisterComponents();
+```
+
+And in your project file:
+
+```xml
+<PropertyGroup>
+    <!-- Use the default behavior which does not generate resources in Debug mode -->
+    <GenerateOperatorResources></GenerateOperatorResources>
+</PropertyGroup>
+```
+
+This setup ensures that resources are always generated and installed automatically during development, but you can disable or restrict this behavior for production builds as needed.

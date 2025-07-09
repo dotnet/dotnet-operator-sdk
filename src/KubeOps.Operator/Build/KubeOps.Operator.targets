@@ -4,6 +4,7 @@
             <OperatorName Condition="'$(OperatorName)' == ''">$(AssemblyName.ToLowerInvariant())</OperatorName>
             <KubeOpsCli Condition="'$(KubeOpsCli)' == ''">dotnet kubeops</KubeOpsCli>
             <KubeOpsConfigOut Condition="'$(KubeOpsConfigOut)' == ''">$(MSBuildProjectDirectory)\config</KubeOpsConfigOut>
+            <GenerateOperatorResources Condition="'$(GenerateOperatorResources)' == '' And '$(Configuration)' == 'Release'">true</GenerateOperatorResources>
         </PropertyGroup>
     </Target>
 
@@ -45,8 +46,10 @@
         </Exec>
         <Message Importance="high" Condition="$(CliInstalled) == 1"
                  Text="KubeOps CLI is not installed as tool, cannot generate stuff for projects. Please install it with 'dotnet tool install KubeOps.Cli' to use automatic build generation." />
+        <Message Importance="high" Condition="'$(GenerateOperatorResources)' != 'true'"
+                 Text="Property 'GenerateOperatorResources' property did not evaluate to 'true'. Do not generate operator configs." />
         <CallTarget ContinueOnError="true"
                     Targets="GenerateKustomizationConfig"
-                    Condition="$(CliInstalled) == 0" />
+                    Condition="$(CliInstalled) == 0 And '$(GenerateOperatorResources)' == 'true'" />
     </Target>
 </Project>

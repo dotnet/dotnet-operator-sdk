@@ -2,6 +2,7 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Controller;
+using KubeOps.Abstractions.Crds;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Finalizer;
 
@@ -60,4 +61,18 @@ public interface IOperatorBuilder
     IOperatorBuilder AddFinalizer<TImplementation, TEntity>(string identifier)
         where TImplementation : class, IEntityFinalizer<TEntity>
         where TEntity : IKubernetesObject<V1ObjectMeta>;
+
+    /// <summary>
+    /// Adds a hosted service to the operator that installs the CRDs for the operator
+    /// on startup. Note that this will only install the CRDs in the current assembly.
+    /// Also, the operator may be destructive if current installed CRDs are overwritten!
+    /// This is intended for development purposes only.
+    /// </summary>
+    /// <param name="configure">
+    /// Configuration action for the <see cref="CrdInstallerSettings"/>.
+    /// Determines the behavior of the CRD installer, such as whether existing CRDs
+    /// should be overwritten or deleted on shutdown.
+    /// </param>
+    /// <returns>The builder for chaining.</returns>
+    IOperatorBuilder AddCrdInstaller(Action<CrdInstallerSettings>? configure = null);
 }

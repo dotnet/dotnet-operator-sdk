@@ -17,7 +17,7 @@ var cert = generator.Server.CopyServerCertWithPrivateKey();
 
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
-    serverOptions.Listen(IPAddress.Any, port, async listenOptions =>
+    serverOptions.Listen(IPAddress.Any, port, listenOptions =>
     {
         listenOptions.UseHttps(cert);
     });

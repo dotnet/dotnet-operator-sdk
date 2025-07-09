@@ -18,7 +18,7 @@ var cert = generator.Server.CopyServerCertWithPrivateKey();
 // Configure Kestrel to listen on IPv4, use port 443, and use the server certificate
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
-    serverOptions.Listen(IPAddress.Any, port, async listenOptions =>
+    serverOptions.Listen(IPAddress.Any, port, listenOptions =>
     {
         listenOptions.UseHttps(cert);
     });

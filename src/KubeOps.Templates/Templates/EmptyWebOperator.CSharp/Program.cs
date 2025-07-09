@@ -7,6 +7,16 @@ using KubeOps.Operator.Web.Certificates;
 var builder = WebApplication.CreateBuilder(args);
 var opBuilder = builder.Services
     .AddKubernetesOperator()
+//-:cnd:noEmit
+#if DEBUG
+    .AddCrdInstaller(c =>
+    {
+        // Careful, this can be very destructive.
+        // c.OverwriteExisting = true;
+        // c.DeleteOnShutdown = true;
+    })
+#endif
+//+:cnd:noEmit
     .RegisterComponents();
 
 //-:cnd:noEmit
