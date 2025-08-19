@@ -1,8 +1,42 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>buehler/renovate-config", ":disableMajorUpdates"],
-  "ignorePaths": ["_old/", "examples/", "src/KubeOps.Generator/"],
-  "dotnet": {
-    "ignoreDeps": ["StyleCop.Analyzers"]
-  }
+  "extends": ["config:recommended", ":disableDependencyDashboard"],
+  "labels": ["dependencies"],
+  "vulnerabilityAlerts": {
+    "labels": ["dependencies-security"]
+  },
+  "branchConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 0,
+  "automerge": true,
+  "timezone": "Europe/Zurich",
+  "schedule": ["after 9pm", "before 6am"],
+  "packageRules": [
+    {
+      "matchFileNames": ["examples/**/*"],
+      "enabled": false
+    },
+    {
+      "matchManagers": ["dotnet"],
+      "matchDepNames": ["Microsoft.CodeAnalysis.CSharp"],
+      "matchFileNames": ["KubeOps.Generator.csproj"],
+      "enabled": false
+    },
+    {
+      "matchFileNames": ["**/*"],
+      "semanticCommitType": "deps"
+    },
+    {
+      "matchFileNames": ["src/**/*"],
+      "semanticCommitScope": "core"
+    },
+    {
+      "matchFileNames": ["test/**/*"],
+      "semanticCommitScope": "test"
+    },
+    {
+      "matchFileNames": ["docs/**/*"],
+      "semanticCommitScope": "docs"
+    }
+  ]
 }

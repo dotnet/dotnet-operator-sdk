@@ -1,6 +1,7 @@
 # KubeOps Abstractions
 
 [![Nuget](https://img.shields.io/nuget/v/KubeOps.Abstractions?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Abstractions)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.Abstractions?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Abstractions)
 
 This package provides the fundamental building blocks for the KubeOps SDK. It defines the core interfaces, abstract base classes, and [.NET attributes](https://learn.microsoft.com/en-us/dotnet/csharp/advanced-topics/reflection-and-attributes/) used throughout the operator framework.
 

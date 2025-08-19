@@ -1,4 +1,8 @@
-﻿using System.CommandLine;
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the Apache 2.0 License.
+// See the LICENSE file in the project root for more information.
+
+using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.Text;
 
@@ -35,21 +39,21 @@ internal static class OperatorGenerator
                     Arguments.OperatorName,
                     Arguments.SolutionOrProjectFile,
                 };
-            cmd.AddAlias("op");
-            cmd.SetHandler(ctx => Handler(AnsiConsole.Console, ctx));
+            cmd.Aliases.Add("op");
+            cmd.SetAction(result => Handler(AnsiConsole.Console, result));
 
             return cmd;
         }
     }
 
-    internal static async Task Handler(IAnsiConsole console, InvocationContext ctx)
+    internal static async Task<int> Handler(IAnsiConsole console, ParseResult parseResult)
     {
-        var name = ctx.ParseResult.GetValueForArgument(Arguments.OperatorName);
-        var file = ctx.ParseResult.GetValueForArgument(Arguments.SolutionOrProjectFile);
-        var outPath = ctx.ParseResult.GetValueForOption(Options.OutputPath);
-        var format = ctx.ParseResult.GetValueForOption(Options.OutputFormat);
-        var dockerImage = ctx.ParseResult.GetValueForOption(Options.AccessibleDockerImage)!;
-        var dockerImageTag = ctx.ParseResult.GetValueForOption(Options.AccessibleDockerTag)!;
+        var name = parseResult.GetValue(Arguments.OperatorName) ?? "operator";
+        var file = parseResult.GetValue(Arguments.SolutionOrProjectFile);
+        var outPath = parseResult.GetValue(Options.OutputPath);
+        var format = parseResult.GetValue(Options.OutputFormat);
+        var dockerImage = parseResult.GetValue(Options.AccessibleDockerImage)!;
+        var dockerImageTag = parseResult.GetValue(Options.AccessibleDockerTag)!;
 
         var result = new ResultOutput(console, format);
         console.WriteLine("Generate operator resources.");
@@ -61,8 +65,8 @@ internal static class OperatorGenerator
             { Extension: ".sln", Exists: true } => await AssemblyLoader.ForSolution(
                 console,
                 file,
-                ctx.ParseResult.GetValueForOption(Options.SolutionProjectRegex),
-                ctx.ParseResult.GetValueForOption(Options.TargetFramework)),
+                parseResult.GetValue(Options.SolutionProjectRegex),
+                parseResult.GetValue(Options.TargetFramework)),
             { Exists: false } => throw new FileNotFoundException($"The file {file.Name} does not exist."),
             _ => throw new NotSupportedException("Only *.csproj and *.sln files are supported."),
         };
@@ -107,7 +111,7 @@ internal static class OperatorGenerator
             new DeploymentGenerator(format).Generate(result);
 
             console.MarkupLine("[green]Generate CRDs.[/]");
-            new CrdGenerator(parser, Array.Empty<byte>(), format).Generate(result);
+            new CrdGenerator(parser, [], format).Generate(result);
         }
 
         result.Add(
@@ -154,7 +158,7 @@ internal static class OperatorGenerator
 
         if (outPath is not null)
         {
-            if (ctx.ParseResult.GetValueForOption(Options.ClearOutputPath))
+            if (parseResult.GetValue(Options.ClearOutputPath))
             {
                 console.MarkupLine("[yellow]Clear output path.[/]");
                 try
@@ -178,5 +182,7 @@ internal static class OperatorGenerator
         {
             result.Write();
         }
+
+        return ExitCodes.Success;
     }
 }

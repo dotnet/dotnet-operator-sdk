@@ -1,5 +1,7 @@
-﻿using System.CommandLine;
-using System.CommandLine.Invocation;
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the Apache 2.0 License.
+// See the LICENSE file in the project root for more information.
+
 using System.Text;
 
 using FluentAssertions;
@@ -20,31 +22,30 @@ public class InstallIntegrationTest
             "Operator.csproj");
 
     [Fact
-    (Skip = "For some reason, the MetadataReferences are not loaded when the assembly parser is used from a test project.")
+        (Skip =
+            "For some reason, the MetadataReferences are not loaded when the assembly parser is used from a test project.")
     ]
     public async Task Should_Install_Crds_In_Cluster()
     {
         var console = new TestConsole();
         var client = new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig());
         var cmd = Install.Command;
-        var ctx = new InvocationContext(
-            cmd.Parse(ProjectPath, "-f"));
+        var result = cmd.Parse([ProjectPath, "-f"]);
 
-        await Install.Handler(console, client, ctx);
+        await Install.Handler(console, client, result);
     }
 
     [Fact
-    (Skip = "We need to think of a good way to validate the kustomization given there is not real schema published")
+        (Skip = "We need to think of a good way to validate the kustomization given there is not real schema published")
     ]
     public async Task Should_Generate_Valid_Installers_In_Cluster()
     {
         var console = new TestConsole();
         var client = new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig());
         var cmd = OperatorGenerator.Command;
-        var ctx = new InvocationContext(
-            cmd.Parse("operator", "test", ProjectPath));
+        var result = cmd.Parse(["operator", "test", ProjectPath]);
 
-        await OperatorGenerator.Handler(console, ctx);
+        await OperatorGenerator.Handler(console, result);
         console.Output.Should().NotBeNull();
         var separator = console.Lines.GroupBy(x => x).OrderByDescending(x => x.Count()).First().Key;
         var groups = new List<string>();

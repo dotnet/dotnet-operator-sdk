@@ -17,7 +17,7 @@ We use [Renovate Bot](https://renovatebot.com) to automatically update all depen
 
 The KubeOps team and community take security bugs seriously. We appreciate your efforts to responsibly disclose your findings, and will make every effort to acknowledge your contributions.
 
-To report a security vulnerability, please use the [GitHub Security Advisory "Report a Vulnerability" tab](https://github.com/buehler/dotnet-operator-sdk/security/advisories/new).
+To report a security vulnerability, please use the [GitHub Security Advisory "Report a Vulnerability" tab](https://github.com/dotnet/dotnet-operator-sdk/security/advisories/new).
 
 Please include the requested information listed below (as much as you can provide) to help us better understand the nature and scope of the possible issue:
 

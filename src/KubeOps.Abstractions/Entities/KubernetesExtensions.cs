@@ -1,12 +1,17 @@
-﻿using k8s;
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the Apache 2.0 License.
+// See the LICENSE file in the project root for more information.
+
+using k8s;
 using k8s.Models;
 
 namespace KubeOps.Abstractions.Entities;
 
 /// <summary>
-/// Method extensions for <see cref="IKubernetesObject{TMetadata}"/>.
+/// Basic extensions for <see cref="IKubernetesObject{TMetadata}"/>.
+/// Extensions that target the Kubernetes Object and its metadata.
 /// </summary>
-public static class Extensions
+public static class KubernetesExtensions
 {
     /// <summary>
     /// Sets the resource version of the specified Kubernetes object to the specified value.

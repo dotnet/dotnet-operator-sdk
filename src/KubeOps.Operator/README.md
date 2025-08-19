@@ -1,6 +1,7 @@
 # KubeOps Operator
 
 [![NuGet](https://img.shields.io/nuget/v/KubeOps.Operator?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Operator)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.Operator?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Operator)
 
 The `KubeOps.Operator` package provides a framework for building Kubernetes operators in .NET. Built on top of the Kubernetes client libraries for .NET, it offers abstractions and utilities for implementing operators that manage custom resources in a Kubernetes cluster.
 
@@ -14,7 +15,7 @@ dotnet add package KubeOps.Operator
 
 After installation, you can create entities, controllers, finalizers, and other components to implement your operator.
 
-All resources must be registered with the operator builder to be recognized by the SDK and used as operator resources. The [`KubeOps.Generator`](https://buehler.github.io/dotnet-operator-sdk/docs/packages/generator) provides convenience methods to register all components at once.
+All resources must be registered with the operator builder to be recognized by the SDK and used as operator resources. The [`KubeOps.Generator`](https://dotnet.github.io/dotnet-operator-sdk/docs/packages/generator) provides convenience methods to register all components at once.
 
 You'll need to use the Generic Host to run your operator. For a plain operator without webhooks, ASP.NET is not required (unlike v7).
 
@@ -82,7 +83,7 @@ public class V1TestEntity :
 
 ### Controller
 
-A controller reconciles a specific entity type. Implement controllers using the `IEntityController<TEntity>` interface. You can reconcile custom entities or other Kubernetes resources as long as they are registered with the operator. For guidance on reconciling external resources, refer to the [documentation](https://buehler.github.io/dotnet-operator-sdk/).
+A controller reconciles a specific entity type. Implement controllers using the `IEntityController<TEntity>` interface. You can reconcile custom entities or other Kubernetes resources as long as they are registered with the operator. For guidance on reconciling external resources, refer to the [documentation](https://dotnet.github.io/dotnet-operator-sdk/).
 
 Example controller implementation:
 
@@ -170,4 +171,4 @@ public class FinalizerOne : IEntityFinalizer<V1TestEntity>
 
 ## Documentation
 
-For more information, visit the [documentation](https://buehler.github.io/dotnet-operator-sdk/).
+For more information, visit the [documentation](https://dotnet.github.io/dotnet-operator-sdk/).

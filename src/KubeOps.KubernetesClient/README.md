@@ -1,6 +1,7 @@
 # KubeOps Kubernetes Client
 
 [![NuGet](https://img.shields.io/nuget/v/KubeOps.KubernetesClient?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.KubernetesClient)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.KubernetesClient?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.KubernetesClient)
 
 This package provides an enhanced, developer-friendly interface for interacting with the Kubernetes API, built on top of the official [kubernetes-client/csharp](https://github.com/kubernetes-client/csharp) library. While the official client is powerful, it often requires verbose calls, especially for Custom Resources.
 

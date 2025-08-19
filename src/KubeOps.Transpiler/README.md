@@ -1,6 +1,7 @@
 # KubeOps Transpiler
 
 [![NuGet](https://img.shields.io/nuget/v/KubeOps.Transpiler?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Transpiler)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.Transpiler?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Transpiler)
 
 The `KubeOps.Transpiler` package provides utilities primarily focused on **generating Kubernetes Custom Resource Definition (CRD) manifests (YAML/JSON) from .NET type definitions**.
 

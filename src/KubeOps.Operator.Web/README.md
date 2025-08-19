@@ -1,6 +1,7 @@
 # KubeOps Web Operator
 
 [![NuGet](https://img.shields.io/nuget/v/KubeOps.Operator.Web?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Operator.Web)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.Operator.Web?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Operator.Web)
 
 **This package requires your operator to run as an ASP.NET Core web application.**
 
@@ -8,7 +9,7 @@ This package integrates KubeOps with ASP.NET Core, enabling your operator to hos
 
 When the Kubernetes API server needs to validate, mutate, or convert a resource as configured in a `ValidatingWebhookConfiguration`, `MutatingWebhookConfiguration`, or `CustomResourceDefinition`, it sends an HTTP request to a service endpoint. This package provides the necessary infrastructure to receive and handle these requests within your .NET operator.
 
-> For a comprehensive explanation of different webhook types, how to implement their logic using KubeOps base classes/interfaces, and how to configure Kubernetes resources to use them, please refer to the main **[Webhooks Documentation](https://buehler.github.io/dotnet-operator-sdk/docs/operator/building-blocks/webhooks)**.
+> For a comprehensive explanation of different webhook types, how to implement their logic using KubeOps base classes/interfaces, and how to configure Kubernetes resources to use them, please refer to the main **[Webhooks Documentation](https://dotnet.github.io/dotnet-operator-sdk/docs/operator/building-blocks/webhooks)**.
 
 ## Setup
 
@@ -73,7 +74,7 @@ The `{webhook-name}` is typically derived from the C# class name of your webhook
 
 ## Implementation Overview
 
-(Refer to the main [Webhooks Documentation](https://buehler.github.io/dotnet-operator-sdk/docs/operator/building-blocks/webhooks) for full details and examples)
+(Refer to the main [Webhooks Documentation](https://dotnet.github.io/dotnet-operator-sdk/docs/operator/building-blocks/webhooks) for full details and examples)
 
 - **Validation Hooks:** Inherit from `ValidationWebhook<TEntity>` and decorate with `[ValidationWebhook(typeof(TEntity))]`
 - **Mutation Hooks:** Inherit from `MutationWebhook<TEntity>` and decorate with `[MutationWebhook(typeof(TEntity))]`

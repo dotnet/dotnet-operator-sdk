@@ -1,0 +1,10 @@
+[
+  "src/KubeOps.Abstractions/KubeOps.Abstractions.csproj",
+  "src/KubeOps.Cli/KubeOps.Cli.csproj",
+  "src/KubeOps.Generator/KubeOps.Generator.csproj",
+  "src/KubeOps.KubernetesClient/KubeOps.KubernetesClient.csproj",
+  "src/KubeOps.Operator/KubeOps.Operator.csproj",
+  "src/KubeOps.Operator.Web/KubeOps.Operator.Web.csproj",
+  "src/KubeOps.Templates/KubeOps.Templates.csproj",
+  "src/KubeOps.Transpiler/KubeOps.Transpiler.csproj"
+]

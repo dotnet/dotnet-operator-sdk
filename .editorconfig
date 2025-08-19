@@ -48,6 +48,7 @@ dotnet_diagnostic.SA1643.severity = none
 dotnet_diagnostic.SA1649.severity = none
 dotnet_diagnostic.RCS1029.severity = none
 dotnet_diagnostic.RCS1090.severity = none
+dotnet_diagnostic.IDE0073.severity = warning
 
 #### Custom Coding Conventions ####
 resharper_csharp_space_in_singleline_accessorholder = true
@@ -65,7 +66,7 @@ resharper_csharp_place_attribute_on_same_line = false
 # Organize usings
 dotnet_separate_import_directive_groups = true
 dotnet_sort_system_directives_first = true
-file_header_template = unset
+file_header_template = Licensed to the .NET Foundation under one or more agreements.\nThe .NET Foundation licenses this file to you under the Apache 2.0 License.\nSee the LICENSE file in the project root for more information.
 
 # this. and Me. preferences
 dotnet_style_qualification_for_event = false:silent

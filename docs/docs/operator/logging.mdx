@@ -24,7 +24,7 @@ You can log from your code by injecting `ILogger<MyEntityController>` (or a simi
 
 Scopes define a logical boundary in which all log entries are automatically enriched with contextual metadata. This is especially useful for correlating logs related to a specific request or operation.
 
-By default, the [ResourceWatcher](https://github.com/buehler/dotnet-operator-sdk/blob/main/src/KubeOps.Operator/Watcher/ResourceWatcher%7BTEntity%7D.cs) starts a new scope for every watch event it processes. Each scope includes:
+By default, the [ResourceWatcher](https://github.com/dotnet/dotnet-operator-sdk/blob/main/src/KubeOps.Operator/Watcher/ResourceWatcher%7BTEntity%7D.cs) starts a new scope for every watch event it processes. Each scope includes:
 
 - `EventType`: Type of the received watch event (`Added`, `Modified`, `Deleted`, `Error`, `Bookmark`)
 - `Kind`: Custom Resource Definition (CRD) kind

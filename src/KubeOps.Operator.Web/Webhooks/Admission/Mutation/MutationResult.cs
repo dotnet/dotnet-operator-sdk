@@ -1,7 +1,15 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the Apache 2.0 License.
+// See the LICENSE file in the project root for more information.
+
 using System.Text.Json.Nodes;
+
+using Json.Patch;
 
 using k8s;
 using k8s.Models;
+
+using KubeOps.Abstractions.Entities;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -60,6 +68,7 @@ public record MutationResult<TEntity>(TEntity? ModifiedObject = default) : IActi
             return;
         }
 
+#pragma warning disable CA2252 // TODO: as soon as patch is fully stable, remove this.
         await response.WriteAsJsonAsync(
             new AdmissionResponse
             {
@@ -70,8 +79,11 @@ public record MutationResult<TEntity>(TEntity? ModifiedObject = default) : IActi
                     Status = Status,
                     Warnings = Warnings.ToArray(),
                     PatchType = ModifiedObject is null ? null : JsonPatch,
-                    Patch = ModifiedObject is null ? null : OriginalObject!.Base64Diff(ModifiedObject),
+                    Patch = ModifiedObject is null
+                        ? null
+                        : OriginalObject!.CreatePatch(ModifiedObject.ToNode()).ToBase64String(),
                 },
             });
+#pragma warning restore CA2252
     }
 }

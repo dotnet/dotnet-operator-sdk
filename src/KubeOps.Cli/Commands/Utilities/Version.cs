@@ -1,4 +1,8 @@
-﻿using System.CommandLine;
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the Apache 2.0 License.
+// See the LICENSE file in the project root for more information.
+
+using System.CommandLine;
 
 using k8s;
 
@@ -15,8 +19,8 @@ internal static class Version
             var cmd = new Command(
                 "api-version",
                 "Prints the actual server version of the connected kubernetes cluster.");
-            cmd.AddAlias("av");
-            cmd.SetHandler(() =>
+            cmd.Aliases.Add("av");
+            cmd.SetAction(_ =>
                 Handler(AnsiConsole.Console, new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig())));
 
             return cmd;

@@ -2,9 +2,12 @@
   "version": 1,
   "isRoot": true,
   "tools": {
-    "docfx": {
-      "version": "2.78.3",
-      "commands": ["docfx"]
+    "nuget-license": {
+      "version": "3.1.6",
+      "commands": [
+        "nuget-license"
+      ],
+      "rollForward": false
     }
   }
 }

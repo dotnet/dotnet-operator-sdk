@@ -14,10 +14,10 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="KubernetesClient" Version="16.0.7" />
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.6"/>
-        <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.3.0" />
+        <PackageReference Include="JsonPatch.Net" Version="3.3.0" />
+        <PackageReference Include="KubernetesClient" Version="17.0.4" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.8"/>
+        <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.4.0" />
     </ItemGroup>
 
 </Project>

@@ -1,6 +1,7 @@
 # KubeOps Generator
 
 [![NuGet](https://img.shields.io/nuget/v/KubeOps.Generator?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Generator)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.Generator?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Generator)
 
 This is a C# source generator for KubeOps and operators.
 It is used to generate convenience functions to help register

@@ -2,12 +2,13 @@
 
 **Build Kubernetes Operators in .NET with Ease**
 
-[![.NET Release](https://github.com/buehler/dotnet-operator-sdk/actions/workflows/dotnet-release.yml/badge.svg?branch=main)](https://github.com/buehler/dotnet-operator-sdk/actions/workflows/dotnet-release.yml)
-[![Scheduled Code Security Testing](https://github.com/buehler/dotnet-operator-sdk/actions/workflows/security-analysis.yml/badge.svg?event=schedule)](https://github.com/buehler/dotnet-operator-sdk/actions/workflows/security-analysis.yml)
+[![.NET Release](https://github.com/dotnet/dotnet-operator-sdk/actions/workflows/dotnet-release.yml/badge.svg?branch=main)](https://github.com/dotnet/dotnet-operator-sdk/actions/workflows/dotnet-release.yml)
+[![.NET Pre-Release](https://github.com/dotnet/dotnet-operator-sdk/actions/workflows/dotnet-pre-release.yml/badge.svg)](https://github.com/dotnet/dotnet-operator-sdk/actions/workflows/dotnet-pre-release.yml)
+[![Scheduled Code Security Testing](https://github.com/dotnet/dotnet-operator-sdk/actions/workflows/security-analysis.yml/badge.svg?event=schedule)](https://github.com/dotnet/dotnet-operator-sdk/actions/workflows/security-analysis.yml)
 
 **KubeOps** is a [Kubernetes Operator](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) SDK designed for [.NET](https://dotnet.microsoft.com/) developers. It allows you to leverage your C# skills and the rich .NET ecosystem to build powerful Kubernetes controllers that automate the management of complex applications. KubeOps simplifies operator development by providing high-level abstractions, code generators, and helper utilities.
 
-**For comprehensive documentation, tutorials, and API references, please visit the official [KubeOps Documentation Site](https://buehler.github.io/dotnet-operator-sdk/).**
+**For comprehensive documentation, tutorials, and API references, please visit the official [KubeOps Documentation Site](https://dotnet.github.io/dotnet-operator-sdk/).**
 
 The documentation is also provided within the code itself (description of methods and classes), and each package contains a README with further information.
 
@@ -49,7 +50,7 @@ There are two ways to start building an operator with KubeOps:
 
 Both methods generate a basic operator structure with a sample custom resource, controller, and finalizer. The template approach is simpler and more direct, while the CLI provides additional commands for generating CRDs, RBAC rules, and more.
 
-For detailed tutorials and guides, visit the [KubeOps Documentation Site](https://buehler.github.io/dotnet-operator-sdk/).
+For detailed tutorials and guides, visit the [KubeOps Documentation Site](https://dotnet.github.io/dotnet-operator-sdk/).
 
 ## Packages
 
@@ -70,11 +71,15 @@ The SDK is designed to be modular. You can include only the packages you need:
 
 ## Examples
 
-You can find various example operators demonstrating different features in the [`examples/`](https://github.com/buehler/dotnet-operator-sdk/tree/main/examples/) directory of this repository.
+You can find various example operators demonstrating different features in the [`examples/`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/) directory of this repository.
 
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details. This license applies to all packages in the KubeOps SDK.
+
+## .NET Foundation
+
+This project is supported by the [.NET Foundation](https://dotnetfoundation.org).
 
 ## Governance
 
@@ -101,10 +106,3 @@ In short:
 ## Motivation
 
 KubeOps aims to provide a first-class experience for developing Kubernetes operators within the .NET ecosystem, offering an alternative to Go-based SDKs like Kubebuilder and Operator SDK, while embracing familiar C# patterns and tooling.
-
-**Why choose KubeOps?**
-
-- **Leverage your .NET Skills:** Build operators using C#, a language you already know, with access to the extensive .NET Base Class Library and NuGet ecosystem.
-- **Strong Typing & IDE Support:** Benefit from compile-time checks and rich IDE features like IntelliSense and debugging.
-- **Simplified Abstractions:** Focus on your reconciliation logic, not Kubernetes API boilerplate.
-- **Code Generation:** Reduce manual effort with generators for CRDs, RBAC, and controller/webhook registrations.

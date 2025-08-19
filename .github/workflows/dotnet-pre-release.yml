@@ -1,0 +1,44 @@
+name: .NET Pre-Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  semantic-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.x
+
+      - name: Setup Semantic Release
+        run: |
+          npm install https://github.com/buehler/semantic-release#feat/force-pre-release
+          npm install \
+            @semantic-release/github \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            conventional-changelog-conventionalcommits \
+            semantic-release-net
+
+      - name: Semantic Release
+        run: npx https://github.com/buehler/semantic-release#feat/force-pre-release -e ./.release/release.base.mjs -e ./.release/release.main-pre.mjs
+        env:
+          DEBUG: semantic-release:*
+          NUGET_API_KEY: ${{ secrets.NUGET_KEY }}
+          GH_NUGET_API_KEY: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

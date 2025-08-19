@@ -1,0 +1,36 @@
+﻿<Solution>
+  <Folder Name="/examples/">
+    <Project Path="examples\ConversionWebhookOperator\ConversionWebhookOperator.csproj" Type="Classic C#" />
+    <Project Path="examples\Operator\Operator.csproj" Type="Classic C#" />
+    <Project Path="examples\WebhookOperator\WebhookOperator.csproj" Type="Classic C#" />
+  </Folder>
+  <Folder Name="/solution/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path=".releaserc.json" />
+    <File Path="renovate.json" />
+    <File Path="README.md" />
+    <File Path="CONTRIBUTING.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src\KubeOps.Abstractions\KubeOps.Abstractions.csproj" Type="Classic C#" />
+    <Project Path="src\KubeOps.Cli\KubeOps.Cli.csproj" Type="Classic C#" />
+    <Project Path="src\KubeOps.Generator\KubeOps.Generator.csproj" Type="Classic C#" />
+    <Project Path="src\KubeOps.KubernetesClient\KubeOps.KubernetesClient.csproj" Type="Classic C#" />
+    <Project Path="src\KubeOps.Operator.Web\KubeOps.Operator.Web.csproj" Type="Classic C#" />
+    <Project Path="src\KubeOps.Operator\KubeOps.Operator.csproj" Type="Classic C#" />
+    <Project Path="src\KubeOps.Templates\KubeOps.Templates.csproj" Type="Classic C#" />
+    <Project Path="src\KubeOps.Transpiler\KubeOps.Transpiler.csproj" Type="Classic C#" />
+    <File Path="src\Directory.Build.props" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test\KubeOps.Abstractions.Test\KubeOps.Abstractions.Test.csproj" Type="Classic C#" />
+    <Project Path="test\KubeOps.Cli.Test\KubeOps.Cli.Test.csproj" Type="Classic C#" />
+    <Project Path="test\KubeOps.Generator.Test\KubeOps.Generator.Test.csproj" Type="Classic C#" />
+    <Project Path="test\KubeOps.KubernetesClient.Test\KubeOps.KubernetesClient.Test.csproj" Type="Classic C#" />
+    <Project Path="test\KubeOps.Operator.Test\KubeOps.Operator.Test.csproj" Type="Classic C#" />
+    <Project Path="test\KubeOps.Operator.Web.Test\KubeOps.Operator.Web.Test.csproj" Type="Classic C#" />
+    <Project Path="test\KubeOps.Transpiler.Test\KubeOps.Transpiler.Test.csproj" Type="Classic C#" />
+    <File Path="test\Directory.Build.props" />
+  </Folder>
+</Solution>

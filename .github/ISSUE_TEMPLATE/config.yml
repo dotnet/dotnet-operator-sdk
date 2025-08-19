@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Q&A and Discussions
-    url: https://github.com/buehler/dotnet-operator-sdk/discussions
+    url: https://github.com/dotnet/dotnet-operator-sdk/discussions
     about: Please use Discussions for Q&A
+  - name: Discord Community
+    url: https://discord.gg/ucUcxpPW8P
+    about: Join our Discord community for real-time discussions

@@ -25,6 +25,11 @@
       "commandName": "Project",
       "workingDirectory": "$(ProjectDir)",
       "commandLineArgs": "u ../../examples/Operator/Operator.csproj -f"
+    },
+    "CLI Version": {
+      "commandName": "Project",
+      "workingDirectory": "$(ProjectDir)",
+      "commandLineArgs": "av"
     }
   }
 }

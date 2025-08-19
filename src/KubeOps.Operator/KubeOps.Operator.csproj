@@ -16,7 +16,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.6"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8"/>
         <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.3.0" />
     </ItemGroup>
 
@@ -31,11 +31,11 @@
             <PackagePath>build/</PackagePath>
         </Content>
     </ItemGroup>
-    
+
     <ItemGroup>
         <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
             <_Parameter1>$(MSBuildProjectName).Web.Test</_Parameter1>
         </AssemblyAttribute>
     </ItemGroup>
-    
+
 </Project>

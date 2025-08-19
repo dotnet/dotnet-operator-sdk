@@ -1,4 +1,8 @@
-﻿using System.Collections.Concurrent;
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the Apache 2.0 License.
+// See the LICENSE file in the project root for more information.
+
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Runtime.CompilerServices;
@@ -307,6 +311,24 @@ public class KubernetesClient : IKubernetesClient
                 metadata.PluralName,
                 entity.Name()),
         };
+    }
+
+    /// <inheritdoc />
+    public async Task<TEntity> PatchAsync<TEntity>(
+        V1Patch patch,
+        string name,
+        string? @namespace = null,
+        CancellationToken cancellationToken = default)
+        where TEntity : IKubernetesObject<V1ObjectMeta>
+    {
+        ThrowIfDisposed();
+
+        using var client = CreateGenericClient<TEntity>();
+        return await (@namespace switch
+        {
+            not null => client.PatchNamespacedAsync<TEntity>(patch, @namespace, name, cancellationToken),
+            null => client.PatchAsync<TEntity>(patch, name, cancellationToken),
+        });
     }
 
     /// <inheritdoc />

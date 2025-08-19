@@ -1,6 +1,7 @@
 # KubeOps CLI
 
 [![NuGet](https://img.shields.io/nuget/v/KubeOps.Cli?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Cli)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.Cli?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Cli)
 
 The KubeOps CLI is a command-line tool designed to simplify the development and management of Kubernetes Operators using .NET. It provides utilities for generating Custom Resource Definitions (CRDs) and managing operator-related tasks.
 

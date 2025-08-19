@@ -1,3 +1,7 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the Apache 2.0 License.
+// See the LICENSE file in the project root for more information.
+
 using FluentAssertions;
 
 using k8s.Models;
@@ -161,6 +165,69 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             Data = new Dictionary<string, string> { { "Hello", "World" } },
         };
         await _client.DeleteAsync(config);
+    }
+
+    [Fact]
+    public async Task Should_Patch_ConfigMap_Async()
+    {
+        // Add
+        var config = await _client.CreateAsync(
+            new V1ConfigMap
+            {
+                Kind = V1ConfigMap.KubeKind,
+                ApiVersion = V1ConfigMap.KubeApiVersion,
+                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Data = new Dictionary<string, string> { { "foo", "bar" } },
+            });
+        _objects.Add(config);
+
+        // Add a new key using PatchAsync(config)
+        config.Data["hello"] = "world";
+        config = await _client.PatchAsync(config);
+        config.Data.Should().ContainKey("hello").And.ContainValue("world");
+
+        // Replace a value using PatchAsync(from, to)
+        var from = config;
+        var to = new V1ConfigMap
+        {
+            Kind = V1ConfigMap.KubeKind,
+            ApiVersion = V1ConfigMap.KubeApiVersion,
+            Metadata = from.Metadata,
+            Data = new Dictionary<string, string> { { "foo", "baz" }, { "hello", "world" } },
+        };
+        config = await _client.PatchAsync(from, to);
+        config.Data["foo"].Should().Be("baz");
+
+        // Remove a key using PatchAsync(config)
+        config.Data.Remove("hello");
+        config = await _client.PatchAsync(config);
+        config.Data.Should().NotContainKey("hello");
+    }
+
+    [Fact]
+    public async Task Should_Patch_ConfigMap_With_Stale_Base_Async()
+    {
+        // Step 1: Create the ConfigMap
+        var original = await _client.CreateAsync(
+            new V1ConfigMap
+            {
+                Kind = V1ConfigMap.KubeKind,
+                ApiVersion = V1ConfigMap.KubeApiVersion,
+                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Data = new Dictionary<string, string> { { "foo", "bar" } },
+            });
+        _objects.Add(original);
+
+        // Step 2: Update the ConfigMap via client (simulate external change)
+        original.Data["hello"] = "world";
+        var updated = await _client.UpdateAsync(original);
+
+        // Step 3: Patch using the original object as the base, adding another key
+        original.Data["newkey"] = "newvalue";
+        var patched = await _client.PatchAsync(original);
+
+        patched.Data.Should().ContainKey("hello").And.ContainKey("newkey");
+        patched.Data["newkey"].Should().Be("newvalue");
     }
 
     public void Dispose()

@@ -1,6 +1,7 @@
 # KubeOps Dotnet New Templates
 
 [![NuGet](https://img.shields.io/nuget/v/KubeOps.Templates?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Templates)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.Templates?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Templates)
 
 To use the operator SDK as easy as possible, this
 [Nuget Package](https://www.nuget.org/packages/KubeOps.Templates)

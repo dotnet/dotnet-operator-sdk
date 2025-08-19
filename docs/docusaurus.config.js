@@ -10,10 +10,10 @@ const config = {
     v4: true,
   },
 
-  url: "https://buehler.github.io",
+  url: "https://dotnet.github.io",
   baseUrl: "/dotnet-operator-sdk/",
 
-  organizationName: "buehler",
+  organizationName: "dotnet",
   projectName: "dotnet-operator-sdk",
 
   onBrokenLinks: "throw",
@@ -30,7 +30,7 @@ const config = {
       {
         docs: {
           sidebarPath: "./sidebars.js",
-          editUrl: "https://github.com/buehler/dotnet-operator-sdk/tree/main/docs/",
+          editUrl: "https://github.com/dotnet/dotnet-operator-sdk/tree/main/docs/",
         },
         blog: false,
         theme: {
@@ -79,12 +79,12 @@ const config = {
           sidebarId: "packages",
         },
         {
-          to: "contribution",
-          label: "Contribution",
+          href: "https://dotnetfoundation.org/about/policies/code-of-conduct",
+          label: "Code of Conduct",
           position: "left",
         },
         {
-          href: "https://github.com/buehler/dotnet-operator-sdk",
+          href: "https://github.com/dotnet/dotnet-operator-sdk",
           label: "GitHub",
           position: "right",
         },
@@ -92,6 +92,7 @@ const config = {
     },
     footer: {
       style: "dark",
+      copyright: `${new Date().getFullYear()} - KubeOps Maintainers.`,
       links: [
         {
           title: "Docs",
@@ -110,25 +111,34 @@ const config = {
           title: "Community",
           items: [
             {
-              label: "GitHub",
-              href: "https://github.com/buehler/dotnet-operator-sdk",
-            },
-            {
               label: "Issues",
-              href: "https://github.com/buehler/dotnet-operator-sdk/issues",
-            },
-            {
-              label: "Discussions",
-              href: "https://github.com/buehler/dotnet-operator-sdk/discussions",
+              href: "https://github.com/dotnet/dotnet-operator-sdk/issues",
             },
             {
               label: "Security",
-              href: "https://github.com/buehler/dotnet-operator-sdk/security",
+              href: "https://github.com/dotnet/dotnet-operator-sdk/security",
+            },
+            {
+              label: "Discord",
+              href: "https://discord.gg/ucUcxpPW8P",
+            },
+          ],
+        },
+        {
+          items: [
+            {
+              html: `
+              <div>
+                <a href="https://dotnetfoundation.org" target="_blank" rel="noreferrer noopener" style="display: inline-block;" aria-label="Supported by the .NET Foundation">
+                  <img src="https://raw.githubusercontent.com/dotnet-foundation/swag/refs/heads/main/logo/dotnetfoundation_v4.svg" alt="Supported by the .NET Foundation" width="160" height="160" />
+                </a>
+              </div>
+              <div>Supported by the <a href="https://dotnetfoundation.org">.NET Foundation</a></div>
+              `,
             },
           ],
         },
       ],
-      copyright: `${new Date().getFullYear()} - KubeOps Maintainers. Built with Docusaurus. Hosted on GitHub Pages.`,
     },
     prism: {
       theme: prismThemes.github,

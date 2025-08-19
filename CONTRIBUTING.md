@@ -4,16 +4,15 @@ First of all, thank you for considering contributing to KubeOps.
 This is an open souce project and shall be driven by the community.
 
 This project and everyone participating in it is governed by the
-[KubeOps Code of Conduct](https://github.com/buehler/dotnet-operator-sdk/blob/main/CODE_OF_CONDUCT.md). By participating, you are
-expected to uphold this code. Please report unacceptable behavior by
-[opening a new issue](https://github.com/buehler/dotnet-operator-sdk/issues/new) with the title prefixed with '[CODE OF CONDUCT]'.
+[.NET Foundation Code of Conduct](https://dotnetfoundation.org/about/policies/code-of-conduct). By participating, you are
+expected to uphold this code.
 
 This document describes how contributions may be done and what is required
 to develop on KubeOps.
 
 ## Creating/Reporting Issues
 
-Feel free to open an issue in the [issues section](https://github.com/buehler/dotnet-operator-sdk/issues).
+Feel free to open an issue in the [issues section](https://github.com/dotnet/dotnet-operator-sdk/issues).
 There are three issue templates:
 
 - Bug: to report an issue/bug that prevents usage or is an inconvenience of KubeOps

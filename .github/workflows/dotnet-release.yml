@@ -3,43 +3,39 @@ name: .NET Release
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 12 * * 2,5"
+    - cron: "0 12 * * 2" # Every Tuesday at 12:00 UTC
+
+permissions:
+  contents: read
 
 jobs:
   semantic-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.x
 
-      - name: Semantic Release
-        uses: cycjimmy/semantic-release-action@v4
-        with:
-          semantic_version: 21
-          extra_plugins: |
+      - name: Setup Semantic Release
+        run: |
+          npm install https://github.com/buehler/semantic-release#feat/force-pre-release
+          npm install \
+            @semantic-release/github \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            conventional-changelog-conventionalcommits \
             semantic-release-net
-          branches: |
-            [
-              "main",
-              {
-                "name": "maintenance/7.x",
-                "range": "7.x"
-              },
-              {
-                "name": "maintenance/8.x",
-                "range": "8.x"
-              },
-              {
-                "name": "maintenance/9.x",
-                "range": "9.x"
-              }
-            ]
+
+      - name: Semantic Release
+        run: npx https://github.com/buehler/semantic-release#feat/force-pre-release -e ./.release/release.base.mjs -e ./.release/release.main.mjs
         env:
           DEBUG: semantic-release:*
           NUGET_API_KEY: ${{ secrets.NUGET_KEY }}
