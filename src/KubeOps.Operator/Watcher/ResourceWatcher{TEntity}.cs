@@ -331,16 +331,13 @@ public class ResourceWatcher<TEntity>(
 
     private async Task<Result<TEntity>> ReconcileDeletionAsync(TEntity entity, CancellationToken cancellationToken)
     {
-        requeue.Remove(entity);
-        await _entityCache.RemoveAsync(entity.Uid(), token: cancellationToken);
-
         await using var scope = provider.CreateAsyncScope();
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
         var result = await controller.DeletedAsync(entity, cancellationToken);
 
         if (result.IsSuccess)
         {
-            _entityCache.TryRemove(result.Entity.Uid(), out _);
+            await _entityCache.RemoveAsync(entity.Uid(), token: cancellationToken);
         }
 
         return result;
