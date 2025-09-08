@@ -234,7 +234,7 @@ public class ResourceWatcher<TEntity>(
 
                         if (result.RequeueAfter.HasValue)
                         {
-                            requeue.Enqueue(result.Entity, result.RequeueAfter.Value);
+                            requeue.Enqueue(result.Entity, type.ToRequeueType(), result.RequeueAfter.Value);
                         }
 
                         if (result.IsFailure)

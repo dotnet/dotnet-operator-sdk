@@ -4,6 +4,8 @@
 
 using System.Collections.Concurrent;
 
+using KubeOps.Abstractions.Queue;
+
 namespace KubeOps.Operator.Queue;
 
 internal sealed record TimedQueueEntry<TEntity> : IDisposable
@@ -11,11 +13,13 @@ internal sealed record TimedQueueEntry<TEntity> : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly TimeSpan _requeueIn;
     private readonly TEntity _entity;
+    private readonly RequeueType _requeueType;
 
-    public TimedQueueEntry(TEntity entity, TimeSpan requeueIn)
+    public TimedQueueEntry(TEntity entity, RequeueType requeueType, TimeSpan requeueIn)
     {
         _requeueIn = requeueIn;
         _entity = entity;
+        _requeueType = requeueType;
     }
 
     /// <summary>
@@ -40,7 +44,7 @@ internal sealed record TimedQueueEntry<TEntity> : IDisposable
     /// </summary>
     /// <param name="collection">The collection to add the entry to.</param>
     /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    public async Task AddAfterDelay(BlockingCollection<TEntity> collection)
+    public async Task AddAfterDelay(BlockingCollection<RequeueEntry<TEntity>> collection)
     {
         try
         {
@@ -50,7 +54,7 @@ internal sealed record TimedQueueEntry<TEntity> : IDisposable
                 return;
             }
 
-            collection.TryAdd(_entity);
+            collection.TryAdd(RequeueEntry<TEntity>.CreateFor(_entity, _requeueType));
         }
         catch (TaskCanceledException)
         {

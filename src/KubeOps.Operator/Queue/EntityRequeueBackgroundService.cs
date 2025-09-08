@@ -84,11 +84,11 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
 
     private async Task WatchAsync(CancellationToken cancellationToken)
     {
-        await foreach (var entity in queue)
+        await foreach (var entry in queue)
         {
             try
             {
-                await ReconcileSingleAsync(entity, cancellationToken);
+                await ReconcileSingleAsync(entry.Entity, cancellationToken);
             }
             catch (OperationCanceledException e) when (!cancellationToken.IsCancellationRequested)
             {
@@ -96,8 +96,8 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
                     e,
                     """Queued reconciliation for the entity of type {ResourceType} for "{Kind}/{Name}" failed.""",
                     typeof(TEntity).Name,
-                    entity.Kind,
-                    entity.Name());
+                    entry.Entity.Kind,
+                    entry.Entity.Name());
             }
             catch (Exception e)
             {
@@ -105,8 +105,8 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
                     e,
                     """Queued reconciliation for the entity of type {ResourceType} for "{Kind}/{Name}" failed.""",
                     typeof(TEntity).Name,
-                    entity.Kind,
-                    entity.Name());
+                    entry.Entity.Kind,
+                    entry.Entity.Name());
             }
         }
     }

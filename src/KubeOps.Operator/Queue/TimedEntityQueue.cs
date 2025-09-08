@@ -7,6 +7,8 @@ using System.Collections.Concurrent;
 using k8s;
 using k8s.Models;
 
+using KubeOps.Abstractions.Queue;
+
 namespace KubeOps.Operator.Queue;
 
 /// <summary>
@@ -24,7 +26,7 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
     private readonly ConcurrentDictionary<string, TimedQueueEntry<TEntity>> _management = new();
 
     // The actual queue containing all the entries that have to be reconciled.
-    private readonly BlockingCollection<TEntity> _queue = new(new ConcurrentQueue<TEntity>());
+    private readonly BlockingCollection<RequeueEntry<TEntity>> _queue = new(new ConcurrentQueue<RequeueEntry<TEntity>>());
 
     internal int Count => _management.Count;
 
@@ -33,14 +35,15 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
     /// If the item already exists, the existing entry is updated.
     /// </summary>
     /// <param name="entity">The entity.</param>
+    /// <param name="type">The type of which the reconcile operation should be executed.</param>
     /// <param name="requeueIn">The time after <see cref="DateTimeOffset.Now"/>, where the item is reevaluated again.</param>
-    public void Enqueue(TEntity entity, TimeSpan requeueIn)
+    public void Enqueue(TEntity entity, RequeueType type, TimeSpan requeueIn)
     {
         _management.AddOrUpdate(
             TimedEntityQueue<TEntity>.GetKey(entity) ?? throw new InvalidOperationException("Cannot enqueue entities without name."),
             key =>
             {
-                var entry = new TimedQueueEntry<TEntity>(entity, requeueIn);
+                var entry = new TimedQueueEntry<TEntity>(entity, type, requeueIn);
                 _scheduledEntries.StartNew(
                     async () =>
                     {
@@ -53,7 +56,7 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
             (key, oldEntry) =>
             {
                 oldEntry.Cancel();
-                var entry = new TimedQueueEntry<TEntity>(entity, requeueIn);
+                var entry = new TimedQueueEntry<TEntity>(entity, type, requeueIn);
                 _scheduledEntries.StartNew(
                     async () =>
                     {
@@ -74,7 +77,7 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
         }
     }
 
-    public async IAsyncEnumerator<TEntity> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+    public async IAsyncEnumerator<RequeueEntry<TEntity>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
     {
         await Task.Yield();
         foreach (var entry in _queue.GetConsumingEnumerable(cancellationToken))

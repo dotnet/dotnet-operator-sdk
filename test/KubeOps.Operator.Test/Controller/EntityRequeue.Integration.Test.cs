@@ -93,7 +93,7 @@ public class EntityRequeueIntegrationTest : IntegrationTestBase
             svc.Invocation(entity);
             if (svc.Invocations.Count <= svc.TargetInvocationCount)
             {
-                requeue(entity, TimeSpan.FromMilliseconds(1));
+                requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(1));
             }
 
             return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));

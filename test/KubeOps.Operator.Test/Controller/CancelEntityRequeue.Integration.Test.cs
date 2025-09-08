@@ -49,7 +49,6 @@ public class CancelEntityRequeueIntegrationTest : IntegrationTestBase
 
         _mock.Invocations.Count.Should().Be(1);
         Services.GetRequiredService<TimedEntityQueue<V1OperatorIntegrationTestEntity>>().Count.Should().Be(1);
-
     }
 
     public override async Task InitializeAsync()
@@ -82,7 +81,7 @@ public class CancelEntityRequeueIntegrationTest : IntegrationTestBase
             svc.Invocation(entity);
             if (svc.Invocations.Count < 2)
             {
-                requeue(entity, TimeSpan.FromMilliseconds(1000));
+                requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(1000));
             }
 
             return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));

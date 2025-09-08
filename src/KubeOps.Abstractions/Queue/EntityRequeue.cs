@@ -26,6 +26,7 @@ namespace KubeOps.Abstractions.Queue;
 /// </summary>
 /// <typeparam name="TEntity">The type of the entity.</typeparam>
 /// <param name="entity">The instance of the entity that should be requeued.</param>
+/// <param name="type">The type of which the reconcile operation should be executed.</param>
 /// <param name="requeueIn">The time to wait before another reconcile loop is fired.</param>
 /// <example>
 /// Use the requeue delegate to repeatedly reconcile an entity after 5 seconds.
@@ -47,5 +48,5 @@ namespace KubeOps.Abstractions.Queue;
 /// }
 /// </code>
 /// </example>
-public delegate void EntityRequeue<in TEntity>(TEntity entity, TimeSpan requeueIn)
+public delegate void EntityRequeue<in TEntity>(TEntity entity, RequeueType type, TimeSpan requeueIn)
     where TEntity : IKubernetesObject<V1ObjectMeta>;

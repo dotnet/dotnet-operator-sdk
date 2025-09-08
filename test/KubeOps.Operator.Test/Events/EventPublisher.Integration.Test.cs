@@ -97,7 +97,7 @@ public class EventPublisherIntegrationTest : IntegrationTestBase
 
             if (svc.Invocations.Count < svc.TargetInvocationCount)
             {
-                requeue(entity, TimeSpan.FromMilliseconds(10));
+                requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(10));
             }
 
             return Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity);

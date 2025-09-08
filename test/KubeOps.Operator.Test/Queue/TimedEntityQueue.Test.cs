@@ -4,19 +4,20 @@
 
 using k8s.Models;
 
+using KubeOps.Abstractions.Queue;
 using KubeOps.Operator.Queue;
 
 namespace KubeOps.Operator.Test.Queue;
 
-public class TimedEntityQueueTest
+public sealed class TimedEntityQueueTest
 {
     [Fact]
     public async Task Can_Enqueue_Multiple_Entities_With_Same_Name()
     {
         var queue = new TimedEntityQueue<V1Secret>();
 
-        queue.Enqueue(CreateSecret("app-ns1", "secret-name"), TimeSpan.FromSeconds(1));
-        queue.Enqueue(CreateSecret("app-ns2", "secret-name"), TimeSpan.FromSeconds(1));
+        queue.Enqueue(CreateSecret("app-ns1", "secret-name"), RequeueType.Modified, TimeSpan.FromSeconds(1));
+        queue.Enqueue(CreateSecret("app-ns2", "secret-name"), RequeueType.Modified, TimeSpan.FromSeconds(1));
 
         var items = new List<V1Secret>();
 
@@ -29,7 +30,7 @@ public class TimedEntityQueueTest
         {
             while (await enumerator.MoveNextAsync())
             {
-                items.Add(enumerator.Current);
+                items.Add(enumerator.Current.Entity);
             }
         }
         catch (OperationCanceledException)
@@ -40,7 +41,7 @@ public class TimedEntityQueueTest
         Assert.Equal(2, items.Count);
     }
 
-    private V1Secret CreateSecret(string secretNamespace, string secretName)
+    private static V1Secret CreateSecret(string secretNamespace, string secretName)
     {
         var secret = new V1Secret();
         secret.EnsureMetadata();
