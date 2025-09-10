@@ -20,6 +20,7 @@ using KubeOps.Operator.Events;
 using KubeOps.Operator.Finalizer;
 using KubeOps.Operator.LeaderElection;
 using KubeOps.Operator.Queue;
+using KubeOps.Operator.Reconciliation;
 using KubeOps.Operator.Watcher;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -47,6 +48,7 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
         Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
         Services.TryAddSingleton(new TimedEntityQueue<TEntity>());
+        Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
         Services.TryAddTransient<IEntityRequeueFactory, KubeOpsEntityRequeueFactory>();
         Services.TryAddTransient<EntityRequeue<TEntity>>(services =>
             services.GetRequiredService<IEntityRequeueFactory>().Create<TEntity>());
@@ -71,6 +73,7 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
         Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
         Services.TryAddSingleton(new TimedEntityQueue<TEntity>());
+        Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
         Services.TryAddTransient<IEntityRequeueFactory, KubeOpsEntityRequeueFactory>();
         Services.TryAddTransient<EntityRequeue<TEntity>>(services =>
             services.GetRequiredService<IEntityRequeueFactory>().Create<TEntity>());
