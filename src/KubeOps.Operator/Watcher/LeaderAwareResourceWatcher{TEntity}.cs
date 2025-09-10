@@ -11,34 +11,28 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
-using KubeOps.Operator.Queue;
+using KubeOps.Operator.Reconciliation;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-
-using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Watcher;
 
 internal sealed class LeaderAwareResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<LeaderAwareResourceWatcher<TEntity>> logger,
-    IServiceProvider provider,
-    TimedEntityQueue<TEntity> queue,
+    IReconciler<TEntity> reconciler,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
-    IFusionCacheProvider cacheProvider,
     IKubernetesClient client,
     IHostApplicationLifetime hostApplicationLifetime,
     LeaderElector elector)
     : ResourceWatcher<TEntity>(
         activitySource,
         logger,
-        provider,
-        queue,
+        reconciler,
         settings,
         labelSelector,
-        cacheProvider,
         client)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
@@ -94,7 +88,7 @@ internal sealed class LeaderAwareResourceWatcher<TEntity>(
         if (_cts.IsCancellationRequested)
         {
             _cts.Dispose();
-            _cts = new CancellationTokenSource();
+            _cts = new();
         }
 
         base.StartAsync(_cts.Token);

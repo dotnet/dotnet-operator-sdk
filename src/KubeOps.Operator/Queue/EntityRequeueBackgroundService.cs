@@ -5,11 +5,10 @@
 using k8s;
 using k8s.Models;
 
-using KubeOps.Abstractions.Controller;
-using KubeOps.Abstractions.Finalizer;
+using KubeOps.Abstractions.Queue;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Reconciliation;
 
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -18,7 +17,7 @@ namespace KubeOps.Operator.Queue;
 internal sealed class EntityRequeueBackgroundService<TEntity>(
     IKubernetesClient client,
     TimedEntityQueue<TEntity> queue,
-    IServiceProvider provider,
+    IReconciler<TEntity> reconciler,
     ILogger<EntityRequeueBackgroundService<TEntity>> logger) : IHostedService, IDisposable, IAsyncDisposable
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
@@ -88,7 +87,7 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
         {
             try
             {
-                await ReconcileSingleAsync(entry.Entity, cancellationToken);
+                await ReconcileSingleAsync(entry, cancellationToken);
             }
             catch (OperationCanceledException e) when (!cancellationToken.IsCancellationRequested)
             {
@@ -111,33 +110,31 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
         }
     }
 
-    private async Task ReconcileSingleAsync(TEntity queued, CancellationToken cancellationToken)
+    private async Task ReconcileSingleAsync(RequeueEntry<TEntity> queuedEntry, CancellationToken cancellationToken)
     {
-        logger.LogTrace("""Execute requested requeued reconciliation for "{Name}".""", queued.Name());
+        logger.LogTrace("""Execute requested requeued reconciliation for "{Name}".""", queuedEntry.Entity.Name());
 
-        if (await client.GetAsync<TEntity>(queued.Name(), queued.Namespace(), cancellationToken) is not
+        if (await client.GetAsync<TEntity>(queuedEntry.Entity.Name(), queuedEntry.Entity.Namespace(), cancellationToken) is not
             { } entity)
         {
             logger.LogWarning(
-                """Requeued entity "{Name}" was not found. Skipping reconciliation.""", queued.Name());
+                """Requeued entity "{Name}" was not found. Skipping reconciliation.""", queuedEntry.Entity.Name());
             return;
         }
 
-        if (entity.DeletionTimestamp() is not null)
+        switch (queuedEntry.RequeueType)
         {
-            if (entity.Finalizers()?.Count > 0)
-            {
-                var identifier = entity.Finalizers()[0];
-                await using var scope = provider.CreateAsyncScope();
-                var finalizer = scope.ServiceProvider.GetRequiredKeyedService<IEntityFinalizer<TEntity>>(identifier);
-                await finalizer.FinalizeAsync(entity, cancellationToken);
-            }
-        }
-        else
-        {
-            await using var scope = provider.CreateAsyncScope();
-            var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
-            await controller.ReconcileAsync(entity, cancellationToken);
+            case RequeueType.Added:
+                await reconciler.ReconcileCreation(entity, cancellationToken);
+                break;
+            case RequeueType.Modified:
+                await reconciler.ReconcileModification(entity, cancellationToken);
+                break;
+            case RequeueType.Deleted:
+                await reconciler.ReconcileDeletion(entity, cancellationToken);
+                break;
+            default:
+                throw new NotSupportedException($"RequeueType '{queuedEntry.RequeueType}' is not supported!");
         }
     }
 }
