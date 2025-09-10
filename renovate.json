@@ -24,7 +24,16 @@
     },
     {
       "matchFileNames": ["**/*"],
-      "semanticCommitType": "deps"
+      "semanticCommitType": "deps",
+      "semanticCommitScope": "general"
+    },
+    {
+      "matchFileNames": [".github/**/*", ".release/**/*"],
+      "semanticCommitScope": "ci"
+    },
+    {
+      "matchFileNames": [".config/dotnet-tools.json"],
+      "semanticCommitScope": "tools"
     },
     {
       "matchFileNames": ["src/**/*"],
