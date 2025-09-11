@@ -5,6 +5,7 @@
 using k8s;
 using k8s.Models;
 
+using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Controller;
 using KubeOps.Abstractions.Finalizer;
 using KubeOps.Abstractions.Queue;
@@ -19,10 +20,25 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Reconciliation;
 
+/// <summary>
+/// The Reconciler class provides mechanisms for handling creation, modification, and deletion
+/// events for Kubernetes objects of the specified entity type. It implements the IReconciler
+/// interface and facilitates the reconciliation of desired and actual states of the entity.
+/// </summary>
+/// <typeparam name="TEntity">
+/// The type of the Kubernetes entity being reconciled. Must implement IKubernetesObject
+/// with V1ObjectMeta.
+/// </typeparam>
+/// <remarks>
+/// This class leverages logging, caching, and client services to manage and process
+/// Kubernetes objects effectively. It also uses internal queuing capabilities for entity
+/// processing and requeuing.
+/// </remarks>
 internal sealed class Reconciler<TEntity>(
     ILogger<Reconciler<TEntity>> logger,
     IFusionCacheProvider cacheProvider,
     IServiceProvider provider,
+    OperatorSettings settings,
     TimedEntityQueue<TEntity> requeue,
     IKubernetesClient client)
     : IReconciler<TEntity>
@@ -161,8 +177,12 @@ internal sealed class Reconciler<TEntity>(
         }
 
         entity = result.Entity;
-        entity.RemoveFinalizer(identifier);
-        entity = await client.UpdateAsync(entity, cancellationToken);
+
+        if (settings.AutoDetachFinalizers)
+        {
+            entity.RemoveFinalizer(identifier);
+            entity = await client.UpdateAsync(entity, cancellationToken);
+        }
 
         logger.LogInformation(
             """Entity "{Kind}/{Name}" finalized with "{Finalizer}".""",
@@ -176,6 +196,19 @@ internal sealed class Reconciler<TEntity>(
     private async Task<Result<TEntity>> ReconcileModificationAsync(TEntity entity, CancellationToken cancellationToken)
     {
         await using var scope = provider.CreateAsyncScope();
+
+        if (settings.AutoAttachFinalizers)
+        {
+            var finalizers = scope.ServiceProvider.GetService<IEnumerable<IEntityFinalizer<TEntity>>>() ?? [];
+
+            foreach (var finalizer in finalizers)
+            {
+                entity.AddFinalizer(finalizer.GetIdentifierName(entity));
+            }
+
+            entity = await client.UpdateAsync(entity, cancellationToken);
+        }
+
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
         return await controller.ReconcileAsync(entity, cancellationToken);
     }

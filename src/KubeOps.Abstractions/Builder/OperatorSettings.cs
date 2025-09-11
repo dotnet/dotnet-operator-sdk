@@ -73,6 +73,19 @@ public sealed partial class OperatorSettings
     /// </summary>
     public Action<IFusionCacheBuilder>? ConfigureResourceWatcherEntityCache { get; set; }
 
+    /// <summary>
+    /// Indicates whether finalizers should be automatically attached to Kubernetes entities during reconciliation.
+    /// When enabled, the operator will ensure that all defined finalizers for the entity are added if they are not already present.
+    /// Defaults to true.
+    /// </summary>
+    public bool AutoAttachFinalizers { get; set; } = true;
+
+    /// <summary>
+    /// Indicates whether finalizers should be automatically removed from Kubernetes resources
+    /// upon successful completion of their finalization process. Defaults to true.
+    /// </summary>
+    public bool AutoDetachFinalizers { get; set; } = true;
+
     [GeneratedRegex(@"(\W|_)", RegexOptions.CultureInvariant)]
     private static partial Regex OperatorNameRegex();
 }
