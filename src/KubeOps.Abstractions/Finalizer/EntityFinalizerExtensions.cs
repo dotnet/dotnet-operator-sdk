@@ -28,7 +28,7 @@ public static class EntityFinalizerExtensions
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
         var finalizerName = finalizer.GetType().Name.ToLowerInvariant();
-        finalizerName = finalizerName.EndsWith("finalizer") ? string.Empty : "finalizer";
+        finalizerName = finalizerName.EndsWith("finalizer") ? finalizerName : $"{finalizerName}finalizer";
 
         var entityGroupName = entity.GetKubernetesEntityAttribute()?.Group ?? string.Empty;
         var name = $"{entityGroupName}/{finalizerName}".TrimStart('/');
