@@ -28,15 +28,27 @@ internal sealed class KubernetesEntitySyntaxReceiver : ISyntaxContextReceiver
 
         Entities.Add(new(
             cls,
-            GetArgumentValue(attr, KindName) ?? cls.Identifier.ToString(),
-            GetArgumentValue(attr, VersionName) ?? DefaultVersion,
-            GetArgumentValue(attr, GroupName),
-            GetArgumentValue(attr, PluralName)));
+            GetArgumentValue(context.SemanticModel, attr, KindName) ?? cls.Identifier.ToString(),
+            GetArgumentValue(context.SemanticModel, attr, VersionName) ?? DefaultVersion,
+            GetArgumentValue(context.SemanticModel, attr, GroupName),
+            GetArgumentValue(context.SemanticModel, attr, PluralName)));
     }
 
-    private static string? GetArgumentValue(AttributeSyntax attr, string argName) =>
-        attr.ArgumentList?.Arguments.FirstOrDefault(a => a.NameEquals?.Name.ToString() == argName) is
-        { Expression: LiteralExpressionSyntax { Token.ValueText: { } value } }
+    private static string? GetArgumentValue(SemanticModel model, AttributeSyntax attr, string argName)
+    {
+        if (attr.ArgumentList?.Arguments.FirstOrDefault(a => a.NameEquals?.Name.ToString() == argName)
+            is not { Expression: { } expr })
+        {
+            return null;
+        }
+
+        if (model.GetConstantValue(expr) is { HasValue: true, Value: string s })
+        {
+            return s;
+        }
+
+        return expr is LiteralExpressionSyntax { Token.ValueText: { } value }
             ? value
             : null;
+    }
 }
