@@ -19,41 +19,52 @@ public sealed class EntityFinalizerExtensions
     [Fact]
     public void GetIdentifierName_Should_Return_Correct_Name_When_Entity_Group_Has_String_Value()
     {
-        var sut = new EntityWithStringValueFinalizer();
-        var entity = new EntityFinalizerTestEntityWithStringValue();
+        var sut = new EntityWithGroupAsStringValueFinalizer();
+        var entity = new EntityWithGroupAsStringValue();
 
         var identifierName = sut.GetIdentifierName(entity);
 
-        identifierName.Should().Be("finalizer.test/entitywithstringvaluefinalizer");
+        identifierName.Should().Be("finalizer.test/entitywithgroupasstringvaluefinalizer");
     }
 
     [Fact]
     public void GetIdentifierName_Should_Return_Correct_Name_When_Entity_Group_Has_Const_Value()
     {
-        var sut = new EntityWithConstValueFinalizer();
-        var entity = new EntityFinalizerTestEntityWithConstValue();
+        var sut = new EntityWithGroupAsConstValueFinalizer();
+        var entity = new EntityWithGroupAsConstValue();
 
         var identifierName = sut.GetIdentifierName(entity);
 
-        identifierName.Should().Be($"{Group}/entitywithconstvaluefinalizer");
+        identifierName.Should().Be($"{Group}/entitywithgroupasconstvaluefinalizer");
+    }
+
+    [Fact]
+    public void GetIdentifierName_Should_Return_Correct_Name_When_Entity_Group_Has_No_Value()
+    {
+        var sut = new EntityWithNoGroupFinalizer();
+        var entity = new EntityWithNoGroupValue();
+
+        var identifierName = sut.GetIdentifierName(entity);
+
+        identifierName.Should().Be("entitywithnogroupfinalizer");
     }
 
     [Fact]
     public void GetIdentifierName_Should_Return_Correct_Name_When_Finalizer_Not_Ending_With_Finalizer()
     {
-        var sut = new EntityFinalizerNotEndingOnFinalizerTest();
-        var entity = new EntityFinalizerTestEntityWithConstValue();
+        var sut = new EntityFinalizerNotEndingOnFinalizer1();
+        var entity = new EntityWithGroupAsConstValue();
 
         var identifierName = sut.GetIdentifierName(entity);
 
-        identifierName.Should().Be($"{Group}/entityfinalizernotendingonfinalizertestfinalizer");
+        identifierName.Should().Be($"{Group}/entityfinalizernotendingonfinalizer1finalizer");
     }
 
     [Fact]
     public void GetIdentifierName_Should_Return_Correct_Name_When_Finalizer_Identifier_Would_Be_Greater_Than_63_Characters()
     {
         var sut = new EntityFinalizerWithATotalIdentifierNameHavingALengthGreaterThan63();
-        var entity = new EntityFinalizerTestEntityWithConstValue();
+        var entity = new EntityWithGroupAsConstValue();
 
         var identifierName = sut.GetIdentifierName(entity);
 
@@ -62,35 +73,42 @@ public sealed class EntityFinalizerExtensions
     }
 
     private sealed class EntityFinalizerWithATotalIdentifierNameHavingALengthGreaterThan63
-        : IEntityFinalizer<EntityFinalizerTestEntityWithConstValue>
+        : IEntityFinalizer<EntityWithGroupAsConstValue>
     {
-        public Task<Result<EntityFinalizerTestEntityWithConstValue>> FinalizeAsync(EntityFinalizerTestEntityWithConstValue entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<EntityFinalizerTestEntityWithConstValue>.ForSuccess(entity));
+        public Task<Result<EntityWithGroupAsConstValue>> FinalizeAsync(EntityWithGroupAsConstValue entity, CancellationToken cancellationToken)
+            => Task.FromResult(Result<EntityWithGroupAsConstValue>.ForSuccess(entity));
     }
 
-    private sealed class EntityFinalizerNotEndingOnFinalizerTest
-        : IEntityFinalizer<EntityFinalizerTestEntityWithConstValue>
+    private sealed class EntityFinalizerNotEndingOnFinalizer1
+        : IEntityFinalizer<EntityWithGroupAsConstValue>
     {
-        public Task<Result<EntityFinalizerTestEntityWithConstValue>> FinalizeAsync(EntityFinalizerTestEntityWithConstValue entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<EntityFinalizerTestEntityWithConstValue>.ForSuccess(entity));
+        public Task<Result<EntityWithGroupAsConstValue>> FinalizeAsync(EntityWithGroupAsConstValue entity, CancellationToken cancellationToken)
+            => Task.FromResult(Result<EntityWithGroupAsConstValue>.ForSuccess(entity));
     }
 
-    private sealed class EntityWithStringValueFinalizer
-        : IEntityFinalizer<EntityFinalizerTestEntityWithStringValue>
+    private sealed class EntityWithGroupAsStringValueFinalizer
+        : IEntityFinalizer<EntityWithGroupAsStringValue>
     {
-        public Task<Result<EntityFinalizerTestEntityWithStringValue>> FinalizeAsync(EntityFinalizerTestEntityWithStringValue entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<EntityFinalizerTestEntityWithStringValue>.ForSuccess(entity));
+        public Task<Result<EntityWithGroupAsStringValue>> FinalizeAsync(EntityWithGroupAsStringValue entity, CancellationToken cancellationToken)
+            => Task.FromResult(Result<EntityWithGroupAsStringValue>.ForSuccess(entity));
     }
 
-    private sealed class EntityWithConstValueFinalizer
-        : IEntityFinalizer<EntityFinalizerTestEntityWithConstValue>
+    private sealed class EntityWithGroupAsConstValueFinalizer
+        : IEntityFinalizer<EntityWithGroupAsConstValue>
     {
-        public Task<Result<EntityFinalizerTestEntityWithConstValue>> FinalizeAsync(EntityFinalizerTestEntityWithConstValue entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<EntityFinalizerTestEntityWithConstValue>.ForSuccess(entity));
+        public Task<Result<EntityWithGroupAsConstValue>> FinalizeAsync(EntityWithGroupAsConstValue entity, CancellationToken cancellationToken)
+            => Task.FromResult(Result<EntityWithGroupAsConstValue>.ForSuccess(entity));
+    }
+
+    private sealed class EntityWithNoGroupFinalizer
+        : IEntityFinalizer<EntityWithNoGroupValue>
+    {
+        public Task<Result<EntityWithNoGroupValue>> FinalizeAsync(EntityWithNoGroupValue entity, CancellationToken cancellationToken)
+            => Task.FromResult(Result<EntityWithNoGroupValue>.ForSuccess(entity));
     }
 
     [KubernetesEntity(Group = "finalizer.test", ApiVersion = "v1", Kind = "FinalizerTest")]
-    private sealed class EntityFinalizerTestEntityWithStringValue
+    private sealed class EntityWithGroupAsStringValue
         : IKubernetesObject<V1ObjectMeta>
     {
         public string ApiVersion { get; set; } = "finalizer.test/v1";
@@ -101,7 +119,18 @@ public sealed class EntityFinalizerExtensions
     }
 
     [KubernetesEntity(Group = Group, ApiVersion = "v1", Kind = "FinalizerTest")]
-    private sealed class EntityFinalizerTestEntityWithConstValue
+    private sealed class EntityWithGroupAsConstValue
+        : IKubernetesObject<V1ObjectMeta>
+    {
+        public string ApiVersion { get; set; } = "finalizer.test/v1";
+
+        public string Kind { get; set; } = "FinalizerTest";
+
+        public V1ObjectMeta Metadata { get; set; } = new();
+    }
+
+    [KubernetesEntity]
+    private sealed class EntityWithNoGroupValue
         : IKubernetesObject<V1ObjectMeta>
     {
         public string ApiVersion { get; set; } = "finalizer.test/v1";
