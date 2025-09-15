@@ -16,7 +16,7 @@ namespace KubeOps.Operator.Queue;
 
 internal sealed class EntityRequeueBackgroundService<TEntity>(
     IKubernetesClient client,
-    TimedEntityQueue<TEntity> queue,
+    ITimedEntityQueue<TEntity> queue,
     IReconciler<TEntity> reconciler,
     ILogger<EntityRequeueBackgroundService<TEntity>> logger) : IHostedService, IDisposable, IAsyncDisposable
     where TEntity : IKubernetesObject<V1ObjectMeta>
@@ -67,6 +67,7 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
         await CastAndDispose(queue);
 
         _disposed = true;
+        return;
 
         static async ValueTask CastAndDispose(IDisposable resource)
         {

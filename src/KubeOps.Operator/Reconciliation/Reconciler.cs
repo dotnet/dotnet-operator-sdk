@@ -39,7 +39,7 @@ internal sealed class Reconciler<TEntity>(
     IFusionCacheProvider cacheProvider,
     IServiceProvider provider,
     OperatorSettings settings,
-    TimedEntityQueue<TEntity> requeue,
+    ITimedEntityQueue<TEntity> requeue,
     IKubernetesClient client)
     : IReconciler<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
@@ -91,7 +91,7 @@ internal sealed class Reconciler<TEntity>(
             case { Metadata.DeletionTimestamp: null }:
                 var cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
 
-                // Check if entity spec has changed through "Generation" value increment. Skip reconcile if not changed.
+                // Check if entity-spec has changed through "Generation" value increment. Skip reconcile if not changed.
                 if (cachedGeneration.HasValue && cachedGeneration >= entity.Generation())
                 {
                     logger.LogDebug(

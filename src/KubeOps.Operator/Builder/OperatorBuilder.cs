@@ -47,7 +47,7 @@ internal sealed class OperatorBuilder : IOperatorBuilder
     {
         Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
         Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
-        Services.TryAddSingleton(new TimedEntityQueue<TEntity>());
+        Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
         Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
         Services.TryAddTransient<IEntityRequeueFactory, KubeOpsEntityRequeueFactory>();
         Services.TryAddTransient<EntityRequeue<TEntity>>(services =>
@@ -72,7 +72,7 @@ internal sealed class OperatorBuilder : IOperatorBuilder
     {
         Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
         Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
-        Services.TryAddSingleton(new TimedEntityQueue<TEntity>());
+        Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
         Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
         Services.TryAddTransient<IEntityRequeueFactory, KubeOpsEntityRequeueFactory>();
         Services.TryAddTransient<EntityRequeue<TEntity>>(services =>

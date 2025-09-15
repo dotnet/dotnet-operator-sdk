@@ -20,7 +20,7 @@ internal sealed class KubeOpsEntityRequeueFactory(IServiceProvider services)
         (entity, type, timeSpan) =>
         {
             var logger = services.GetService<ILogger<EntityRequeue<TEntity>>>();
-            var queue = services.GetRequiredService<TimedEntityQueue<TEntity>>();
+            var queue = services.GetRequiredService<ITimedEntityQueue<TEntity>>();
 
             logger?.LogTrace(
                 """Requeue entity "{Kind}/{Name}" in {Milliseconds}ms.""",

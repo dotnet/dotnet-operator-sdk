@@ -16,7 +16,7 @@ namespace KubeOps.Operator.Queue;
 /// The given enumerable only contains items that should be considered for reconciliations.
 /// </summary>
 /// <typeparam name="TEntity">The type of the inner entity.</typeparam>
-public sealed class TimedEntityQueue<TEntity> : IDisposable
+public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     // A shared task factory for all the created tasks.
@@ -30,17 +30,11 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
 
     internal int Count => _management.Count;
 
-    /// <summary>
-    /// Enqueues the given <paramref name="entity"/> to happen in <paramref name="requeueIn"/>.
-    /// If the item already exists, the existing entry is updated.
-    /// </summary>
-    /// <param name="entity">The entity.</param>
-    /// <param name="type">The type of which the reconcile operation should be executed.</param>
-    /// <param name="requeueIn">The time after <see cref="DateTimeOffset.Now"/>, where the item is reevaluated again.</param>
+    /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Enqueue"/>
     public void Enqueue(TEntity entity, RequeueType type, TimeSpan requeueIn)
     {
         _management.AddOrUpdate(
-            TimedEntityQueue<TEntity>.GetKey(entity) ?? throw new InvalidOperationException("Cannot enqueue entities without name."),
+            this.GetKey(entity) ?? throw new InvalidOperationException("Cannot enqueue entities without name."),
             key =>
             {
                 var entry = new TimedQueueEntry<TEntity>(entity, type, requeueIn);
@@ -68,6 +62,7 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
             });
     }
 
+    /// <inheritdoc cref="IDisposable.Dispose"/>
     public void Dispose()
     {
         _queue.Dispose();
@@ -77,6 +72,7 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
         }
     }
 
+    /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator"/>
     public async IAsyncEnumerator<RequeueEntry<TEntity>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
     {
         await Task.Yield();
@@ -86,9 +82,10 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
         }
     }
 
+    /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Remove"/>
     public void Remove(TEntity entity)
     {
-        var key = TimedEntityQueue<TEntity>.GetKey(entity);
+        var key = this.GetKey(entity);
         if (key is null)
         {
             return;
@@ -98,20 +95,5 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
         {
             task.Cancel();
         }
-    }
-
-    private static string? GetKey(TEntity entity)
-    {
-        if (entity.Name() is null)
-        {
-            return null;
-        }
-
-        if (entity.Namespace() is null)
-        {
-            return entity.Name();
-        }
-
-        return $"{entity.Namespace()}/{entity.Name()}";
     }
 }
