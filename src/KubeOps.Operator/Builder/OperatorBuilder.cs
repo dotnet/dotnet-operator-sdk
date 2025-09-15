@@ -45,7 +45,6 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         where TImplementation : class, IEntityController<TEntity>
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
-        Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
         Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
         Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
         Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
@@ -53,13 +52,16 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         Services.TryAddTransient<EntityRequeue<TEntity>>(services =>
             services.GetRequiredService<IEntityRequeueFactory>().Create<TEntity>());
 
-        if (_settings.EnableLeaderElection)
+        switch (_settings.LeaderElectionType)
         {
-            Services.AddHostedService<LeaderAwareResourceWatcher<TEntity>>();
-        }
-        else
-        {
-            Services.AddHostedService<ResourceWatcher<TEntity>>();
+            case LeaderElectionType.None:
+                Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
+                Services.AddHostedService<ResourceWatcher<TEntity>>();
+                break;
+            case LeaderElectionType.Single:
+                Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
+                Services.AddHostedService<LeaderAwareResourceWatcher<TEntity>>();
+                break;
         }
 
         return this;
@@ -70,23 +72,8 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         where TEntity : IKubernetesObject<V1ObjectMeta>
         where TLabelSelector : class, IEntityLabelSelector<TEntity>
     {
-        Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
-        Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
-        Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
-        Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
-        Services.TryAddTransient<IEntityRequeueFactory, KubeOpsEntityRequeueFactory>();
-        Services.TryAddTransient<EntityRequeue<TEntity>>(services =>
-            services.GetRequiredService<IEntityRequeueFactory>().Create<TEntity>());
+        AddController<TImplementation, TEntity>();
         Services.TryAddSingleton<IEntityLabelSelector<TEntity>, TLabelSelector>();
-
-        if (_settings.EnableLeaderElection)
-        {
-            Services.AddHostedService<LeaderAwareResourceWatcher<TEntity>>();
-        }
-        else
-        {
-            Services.AddHostedService<ResourceWatcher<TEntity>>();
-        }
 
         return this;
     }
@@ -143,7 +130,7 @@ internal sealed class OperatorBuilder : IOperatorBuilder
 
         Services.AddSingleton(typeof(IEntityLabelSelector<>), typeof(DefaultEntityLabelSelector<>));
 
-        if (_settings.EnableLeaderElection)
+        if (_settings.LeaderElectionType == LeaderElectionType.Single)
         {
             Services.AddLeaderElection();
         }

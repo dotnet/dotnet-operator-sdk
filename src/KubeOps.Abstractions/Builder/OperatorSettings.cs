@@ -36,19 +36,11 @@ public sealed partial class OperatorSettings
     public string? Namespace { get; set; }
 
     /// <summary>
-    /// <para>
-    /// Whether the leader elector should run. You should enable
-    /// this if you plan to run the operator redundantly.
-    /// </para>
-    /// <para>
-    /// If this is disabled and an operator runs in multiple instances
-    /// (in the same namespace), it can lead to a "split brain" problem.
-    /// </para>
-    /// <para>
-    /// Defaults to `false`.
-    /// </para>
+    /// Defines the type of leader election mechanism to be used by the operator.
+    /// Determines how resources and controllers are coordinated in a distributed environment.
+    /// Defaults to <see cref="LeaderElectionType.None"/> indicating no leader election is configured.
     /// </summary>
-    public bool EnableLeaderElection { get; set; } = false;
+    public LeaderElectionType LeaderElectionType { get; set; } = LeaderElectionType.None;
 
     /// <summary>
     /// Defines how long one lease is valid for any leader.

@@ -6,6 +6,7 @@ using FluentAssertions;
 
 using k8s.Models;
 
+using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Controller;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Test.TestEntities;
@@ -49,7 +50,7 @@ public class LeaderAwarenessIntegrationTest : IntegrationTestBase
     {
         builder.Services
             .AddSingleton(_mock)
-            .AddKubernetesOperator(s => s.EnableLeaderElection = true)
+            .AddKubernetesOperator(s => s.LeaderElectionType = LeaderElectionType.Single)
             .AddController<TestController, V1OperatorIntegrationTestEntity>();
     }
 

@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Queue;
 
-internal sealed class EntityRequeueBackgroundService<TEntity>(
+public class EntityRequeueBackgroundService<TEntity>(
     IKubernetesClient client,
     ITimedEntityQueue<TEntity> queue,
     IReconciler<TEntity> reconciler,
@@ -53,6 +53,23 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
 
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeAsync(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing)
+        {
+            return;
+        }
+
         _cts.Dispose();
         client.Dispose();
         queue.Dispose();
@@ -60,8 +77,13 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
         _disposed = true;
     }
 
-    public async ValueTask DisposeAsync()
+    protected virtual async ValueTask DisposeAsync(bool disposing)
     {
+        if (!disposing)
+        {
+            return;
+        }
+
         await CastAndDispose(_cts);
         await CastAndDispose(client);
         await CastAndDispose(queue);
@@ -79,6 +101,34 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
             {
                 resource.Dispose();
             }
+        }
+    }
+
+    protected virtual async Task ReconcileSingleAsync(RequeueEntry<TEntity> queuedEntry, CancellationToken cancellationToken)
+    {
+        logger.LogTrace("""Execute requested requeued reconciliation for "{Name}".""", queuedEntry.Entity.Name());
+
+        if (await client.GetAsync<TEntity>(queuedEntry.Entity.Name(), queuedEntry.Entity.Namespace(), cancellationToken) is not
+            { } entity)
+        {
+            logger.LogWarning(
+                """Requeued entity "{Name}" was not found. Skipping reconciliation.""", queuedEntry.Entity.Name());
+            return;
+        }
+
+        switch (queuedEntry.RequeueType)
+        {
+            case RequeueType.Added:
+                await reconciler.ReconcileCreation(entity, cancellationToken);
+                break;
+            case RequeueType.Modified:
+                await reconciler.ReconcileModification(entity, cancellationToken);
+                break;
+            case RequeueType.Deleted:
+                await reconciler.ReconcileDeletion(entity, cancellationToken);
+                break;
+            default:
+                throw new NotSupportedException($"RequeueType '{queuedEntry.RequeueType}' is not supported!");
         }
     }
 
@@ -108,34 +158,6 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
                     entry.Entity.Kind,
                     entry.Entity.Name());
             }
-        }
-    }
-
-    private async Task ReconcileSingleAsync(RequeueEntry<TEntity> queuedEntry, CancellationToken cancellationToken)
-    {
-        logger.LogTrace("""Execute requested requeued reconciliation for "{Name}".""", queuedEntry.Entity.Name());
-
-        if (await client.GetAsync<TEntity>(queuedEntry.Entity.Name(), queuedEntry.Entity.Namespace(), cancellationToken) is not
-            { } entity)
-        {
-            logger.LogWarning(
-                """Requeued entity "{Name}" was not found. Skipping reconciliation.""", queuedEntry.Entity.Name());
-            return;
-        }
-
-        switch (queuedEntry.RequeueType)
-        {
-            case RequeueType.Added:
-                await reconciler.ReconcileCreation(entity, cancellationToken);
-                break;
-            case RequeueType.Modified:
-                await reconciler.ReconcileModification(entity, cancellationToken);
-                break;
-            case RequeueType.Deleted:
-                await reconciler.ReconcileDeletion(entity, cancellationToken);
-                break;
-            default:
-                throw new NotSupportedException($"RequeueType '{queuedEntry.RequeueType}' is not supported!");
         }
     }
 }

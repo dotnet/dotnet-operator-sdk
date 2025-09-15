@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Controller;
 using KubeOps.Operator.Test.TestEntities;
 
@@ -14,7 +15,7 @@ public sealed class LeaderAwareHostedServiceDisposeIntegrationTest : HostedServi
     protected override void ConfigureHost(HostApplicationBuilder builder)
     {
         builder.Services
-            .AddKubernetesOperator(op => op.EnableLeaderElection = true)
+            .AddKubernetesOperator(op => op.LeaderElectionType = LeaderElectionType.Single)
             .AddController<TestController, V1OperatorIntegrationTestEntity>();
     }
 
