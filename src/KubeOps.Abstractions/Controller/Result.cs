@@ -25,11 +25,11 @@ public sealed record Result<TEntity>
     [MemberNotNullWhen(true, nameof(ErrorMessage))]
     public bool IsFailure => !IsSuccess;
 
-    public string? ErrorMessage { get; set; }
+    public string? ErrorMessage { get; }
 
     public Exception? Error { get; }
 
-    public TimeSpan? RequeueAfter { get; }
+    public TimeSpan? RequeueAfter { get; set; }
 
     public static Result<TEntity> ForSuccess(TEntity entity, TimeSpan? requeueAfter = null)
     {
