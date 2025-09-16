@@ -30,16 +30,16 @@ namespace KubeOps.Operator.Builder;
 
 internal sealed class OperatorBuilder : IOperatorBuilder
 {
-    private readonly OperatorSettings _settings;
-
     public OperatorBuilder(IServiceCollection services, OperatorSettings settings)
     {
-        _settings = settings;
+        Settings = settings;
         Services = services;
         AddOperatorBase();
     }
 
     public IServiceCollection Services { get; }
+
+    public OperatorSettings Settings { get; }
 
     public IOperatorBuilder AddController<TImplementation, TEntity>()
         where TImplementation : class, IEntityController<TEntity>
@@ -52,7 +52,7 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         Services.TryAddTransient<EntityRequeue<TEntity>>(services =>
             services.GetRequiredService<IEntityRequeueFactory>().Create<TEntity>());
 
-        switch (_settings.LeaderElectionType)
+        switch (Settings.LeaderElectionType)
         {
             case LeaderElectionType.None:
                 Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
@@ -102,19 +102,19 @@ internal sealed class OperatorBuilder : IOperatorBuilder
 
     private void AddOperatorBase()
     {
-        Services.AddSingleton(_settings);
-        Services.AddSingleton(new ActivitySource(_settings.Name));
+        Services.AddSingleton(Settings);
+        Services.AddSingleton(new ActivitySource(Settings.Name));
 
         // add and configure resource watcher entity cache
-        Services.WithResourceWatcherEntityCaching(_settings);
+        Services.WithResourceWatcherEntityCaching(Settings);
 
         // Add the default configuration and the client separately. This allows external users to override either
         // just the config (e.g. for integration tests) or to replace the whole client, e.g. with a mock.
-        // We also add the k8s.IKubernetes as a singleton service, in order to allow to access internal services
-        // and also external users to make use of it's features that might not be implemented in the adapted client.
+        // We also add the k8s.IKubernetes as a singleton service, in order to allow accessing internal services
+        // and also external users to make use of its features that might not be implemented in the adapted client.
         //
         // Due to a memory leak in the Kubernetes client, it is important that the client is registered with
-        // with the same lifetime as the KubernetesClientConfiguration. This is tracked in kubernetes/csharp#1446.
+        // the same lifetime as the KubernetesClientConfiguration. This is tracked in kubernetes/csharp#1446.
         // https://github.com/kubernetes-client/csharp/issues/1446
         //
         // The missing ability to inject a custom HTTP client and therefore the possibility to use the .AddHttpClient()
@@ -130,7 +130,7 @@ internal sealed class OperatorBuilder : IOperatorBuilder
 
         Services.AddSingleton(typeof(IEntityLabelSelector<>), typeof(DefaultEntityLabelSelector<>));
 
-        if (_settings.LeaderElectionType == LeaderElectionType.Single)
+        if (Settings.LeaderElectionType == LeaderElectionType.Single)
         {
             Services.AddLeaderElection();
         }

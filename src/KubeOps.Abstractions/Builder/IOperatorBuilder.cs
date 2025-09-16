@@ -25,6 +25,11 @@ public interface IOperatorBuilder
     IServiceCollection Services { get; }
 
     /// <summary>
+    /// Configuration settings for the operator.
+    /// </summary>
+    OperatorSettings Settings { get; }
+
+    /// <summary>
     /// Add a controller implementation for a specific entity to the operator.
     /// The metadata for the entity must be added as well.
     /// </summary>
