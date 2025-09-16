@@ -7,6 +7,10 @@ using k8s.Models;
 using KubeOps.Abstractions.Queue;
 using KubeOps.Operator.Queue;
 
+using Microsoft.Extensions.Logging;
+
+using Moq;
+
 namespace KubeOps.Operator.Test.Queue;
 
 public sealed class TimedEntityQueueTest
@@ -14,7 +18,7 @@ public sealed class TimedEntityQueueTest
     [Fact]
     public async Task Can_Enqueue_Multiple_Entities_With_Same_Name()
     {
-        var queue = new TimedEntityQueue<V1Secret>();
+        var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
 
         queue.Enqueue(CreateSecret("app-ns1", "secret-name"), RequeueType.Modified, TimeSpan.FromSeconds(1));
         queue.Enqueue(CreateSecret("app-ns2", "secret-name"), RequeueType.Modified, TimeSpan.FromSeconds(1));

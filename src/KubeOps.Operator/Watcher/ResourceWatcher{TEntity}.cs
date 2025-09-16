@@ -46,7 +46,7 @@ public class ResourceWatcher<TEntity>(
         if (_cancellationTokenSource.IsCancellationRequested)
         {
             _cancellationTokenSource.Dispose();
-            _cancellationTokenSource = new CancellationTokenSource();
+            _cancellationTokenSource = new();
         }
 
         _eventWatcher = WatchClientEventsAsync(_cancellationTokenSource.Token);

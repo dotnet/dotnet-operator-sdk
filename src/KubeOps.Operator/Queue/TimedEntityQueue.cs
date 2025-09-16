@@ -9,6 +9,8 @@ using k8s.Models;
 
 using KubeOps.Abstractions.Queue;
 
+using Microsoft.Extensions.Logging;
+
 namespace KubeOps.Operator.Queue;
 
 /// <summary>
@@ -16,7 +18,9 @@ namespace KubeOps.Operator.Queue;
 /// The given enumerable only contains items that should be considered for reconciliations.
 /// </summary>
 /// <typeparam name="TEntity">The type of the inner entity.</typeparam>
-public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
+public sealed class TimedEntityQueue<TEntity>(
+    ILogger<TimedEntityQueue<TEntity>> logger)
+    : ITimedEntityQueue<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     // A shared task factory for all the created tasks.
@@ -33,33 +37,46 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
     /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Enqueue"/>
     public void Enqueue(TEntity entity, RequeueType type, TimeSpan requeueIn)
     {
-        _management.AddOrUpdate(
-            this.GetKey(entity) ?? throw new InvalidOperationException("Cannot enqueue entities without name."),
-            key =>
-            {
-                var entry = new TimedQueueEntry<TEntity>(entity, type, requeueIn);
-                _scheduledEntries.StartNew(
-                    async () =>
-                    {
-                        await entry.AddAfterDelay(_queue);
-                        _management.TryRemove(key, out _);
-                    },
-                    entry.Token);
-                return entry;
-            },
-            (key, oldEntry) =>
-            {
-                oldEntry.Cancel();
-                var entry = new TimedQueueEntry<TEntity>(entity, type, requeueIn);
-                _scheduledEntries.StartNew(
-                    async () =>
-                    {
-                        await entry.AddAfterDelay(_queue);
-                        _management.TryRemove(key, out _);
-                    },
-                    entry.Token);
-                return entry;
-            });
+        _management
+            .AddOrUpdate(
+                this.GetKey(entity) ?? throw new InvalidOperationException("Cannot enqueue entities without name."),
+                key =>
+                {
+                    logger.LogTrace(
+                        """Adding schedule for entity "{Kind}/{Name}" to reconcile in {Seconds}s.""",
+                        entity.Kind,
+                        entity.Name(),
+                        requeueIn.TotalSeconds);
+
+                    var entry = new TimedQueueEntry<TEntity>(entity, type, requeueIn);
+                    _scheduledEntries.StartNew(
+                        async () =>
+                        {
+                            await entry.AddAfterDelay(_queue);
+                            _management.TryRemove(key, out _);
+                        },
+                        entry.Token);
+                    return entry;
+                },
+                (key, oldEntry) =>
+                {
+                    logger.LogTrace(
+                        """Updating schedule for entity "{Kind}/{Name}" to reconcile in {Seconds}s.""",
+                        entity.Kind,
+                        entity.Name(),
+                        requeueIn.TotalSeconds);
+
+                    oldEntry.Cancel();
+                    var entry = new TimedQueueEntry<TEntity>(entity, type, requeueIn);
+                    _scheduledEntries.StartNew(
+                        async () =>
+                        {
+                            await entry.AddAfterDelay(_queue);
+                            _management.TryRemove(key, out _);
+                        },
+                        entry.Token);
+                    return entry;
+                });
     }
 
     /// <inheritdoc cref="IDisposable.Dispose"/>
