@@ -199,7 +199,7 @@ internal sealed class Reconciler<TEntity>(
 
         if (settings.AutoAttachFinalizers)
         {
-            var finalizers = scope.ServiceProvider.GetService<IEnumerable<IEntityFinalizer<TEntity>>>() ?? [];
+            var finalizers = scope.ServiceProvider.GetKeyedServices<IEntityFinalizer<TEntity>>(KeyedService.AnyKey);
 
             foreach (var finalizer in finalizers)
             {
