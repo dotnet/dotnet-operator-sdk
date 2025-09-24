@@ -52,10 +52,14 @@ internal sealed class Reconciler<TEntity>(
         requeue.Remove(entity);
         var cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
 
+        // Only perform reconciliation if the entity was not already in the cache.
         if (!cachedGeneration.HasValue)
         {
-            // Only perform reconciliation if the entity was not already in the cache.
-            var result = await ReconcileModificationAsync(entity, cancellationToken);
+            // in case we missed an event (operator was not running)
+            // and the entity was marked for deletion - execute finalizers
+            var result = (entity.Metadata.DeletionTimestamp is null)
+                ? await ReconcileModificationAsync(entity, cancellationToken)
+                : await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
 
             if (result.IsSuccess)
             {
