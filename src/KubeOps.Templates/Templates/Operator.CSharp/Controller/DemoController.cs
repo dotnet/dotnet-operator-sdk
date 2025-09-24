@@ -1,4 +1,4 @@
-﻿using KubeOps.Abstractions.Controller;
+﻿using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Rbac;
 
 using Microsoft.Extensions.Logging;

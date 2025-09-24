@@ -1,6 +1,6 @@
 ﻿using k8s.Models;
 
-using KubeOps.Abstractions.Finalizer;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
 
 using Microsoft.Extensions.Logging;
 

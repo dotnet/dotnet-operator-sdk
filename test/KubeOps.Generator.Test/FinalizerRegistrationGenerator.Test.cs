@@ -35,7 +35,7 @@ public sealed class FinalizerRegistrationGeneratorTest
     [InlineData("""
                 using k8s;
                 using k8s.Models;
-                using KubeOps.Abstractions.Finalizer;
+                using KubeOps.Abstractions.Reconciliation.Finalizer;
 
                 public static class Constants
                 {
@@ -73,7 +73,7 @@ public sealed class FinalizerRegistrationGeneratorTest
     [InlineData("""
                 using k8s;
                 using k8s.Models;
-                using KubeOps.Abstractions.Finalizer;
+                using KubeOps.Abstractions.Reconciliation.Finalizer;
                 
                 [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
                 public sealed class V1TestEntity : IKubernetesObject<V1ObjectMeta>
@@ -104,7 +104,7 @@ public sealed class FinalizerRegistrationGeneratorTest
     [InlineData("""
                 using k8s;
                 using k8s.Models;
-                using KubeOps.Abstractions.Finalizer;
+                using KubeOps.Abstractions.Reconciliation.Finalizer;
 
                 [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
                 public sealed class V1TestEntity : IKubernetesObject<V1ObjectMeta>
@@ -140,7 +140,7 @@ public sealed class FinalizerRegistrationGeneratorTest
     [InlineData("""
                 using k8s;
                 using k8s.Models;
-                using KubeOps.Abstractions.Finalizer;
+                using KubeOps.Abstractions.Reconciliation.Finalizer;
 
                 [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
                 public sealed class V1TestEntity : IKubernetesObject<V1ObjectMeta>
@@ -177,7 +177,7 @@ public sealed class FinalizerRegistrationGeneratorTest
     [InlineData("""
                 using k8s;
                 using k8s.Models;
-                using KubeOps.Abstractions.Finalizer;
+                using KubeOps.Abstractions.Reconciliation.Finalizer;
 
                 [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
                 public sealed class V1TestEntity : IKubernetesObject<V1ObjectMeta>

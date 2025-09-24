@@ -88,7 +88,7 @@ A controller reconciles a specific entity type. Implement controllers using the 
 Example controller implementation:
 
 ```csharp
-using KubeOps.Abstractions.Controller;
+using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Rbac;
 using KubeOps.KubernetesClient;
 using Microsoft.Extensions.Logging;
@@ -154,7 +154,7 @@ A [finalizer](https://kubernetes.io/docs/concepts/overview/working-with-objects/
 Finalizers are attached using an `EntityFinalizerAttacher` and are called when the entity is marked for deletion.
 
 ```csharp
-using KubeOps.Abstractions.Finalizer;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
 
 public class FinalizerOne : IEntityFinalizer<V1TestEntity>
 {
