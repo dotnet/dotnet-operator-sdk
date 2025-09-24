@@ -7,8 +7,8 @@ using FluentAssertions;
 using k8s;
 using k8s.Models;
 
-using KubeOps.Abstractions.Controller;
-using KubeOps.Abstractions.Finalizer;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
 
 namespace KubeOps.Abstractions.Test.Finalizer;
 
@@ -75,36 +75,36 @@ public sealed class EntityFinalizerExtensions
     private sealed class EntityFinalizerWithATotalIdentifierNameHavingALengthGreaterThan63
         : IEntityFinalizer<EntityWithGroupAsConstValue>
     {
-        public Task<Result<EntityWithGroupAsConstValue>> FinalizeAsync(EntityWithGroupAsConstValue entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<EntityWithGroupAsConstValue>.ForSuccess(entity));
+        public Task<ReconciliationResult<EntityWithGroupAsConstValue>> FinalizeAsync(EntityWithGroupAsConstValue entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<EntityWithGroupAsConstValue>.Success(entity));
     }
 
     private sealed class EntityFinalizerNotEndingOnFinalizer1
         : IEntityFinalizer<EntityWithGroupAsConstValue>
     {
-        public Task<Result<EntityWithGroupAsConstValue>> FinalizeAsync(EntityWithGroupAsConstValue entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<EntityWithGroupAsConstValue>.ForSuccess(entity));
+        public Task<ReconciliationResult<EntityWithGroupAsConstValue>> FinalizeAsync(EntityWithGroupAsConstValue entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<EntityWithGroupAsConstValue>.Success(entity));
     }
 
     private sealed class EntityWithGroupAsStringValueFinalizer
         : IEntityFinalizer<EntityWithGroupAsStringValue>
     {
-        public Task<Result<EntityWithGroupAsStringValue>> FinalizeAsync(EntityWithGroupAsStringValue entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<EntityWithGroupAsStringValue>.ForSuccess(entity));
+        public Task<ReconciliationResult<EntityWithGroupAsStringValue>> FinalizeAsync(EntityWithGroupAsStringValue entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<EntityWithGroupAsStringValue>.Success(entity));
     }
 
     private sealed class EntityWithGroupAsConstValueFinalizer
         : IEntityFinalizer<EntityWithGroupAsConstValue>
     {
-        public Task<Result<EntityWithGroupAsConstValue>> FinalizeAsync(EntityWithGroupAsConstValue entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<EntityWithGroupAsConstValue>.ForSuccess(entity));
+        public Task<ReconciliationResult<EntityWithGroupAsConstValue>> FinalizeAsync(EntityWithGroupAsConstValue entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<EntityWithGroupAsConstValue>.Success(entity));
     }
 
     private sealed class EntityWithNoGroupFinalizer
         : IEntityFinalizer<EntityWithNoGroupValue>
     {
-        public Task<Result<EntityWithNoGroupValue>> FinalizeAsync(EntityWithNoGroupValue entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<EntityWithNoGroupValue>.ForSuccess(entity));
+        public Task<ReconciliationResult<EntityWithNoGroupValue>> FinalizeAsync(EntityWithNoGroupValue entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<EntityWithNoGroupValue>.Success(entity));
     }
 
     [KubernetesEntity(Group = "finalizer.test", ApiVersion = "v1", Kind = "FinalizerTest")]

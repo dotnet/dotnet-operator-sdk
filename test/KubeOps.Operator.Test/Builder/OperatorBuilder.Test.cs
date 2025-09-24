@@ -5,11 +5,12 @@
 using FluentAssertions;
 
 using KubeOps.Abstractions.Builder;
-using KubeOps.Abstractions.Controller;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Events;
-using KubeOps.Abstractions.Finalizer;
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
+using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient.LabelSelectors;
 using KubeOps.Operator.Builder;
 using KubeOps.Operator.Queue;
@@ -147,17 +148,17 @@ public sealed class OperatorBuilderTest
 
     private sealed class TestController : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public Task<Result<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
-            Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
+            Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
 
-        public Task<Result<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
-            Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
+            Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
     }
 
     private sealed class TestFinalizer : IEntityFinalizer<V1OperatorIntegrationTestEntity>
     {
-        public Task<Result<V1OperatorIntegrationTestEntity>> FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
-            Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
+            Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
     }
 
     private sealed class TestLabelSelector : IEntityLabelSelector<V1OperatorIntegrationTestEntity>

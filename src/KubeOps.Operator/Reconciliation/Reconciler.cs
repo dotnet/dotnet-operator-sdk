@@ -6,9 +6,10 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Builder;
-using KubeOps.Abstractions.Controller;
-using KubeOps.Abstractions.Finalizer;
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
+using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Constants;
 using KubeOps.Operator.Queue;
@@ -46,7 +47,7 @@ internal sealed class Reconciler<TEntity>(
 {
     private readonly IFusionCache _entityCache = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
 
-    public async Task<Result<TEntity>> ReconcileCreation(TEntity entity, CancellationToken cancellationToken)
+    public async Task<ReconciliationResult<TEntity>> ReconcileCreation(TEntity entity, CancellationToken cancellationToken)
     {
         requeue.Remove(entity);
         var cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
@@ -77,14 +78,14 @@ internal sealed class Reconciler<TEntity>(
             entity.Kind,
             entity.Name());
 
-        return Result<TEntity>.ForSuccess(entity);
+        return ReconciliationResult<TEntity>.Success(entity);
     }
 
-    public async Task<Result<TEntity>> ReconcileModification(TEntity entity, CancellationToken cancellationToken)
+    public async Task<ReconciliationResult<TEntity>> ReconcileModification(TEntity entity, CancellationToken cancellationToken)
     {
         requeue.Remove(entity);
 
-        Result<TEntity> result;
+        ReconciliationResult<TEntity> reconciliationResult;
 
         switch (entity)
         {
@@ -99,33 +100,33 @@ internal sealed class Reconciler<TEntity>(
                         entity.Kind,
                         entity.Name());
 
-                    return Result<TEntity>.ForSuccess(entity);
+                    return ReconciliationResult<TEntity>.Success(entity);
                 }
 
                 // update cached generation since generation now changed
                 await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 1, token: cancellationToken);
-                result = await ReconcileModificationAsync(entity, cancellationToken);
+                reconciliationResult = await ReconcileModificationAsync(entity, cancellationToken);
 
                 break;
             case { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }:
-                result = await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
+                reconciliationResult = await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
 
                 break;
             default:
-                result = Result<TEntity>.ForSuccess(entity);
+                reconciliationResult = ReconciliationResult<TEntity>.Success(entity);
 
                 break;
         }
 
-        if (result.RequeueAfter.HasValue)
+        if (reconciliationResult.RequeueAfter.HasValue)
         {
-            requeue.Enqueue(result.Entity, RequeueType.Modified, result.RequeueAfter.Value);
+            requeue.Enqueue(reconciliationResult.Entity, RequeueType.Modified, reconciliationResult.RequeueAfter.Value);
         }
 
-        return result;
+        return reconciliationResult;
     }
 
-    public async Task<Result<TEntity>> ReconcileDeletion(TEntity entity, CancellationToken cancellationToken)
+    public async Task<ReconciliationResult<TEntity>> ReconcileDeletion(TEntity entity, CancellationToken cancellationToken)
     {
         requeue.Remove(entity);
 
@@ -149,7 +150,7 @@ internal sealed class Reconciler<TEntity>(
         return result;
     }
 
-    private async Task<Result<TEntity>> ReconcileFinalizersSequentialAsync(TEntity entity, CancellationToken cancellationToken)
+    private async Task<ReconciliationResult<TEntity>> ReconcileFinalizersSequentialAsync(TEntity entity, CancellationToken cancellationToken)
     {
         await using var scope = provider.CreateAsyncScope();
 
@@ -166,7 +167,7 @@ internal sealed class Reconciler<TEntity>(
                 entity.Kind,
                 entity.Name(),
                 identifier);
-            return Result<TEntity>.ForSuccess(entity);
+            return ReconciliationResult<TEntity>.Success(entity);
         }
 
         var result = await finalizer.FinalizeAsync(entity, cancellationToken);
@@ -190,10 +191,10 @@ internal sealed class Reconciler<TEntity>(
             entity.Name(),
             identifier);
 
-        return Result<TEntity>.ForSuccess(entity, result.RequeueAfter);
+        return ReconciliationResult<TEntity>.Success(entity, result.RequeueAfter);
     }
 
-    private async Task<Result<TEntity>> ReconcileModificationAsync(TEntity entity, CancellationToken cancellationToken)
+    private async Task<ReconciliationResult<TEntity>> ReconcileModificationAsync(TEntity entity, CancellationToken cancellationToken)
     {
         await using var scope = provider.CreateAsyncScope();
 

@@ -4,7 +4,7 @@
 
 using k8s.Models;
 
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.Operator.Queue;
 
 using Microsoft.Extensions.Logging;

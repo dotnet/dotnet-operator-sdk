@@ -5,7 +5,7 @@
 using k8s;
 using k8s.Models;
 
-namespace KubeOps.Abstractions.Controller;
+namespace KubeOps.Abstractions.Reconciliation.Controller;
 
 /// <summary>
 /// Generic entity controller. The controller manages the reconcile loop
@@ -47,7 +47,7 @@ public interface IEntityController<TEntity>
     /// <param name="entity">The entity that initiated the reconcile operation.</param>
     /// <param name="cancellationToken">The token used to signal cancellation of the operation.</param>
     /// <returns>A task that represents the asynchronous operation and contains the result of the reconcile process.</returns>
-    Task<Result<TEntity>> ReconcileAsync(TEntity entity, CancellationToken cancellationToken);
+    Task<ReconciliationResult<TEntity>> ReconcileAsync(TEntity entity, CancellationToken cancellationToken);
 
     /// <summary>
     /// Called for `delete` events for a given entity.
@@ -55,5 +55,5 @@ public interface IEntityController<TEntity>
     /// <param name="entity">The entity that fired the deleted event.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation and contains the result of the reconcile process.</returns>
-    Task<Result<TEntity>> DeletedAsync(TEntity entity, CancellationToken cancellationToken);
+    Task<ReconciliationResult<TEntity>> DeletedAsync(TEntity entity, CancellationToken cancellationToken);
 }

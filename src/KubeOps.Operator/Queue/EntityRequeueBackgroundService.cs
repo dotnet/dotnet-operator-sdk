@@ -5,7 +5,8 @@
 using k8s;
 using k8s.Models;
 
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Reconciliation;
 

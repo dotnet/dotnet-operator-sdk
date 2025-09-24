@@ -5,7 +5,7 @@
 using k8s;
 using k8s.Models;
 
-namespace KubeOps.Abstractions.Queue;
+namespace KubeOps.Abstractions.Reconciliation.Queue;
 
 /// <summary>
 /// <para>Injectable delegate for requeueing entities.</para>

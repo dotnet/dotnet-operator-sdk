@@ -6,8 +6,9 @@ using FluentAssertions;
 
 using k8s.Models;
 
-using KubeOps.Abstractions.Controller;
-using KubeOps.Abstractions.Finalizer;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Test.TestEntities;
 
@@ -213,7 +214,7 @@ public class EntityFinalizerIntegrationTest : IntegrationTestBase
             EntityFinalizerAttacher<SecondFinalizer, V1OperatorIntegrationTestEntity> second)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public async Task<Result<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public async Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
             if (entity.Name().Contains("first"))
@@ -226,31 +227,31 @@ public class EntityFinalizerIntegrationTest : IntegrationTestBase
                 await second(entity);
             }
 
-            return Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity);
+            return ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity);
         }
 
-        public Task<Result<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
     }
 
     private class FirstFinalizer(InvocationCounter<V1OperatorIntegrationTestEntity> svc) : IEntityFinalizer<V1OperatorIntegrationTestEntity>
     {
-        public Task<Result<V1OperatorIntegrationTestEntity>> FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
     }
 
     private class SecondFinalizer(InvocationCounter<V1OperatorIntegrationTestEntity> svc) : IEntityFinalizer<V1OperatorIntegrationTestEntity>
     {
-        public Task<Result<V1OperatorIntegrationTestEntity>> FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
     }
 }

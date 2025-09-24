@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation.Queue;
 
 namespace KubeOps.Operator.Queue;
 

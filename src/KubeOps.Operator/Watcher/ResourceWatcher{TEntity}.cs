@@ -11,8 +11,8 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Builder;
-using KubeOps.Abstractions.Controller;
 using KubeOps.Abstractions.Entities;
+using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Logging;
 using KubeOps.Operator.Reconciliation;
@@ -126,7 +126,7 @@ public class ResourceWatcher<TEntity>(
         }
     }
 
-    protected virtual async Task<Result<TEntity>> OnEventAsync(WatchEventType type, TEntity entity, CancellationToken cancellationToken)
+    protected virtual async Task<ReconciliationResult<TEntity>> OnEventAsync(WatchEventType type, TEntity entity, CancellationToken cancellationToken)
     {
         switch (type)
         {
@@ -148,7 +148,7 @@ public class ResourceWatcher<TEntity>(
                 break;
         }
 
-        return Result<TEntity>.ForSuccess(entity);
+        return ReconciliationResult<TEntity>.Success(entity);
     }
 
     private async Task WatchClientEventsAsync(CancellationToken stoppingToken)

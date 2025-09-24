@@ -9,9 +9,10 @@ using FluentAssertions;
 
 using k8s.Models;
 
-using KubeOps.Abstractions.Controller;
 using KubeOps.Abstractions.Events;
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Test.TestEntities;
 
@@ -90,7 +91,7 @@ public class EventPublisherIntegrationTest : IntegrationTestBase
         EventPublisher eventPublisher)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public async Task<Result<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public async Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             await eventPublisher(entity, "REASON", "message", cancellationToken: cancellationToken);
             svc.Invocation(entity);
@@ -100,10 +101,10 @@ public class EventPublisherIntegrationTest : IntegrationTestBase
                 requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(10));
             }
 
-            return Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity);
+            return ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity);
         }
 
-        public Task<Result<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
     }
 }

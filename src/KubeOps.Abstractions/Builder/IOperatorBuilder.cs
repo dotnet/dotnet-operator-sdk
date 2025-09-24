@@ -5,10 +5,10 @@
 using k8s;
 using k8s.Models;
 
-using KubeOps.Abstractions.Controller;
 using KubeOps.Abstractions.Crds;
 using KubeOps.Abstractions.Entities;
-using KubeOps.Abstractions.Finalizer;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
 
 using Microsoft.Extensions.DependencyInjection;
 

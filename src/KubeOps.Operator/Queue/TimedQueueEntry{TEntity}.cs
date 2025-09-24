@@ -4,7 +4,7 @@
 
 using System.Collections.Concurrent;
 
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation.Queue;
 
 namespace KubeOps.Operator.Queue;
 

@@ -8,12 +8,13 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Builder;
-using KubeOps.Abstractions.Controller;
 using KubeOps.Abstractions.Crds;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Events;
-using KubeOps.Abstractions.Finalizer;
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
+using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Crds;
 using KubeOps.Operator.Events;

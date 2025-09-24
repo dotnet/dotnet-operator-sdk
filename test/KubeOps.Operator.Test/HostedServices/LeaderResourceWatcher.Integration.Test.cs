@@ -3,7 +3,8 @@
 // See the LICENSE file in the project root for more information.
 
 using KubeOps.Abstractions.Builder;
-using KubeOps.Abstractions.Controller;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Operator.Test.TestEntities;
 
 using Microsoft.Extensions.Hosting;
@@ -21,10 +22,10 @@ public sealed class LeaderAwareHostedServiceDisposeIntegrationTest : HostedServi
 
     private sealed class TestController : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public Task<Result<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
 
-        public Task<Result<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
     }
 }

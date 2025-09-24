@@ -4,8 +4,9 @@
 
 using FluentAssertions;
 
-using KubeOps.Abstractions.Controller;
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Test.TestEntities;
 
@@ -88,7 +89,7 @@ public class EntityRequeueIntegrationTest : IntegrationTestBase
             EntityRequeue<V1OperatorIntegrationTestEntity> requeue)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public Task<Result<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
             if (svc.Invocations.Count <= svc.TargetInvocationCount)
@@ -96,10 +97,10 @@ public class EntityRequeueIntegrationTest : IntegrationTestBase
                 requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(1));
             }
 
-            return Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
 
-        public Task<Result<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
-            => Task.FromResult(Result<V1OperatorIntegrationTestEntity>.ForSuccess(entity));
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
     }
 }

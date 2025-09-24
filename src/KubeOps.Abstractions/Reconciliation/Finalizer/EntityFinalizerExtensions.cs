@@ -7,7 +7,7 @@ using k8s.Models;
 
 using KubeOps.Abstractions.Entities;
 
-namespace KubeOps.Abstractions.Finalizer;
+namespace KubeOps.Abstractions.Reconciliation.Finalizer;
 
 /// <summary>
 /// Provides extension methods for handling entity finalizers in Kubernetes resources.

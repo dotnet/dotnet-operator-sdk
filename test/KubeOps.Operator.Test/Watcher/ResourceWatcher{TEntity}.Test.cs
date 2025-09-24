@@ -10,8 +10,8 @@ using k8s.Models;
 
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
+using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
-using KubeOps.Operator.Reconciliation;
 using KubeOps.Operator.Watcher;
 
 using Microsoft.Extensions.Logging;

@@ -7,7 +7,7 @@ using System.Collections.Concurrent;
 using k8s;
 using k8s.Models;
 
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation.Queue;
 
 using Microsoft.Extensions.Logging;
 
