@@ -14,13 +14,10 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
-using KubeOps.Operator.Constants;
 using KubeOps.Operator.Logging;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-
-using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Watcher;
 
@@ -28,14 +25,12 @@ public class ResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<ResourceWatcher<TEntity>> logger,
     IReconciler<TEntity> reconciler,
-    IFusionCacheProvider cacheProvider,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
     IKubernetesClient client)
     : IHostedService, IAsyncDisposable, IDisposable
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private readonly IFusionCache _bookmarkVersionCache = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
     private CancellationTokenSource _cancellationTokenSource = new();
     private uint _watcherReconnectRetries;
     private Task? _eventWatcher;
@@ -155,13 +150,9 @@ public class ResourceWatcher<TEntity>(
         return ReconciliationResult<TEntity>.Success(entity);
     }
 
-    private static string GetBookmarkCacheKey()
-        => $"bookmark:{typeof(TEntity).Name}";
-
     private async Task WatchClientEventsAsync(CancellationToken stoppingToken)
     {
-        var cachedBookmarkVersion = await _bookmarkVersionCache.TryGetAsync<string>(GetBookmarkCacheKey(), token: stoppingToken);
-        var currentVersion = cachedBookmarkVersion.HasValue ? cachedBookmarkVersion.Value : null;
+        string? currentVersion = null;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -186,7 +177,6 @@ public class ResourceWatcher<TEntity>(
 
                     if (type == WatchEventType.Bookmark)
                     {
-                        await _bookmarkVersionCache.SetAsync(GetBookmarkCacheKey(), entity.ResourceVersion(), token: stoppingToken);
                         currentVersion = entity.ResourceVersion();
                         continue;
                     }
