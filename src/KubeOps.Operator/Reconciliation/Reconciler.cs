@@ -55,11 +55,17 @@ internal sealed class Reconciler<TEntity>(
         // Only perform reconciliation if the entity was not already in the cache.
         if (!cachedGeneration.HasValue)
         {
-            // in case we missed an event (operator was not running)
-            // and the entity was marked for deletion - execute finalizers
-            var result = (entity.Metadata.DeletionTimestamp is null)
-                ? await ReconcileModificationAsync(entity, cancellationToken)
-                : await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
+            if (entity.Metadata.DeletionTimestamp is not null)
+            {
+                logger.LogDebug(
+                    """Received ADDED event for entity "{Kind}/{Name}" which already has a deletion timestamp "{DeletionTimestamp}". Skip event.""",
+                    entity.Kind,
+                    entity.Name(),
+                    entity.Metadata.DeletionTimestamp.Value.ToString("O"));
+                return ReconciliationResult<TEntity>.Success(entity);
+            }
+
+            var result = await ReconcileModificationAsync(entity, cancellationToken);
 
             if (result.IsSuccess)
             {

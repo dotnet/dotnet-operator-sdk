@@ -12,10 +12,11 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
-using KubeOps.Operator.Reconciliation;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+
+using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Watcher;
 
@@ -23,6 +24,7 @@ internal sealed class LeaderAwareResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<LeaderAwareResourceWatcher<TEntity>> logger,
     IReconciler<TEntity> reconciler,
+    IFusionCacheProvider cacheProvider,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
     IKubernetesClient client,
@@ -32,6 +34,7 @@ internal sealed class LeaderAwareResourceWatcher<TEntity>(
         activitySource,
         logger,
         reconciler,
+        cacheProvider,
         settings,
         labelSelector,
         client)
@@ -102,7 +105,7 @@ internal sealed class LeaderAwareResourceWatcher<TEntity>(
         logger.LogInformation("This instance stopped leading, stopping watcher.");
 
         // Stop the base implementation using the 'ApplicationStopped' cancellation token.
-        // The cancellation token should only be marked cancelled when the stop should no longer be graceful.
+        // The cancellation token should only be marked as canceled when the stop should no longer be graceful.
         base.StopAsync(hostApplicationLifetime.ApplicationStopped).Wait();
     }
 }
