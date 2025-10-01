@@ -633,7 +633,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
-    private class ResourceQuantityTestEntity: CustomKubernetesEntity
+    private class ResourceQuantityTestEntity : CustomKubernetesEntity
     {
         public ResourceQuantity Property { get; set; } = null!;
     }
