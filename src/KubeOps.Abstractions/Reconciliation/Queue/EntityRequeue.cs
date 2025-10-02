@@ -8,7 +8,7 @@ using k8s.Models;
 namespace KubeOps.Abstractions.Reconciliation.Queue;
 
 /// <summary>
-/// <para>Injectable delegate for requeueing entities.</para>
+/// <para>Injectable delegate for requeuing entities.</para>
 /// <para>
 /// Use this delegate when you need to pro-actively reconcile an entity after a
 /// certain amount of time. This is useful, if you want to check your entities

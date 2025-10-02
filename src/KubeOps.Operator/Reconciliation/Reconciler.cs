@@ -47,106 +47,125 @@ internal sealed class Reconciler<TEntity>(
 {
     private readonly IFusionCache _entityCache = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
 
-    public async Task<ReconciliationResult<TEntity>> ReconcileCreation(TEntity entity, CancellationToken cancellationToken)
+    public async Task<ReconciliationResult<TEntity>> ReconcileCreation(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        requeue.Remove(entity);
-        var cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
+        requeue.Remove(reconciliationContext.Entity);
 
-        // Only perform reconciliation if the entity was not already in the cache.
-        if (!cachedGeneration.HasValue)
+        if (reconciliationContext.Entity.Metadata.DeletionTimestamp is not null)
         {
-            if (entity.Metadata.DeletionTimestamp is not null)
-            {
-                logger.LogDebug(
-                    """Received ADDED event for entity "{Kind}/{Name}" which already has a deletion timestamp "{DeletionTimestamp}". Skip event.""",
-                    entity.Kind,
-                    entity.Name(),
-                    entity.Metadata.DeletionTimestamp.Value.ToString("O"));
-                return ReconciliationResult<TEntity>.Success(entity);
-            }
+            logger.LogDebug(
+                """Received ADDED event for entity "{Kind}/{Name}" which already has a deletion timestamp "{DeletionTimestamp}". Skip event.""",
+                reconciliationContext.Entity.Kind,
+                reconciliationContext.Entity.Name(),
+                reconciliationContext.Entity.Metadata.DeletionTimestamp.Value.ToString("O"));
 
-            var result = await ReconcileModificationAsync(entity, cancellationToken);
-
-            if (result.IsSuccess)
-            {
-                await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 0, token: cancellationToken);
-            }
-
-            if (result.RequeueAfter.HasValue)
-            {
-                requeue.Enqueue(
-                    result.Entity,
-                    result.IsSuccess ? RequeueType.Modified : RequeueType.Added,
-                    result.RequeueAfter.Value);
-            }
-
-            return result;
+            return ReconciliationResult<TEntity>.Success(reconciliationContext.Entity);
         }
 
-        logger.LogDebug(
-            """Received ADDED event for entity "{Kind}/{Name}" which was already in the cache. Skip event.""",
-            entity.Kind,
-            entity.Name());
+        if (reconciliationContext.IsTriggeredByApiServer())
+        {
+            var cachedGeneration =
+                await _entityCache.TryGetAsync<long?>(reconciliationContext.Entity.Uid(), token: cancellationToken);
 
-        return ReconciliationResult<TEntity>.Success(entity);
+            // Only perform reconciliation if the entity was not already in the cache.
+            if (cachedGeneration.HasValue)
+            {
+                logger.LogDebug(
+                    """Received ADDED event for entity "{Kind}/{Name}" which was already in the cache. Skip event.""",
+                    reconciliationContext.Entity.Kind,
+                    reconciliationContext.Entity.Name());
+
+                return ReconciliationResult<TEntity>.Success(reconciliationContext.Entity);
+            }
+
+            await _entityCache.SetAsync(
+                reconciliationContext.Entity.Uid(),
+                reconciliationContext.Entity.Generation() ?? 0,
+                token: cancellationToken);
+        }
+
+        var result = await ReconcileModificationAsync(reconciliationContext.Entity, cancellationToken);
+
+        if (result.RequeueAfter.HasValue)
+        {
+            requeue.Enqueue(
+                result.Entity,
+                result.IsSuccess ? RequeueType.Modified : RequeueType.Added,
+                result.RequeueAfter.Value);
+        }
+
+        return result;
     }
 
-    public async Task<ReconciliationResult<TEntity>> ReconcileModification(TEntity entity, CancellationToken cancellationToken)
+    public async Task<ReconciliationResult<TEntity>> ReconcileModification(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        requeue.Remove(entity);
+        requeue.Remove(reconciliationContext.Entity);
 
         ReconciliationResult<TEntity> reconciliationResult;
 
-        switch (entity)
+        switch (reconciliationContext.Entity)
         {
             case { Metadata.DeletionTimestamp: null }:
-                var cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
-
-                // Check if entity-spec has changed through "Generation" value increment. Skip reconcile if not changed.
-                if (cachedGeneration.HasValue && cachedGeneration >= entity.Generation())
+                if (reconciliationContext.IsTriggeredByApiServer())
                 {
-                    logger.LogDebug(
-                        """Entity "{Kind}/{Name}" modification did not modify generation. Skip event.""",
-                        entity.Kind,
-                        entity.Name());
+                    var cachedGeneration = await _entityCache.TryGetAsync<long?>(
+                        reconciliationContext.Entity.Uid(),
+                        token: cancellationToken);
 
-                    return ReconciliationResult<TEntity>.Success(entity);
+                    // Check if entity-spec has changed through "Generation" value increment. Skip reconcile if not changed.
+                    if (cachedGeneration.HasValue && cachedGeneration >= reconciliationContext.Entity.Generation())
+                    {
+                        logger.LogDebug(
+                            """Entity "{Kind}/{Name}" modification did not modify generation. Skip event.""",
+                            reconciliationContext.Entity.Kind,
+                            reconciliationContext.Entity.Name());
+
+                        return ReconciliationResult<TEntity>.Success(reconciliationContext.Entity);
+                    }
+
+                    // update cached generation since generation now changed
+                    await _entityCache.SetAsync(
+                        reconciliationContext.Entity.Uid(),
+                        reconciliationContext.Entity.Generation() ?? 1,
+                        token: cancellationToken);
                 }
 
-                // update cached generation since generation now changed
-                await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 1, token: cancellationToken);
-                reconciliationResult = await ReconcileModificationAsync(entity, cancellationToken);
+                reconciliationResult = await ReconcileModificationAsync(reconciliationContext.Entity, cancellationToken);
 
                 break;
             case { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }:
-                reconciliationResult = await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
+                reconciliationResult = await ReconcileFinalizersSequentialAsync(reconciliationContext.Entity, cancellationToken);
 
                 break;
             default:
-                reconciliationResult = ReconciliationResult<TEntity>.Success(entity);
+                reconciliationResult = ReconciliationResult<TEntity>.Success(reconciliationContext.Entity);
 
                 break;
         }
 
         if (reconciliationResult.RequeueAfter.HasValue)
         {
-            requeue.Enqueue(reconciliationResult.Entity, RequeueType.Modified, reconciliationResult.RequeueAfter.Value);
+            requeue
+                .Enqueue(
+                    reconciliationResult.Entity,
+                    RequeueType.Modified,
+                    reconciliationResult.RequeueAfter.Value);
         }
 
         return reconciliationResult;
     }
 
-    public async Task<ReconciliationResult<TEntity>> ReconcileDeletion(TEntity entity, CancellationToken cancellationToken)
+    public async Task<ReconciliationResult<TEntity>> ReconcileDeletion(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        requeue.Remove(entity);
+        requeue.Remove(reconciliationContext.Entity);
 
         await using var scope = provider.CreateAsyncScope();
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
-        var result = await controller.DeletedAsync(entity, cancellationToken);
+        var result = await controller.DeletedAsync(reconciliationContext.Entity, cancellationToken);
 
         if (result.IsSuccess)
         {
-            await _entityCache.RemoveAsync(entity.Uid(), token: cancellationToken);
+            await _entityCache.RemoveAsync(reconciliationContext.Entity.Uid(), token: cancellationToken);
         }
 
         if (result.RequeueAfter.HasValue)

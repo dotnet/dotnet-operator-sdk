@@ -127,16 +127,18 @@ public class ResourceWatcher<TEntity>(
 
     protected virtual async Task<ReconciliationResult<TEntity>> OnEventAsync(WatchEventType type, TEntity entity, CancellationToken cancellationToken)
     {
+        var reconciliationContext = ReconciliationContext<TEntity>.CreateFromApiServerEvent(entity);
+
         switch (type)
         {
             case WatchEventType.Added:
-                return await reconciler.ReconcileCreation(entity, cancellationToken);
+                return await reconciler.ReconcileCreation(reconciliationContext, cancellationToken);
 
             case WatchEventType.Modified:
-                return await reconciler.ReconcileModification(entity, cancellationToken);
+                return await reconciler.ReconcileModification(reconciliationContext, cancellationToken);
 
             case WatchEventType.Deleted:
-                return await reconciler.ReconcileDeletion(entity, cancellationToken);
+                return await reconciler.ReconcileDeletion(reconciliationContext, cancellationToken);
 
             default:
                 logger.LogWarning(

@@ -117,16 +117,18 @@ public class EntityRequeueBackgroundService<TEntity>(
             return;
         }
 
+        var reconciliationContext = ReconciliationContext<TEntity>.CreateFromOperatorEvent(entity);
+
         switch (queuedEntry.RequeueType)
         {
             case RequeueType.Added:
-                await reconciler.ReconcileCreation(entity, cancellationToken);
+                await reconciler.ReconcileCreation(reconciliationContext, cancellationToken);
                 break;
             case RequeueType.Modified:
-                await reconciler.ReconcileModification(entity, cancellationToken);
+                await reconciler.ReconcileModification(reconciliationContext, cancellationToken);
                 break;
             case RequeueType.Deleted:
-                await reconciler.ReconcileDeletion(entity, cancellationToken);
+                await reconciler.ReconcileDeletion(reconciliationContext, cancellationToken);
                 break;
             default:
                 throw new NotSupportedException($"RequeueType '{queuedEntry.RequeueType}' is not supported!");
