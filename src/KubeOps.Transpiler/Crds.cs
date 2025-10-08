@@ -417,6 +417,9 @@ public static class Crds
     {
         switch (type.FullName)
         {
+            case "k8s.Models.ResourceQuantity":
+                // Quantities are serialized as strings in CRDs (e.g., "500m", "2Gi")
+                return new V1JSONSchemaProps { Type = String };
             case "k8s.Models.V1ObjectMeta":
                 return new V1JSONSchemaProps { Type = Object };
             case "k8s.Models.IntstrIntOrString":
