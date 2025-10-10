@@ -25,13 +25,15 @@ public interface ITimedEntityQueue<TEntity> : IDisposable, IAsyncEnumerable<Requ
     /// <param name="entity">The entity to be queued.</param>
     /// <param name="type">The type of requeue operation to handle (added, modified, or deleted).</param>
     /// <param name="requeueIn">The duration to wait before processing the entity.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the asynchronous operation.</param>
     /// <returns>A task that represents the asynchronous operation of enqueuing the entity.</returns>
-    Task Enqueue(TEntity entity, RequeueType type, TimeSpan requeueIn);
+    Task Enqueue(TEntity entity, RequeueType type, TimeSpan requeueIn, CancellationToken cancellationToken);
 
     /// <summary>
     /// Removes the specified entity from the queue.
     /// </summary>
     /// <param name="entity">The entity to be removed from the queue.</param>
+    /// <param name="cancellationToken">A token that can be used to cancel the asynchronous operation.</param>
     /// <returns>A task that represents the asynchronous operation of removing the entity from the queue.</returns>
-    Task Remove(TEntity entity);
+    Task Remove(TEntity entity, CancellationToken cancellationToken);
 }

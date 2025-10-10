@@ -20,8 +20,8 @@ public sealed class TimedEntityQueueTest
     {
         var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
 
-        await queue.Enqueue(CreateSecret("app-ns1", "secret-name"), RequeueType.Modified, TimeSpan.FromSeconds(1));
-        await queue.Enqueue(CreateSecret("app-ns2", "secret-name"), RequeueType.Modified, TimeSpan.FromSeconds(1));
+        await queue.Enqueue(CreateSecret("app-ns1", "secret-name"), RequeueType.Modified, TimeSpan.FromSeconds(1), CancellationToken.None);
+        await queue.Enqueue(CreateSecret("app-ns2", "secret-name"), RequeueType.Modified, TimeSpan.FromSeconds(1), CancellationToken.None);
 
         var items = new List<V1Secret>();
 

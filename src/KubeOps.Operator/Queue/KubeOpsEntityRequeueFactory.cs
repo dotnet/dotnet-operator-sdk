@@ -17,7 +17,7 @@ internal sealed class KubeOpsEntityRequeueFactory(IServiceProvider services)
 {
     public EntityRequeue<TEntity> Create<TEntity>()
         where TEntity : IKubernetesObject<V1ObjectMeta> =>
-        (entity, type, timeSpan) =>
+        (entity, type, timeSpan, cancellationToken) =>
         {
             var logger = services.GetService<ILogger<EntityRequeue<TEntity>>>();
             var queue = services.GetRequiredService<ITimedEntityQueue<TEntity>>();
@@ -28,6 +28,6 @@ internal sealed class KubeOpsEntityRequeueFactory(IServiceProvider services)
                 entity.Name(),
                 timeSpan.TotalMilliseconds);
 
-            queue.Enqueue(entity, type, timeSpan);
+            queue.Enqueue(entity, type, timeSpan, cancellationToken);
         };
 }

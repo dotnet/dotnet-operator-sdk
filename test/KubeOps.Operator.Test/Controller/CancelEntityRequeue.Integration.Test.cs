@@ -16,7 +16,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.Controller;
 
-public class CancelEntityRequeueIntegrationTest : IntegrationTestBase
+public sealed class CancelEntityRequeueIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
     private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
@@ -82,7 +82,7 @@ public class CancelEntityRequeueIntegrationTest : IntegrationTestBase
             svc.Invocation(entity);
             if (svc.Invocations.Count < 2)
             {
-                requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(1000));
+                requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(1000), CancellationToken.None);
             }
 
             return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));

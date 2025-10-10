@@ -21,7 +21,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.Events;
 
-public class EventPublisherIntegrationTest : IntegrationTestBase
+public sealed class EventPublisherIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
     private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
@@ -98,7 +98,7 @@ public class EventPublisherIntegrationTest : IntegrationTestBase
 
             if (svc.Invocations.Count < svc.TargetInvocationCount)
             {
-                requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(10));
+                requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(10), CancellationToken.None);
             }
 
             return ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity);

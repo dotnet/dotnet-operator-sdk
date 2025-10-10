@@ -49,7 +49,10 @@ internal sealed class Reconciler<TEntity>(
 
     public async Task<ReconciliationResult<TEntity>> ReconcileCreation(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        await requeue.Remove(reconciliationContext.Entity);
+        await requeue
+            .Remove(
+                reconciliationContext.Entity,
+                cancellationToken);
 
         if (reconciliationContext.Entity.Metadata.DeletionTimestamp is not null)
         {
@@ -78,20 +81,23 @@ internal sealed class Reconciler<TEntity>(
                 return ReconciliationResult<TEntity>.Success(reconciliationContext.Entity);
             }
 
-            await _entityCache.SetAsync(
-                reconciliationContext.Entity.Uid(),
-                reconciliationContext.Entity.Generation() ?? 0,
-                token: cancellationToken);
+            await _entityCache
+                .SetAsync(
+                    reconciliationContext.Entity.Uid(),
+                    reconciliationContext.Entity.Generation() ?? 0,
+                    token: cancellationToken);
         }
 
         var result = await ReconcileModificationAsync(reconciliationContext.Entity, cancellationToken);
 
         if (result.RequeueAfter.HasValue)
         {
-            await requeue.Enqueue(
-                result.Entity,
-                result.IsSuccess ? RequeueType.Modified : RequeueType.Added,
-                result.RequeueAfter.Value);
+            await requeue
+                .Enqueue(
+                    result.Entity,
+                    result.IsSuccess ? RequeueType.Modified : RequeueType.Added,
+                    result.RequeueAfter.Value,
+                    cancellationToken);
         }
 
         return result;
@@ -99,7 +105,10 @@ internal sealed class Reconciler<TEntity>(
 
     public async Task<ReconciliationResult<TEntity>> ReconcileModification(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        await requeue.Remove(reconciliationContext.Entity);
+        await requeue
+            .Remove(
+                reconciliationContext.Entity,
+                cancellationToken);
 
         ReconciliationResult<TEntity> reconciliationResult;
 
@@ -149,7 +158,8 @@ internal sealed class Reconciler<TEntity>(
                 .Enqueue(
                     reconciliationResult.Entity,
                     RequeueType.Modified,
-                    reconciliationResult.RequeueAfter.Value);
+                    reconciliationResult.RequeueAfter.Value,
+                    cancellationToken);
         }
 
         return reconciliationResult;
@@ -157,7 +167,10 @@ internal sealed class Reconciler<TEntity>(
 
     public async Task<ReconciliationResult<TEntity>> ReconcileDeletion(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        await requeue.Remove(reconciliationContext.Entity);
+        await requeue
+            .Remove(
+                reconciliationContext.Entity,
+                cancellationToken);
 
         await using var scope = provider.CreateAsyncScope();
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
@@ -174,7 +187,8 @@ internal sealed class Reconciler<TEntity>(
                 .Enqueue(
                     result.Entity,
                     RequeueType.Deleted,
-                    result.RequeueAfter.Value);
+                    result.RequeueAfter.Value,
+                    cancellationToken);
         }
 
         return result;
