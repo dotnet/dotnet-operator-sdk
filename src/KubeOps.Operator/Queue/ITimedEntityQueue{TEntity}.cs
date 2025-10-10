@@ -20,16 +20,18 @@ public interface ITimedEntityQueue<TEntity> : IDisposable, IAsyncEnumerable<Requ
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     /// <summary>
-    /// Adds the specified entity to the queue for processing after the specified time span has expired.
+    /// Adds the specified entity to the queue for processing after the specified time span has elapsed.
     /// </summary>
-    /// <param name="entity">The entity to be added to the queue.</param>
-    /// <param name="type">The type of requeue operation to be performed.</param>
-    /// <param name="requeueIn">The duration after which the entity should be requeued.</param>
-    void Enqueue(TEntity entity, RequeueType type, TimeSpan requeueIn);
+    /// <param name="entity">The entity to be queued.</param>
+    /// <param name="type">The type of requeue operation to handle (added, modified, or deleted).</param>
+    /// <param name="requeueIn">The duration to wait before processing the entity.</param>
+    /// <returns>A task that represents the asynchronous operation of enqueuing the entity.</returns>
+    Task Enqueue(TEntity entity, RequeueType type, TimeSpan requeueIn);
 
     /// <summary>
-    /// Removes the specified <paramref name="entity"/> from the queue.
+    /// Removes the specified entity from the queue.
     /// </summary>
     /// <param name="entity">The entity to be removed from the queue.</param>
-    void Remove(TEntity entity);
+    /// <returns>A task that represents the asynchronous operation of removing the entity from the queue.</returns>
+    Task Remove(TEntity entity);
 }

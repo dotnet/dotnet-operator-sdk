@@ -35,7 +35,7 @@ public sealed class TimedEntityQueue<TEntity>(
     internal int Count => _management.Count;
 
     /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Enqueue"/>
-    public void Enqueue(TEntity entity, RequeueType type, TimeSpan requeueIn)
+    public Task Enqueue(TEntity entity, RequeueType type, TimeSpan requeueIn)
     {
         _management
             .AddOrUpdate(
@@ -77,6 +77,8 @@ public sealed class TimedEntityQueue<TEntity>(
                         entry.Token);
                     return entry;
                 });
+
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc cref="IDisposable.Dispose"/>
@@ -100,17 +102,19 @@ public sealed class TimedEntityQueue<TEntity>(
     }
 
     /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Remove"/>
-    public void Remove(TEntity entity)
+    public Task Remove(TEntity entity)
     {
         var key = this.GetKey(entity);
         if (key is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         if (_management.Remove(key, out var task))
         {
             task.Cancel();
         }
+
+        return Task.CompletedTask;
     }
 }

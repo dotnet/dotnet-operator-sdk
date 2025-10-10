@@ -49,7 +49,7 @@ internal sealed class Reconciler<TEntity>(
 
     public async Task<ReconciliationResult<TEntity>> ReconcileCreation(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        requeue.Remove(reconciliationContext.Entity);
+        await requeue.Remove(reconciliationContext.Entity);
 
         if (reconciliationContext.Entity.Metadata.DeletionTimestamp is not null)
         {
@@ -88,7 +88,7 @@ internal sealed class Reconciler<TEntity>(
 
         if (result.RequeueAfter.HasValue)
         {
-            requeue.Enqueue(
+            await requeue.Enqueue(
                 result.Entity,
                 result.IsSuccess ? RequeueType.Modified : RequeueType.Added,
                 result.RequeueAfter.Value);
@@ -99,7 +99,7 @@ internal sealed class Reconciler<TEntity>(
 
     public async Task<ReconciliationResult<TEntity>> ReconcileModification(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        requeue.Remove(reconciliationContext.Entity);
+        await requeue.Remove(reconciliationContext.Entity);
 
         ReconciliationResult<TEntity> reconciliationResult;
 
@@ -145,7 +145,7 @@ internal sealed class Reconciler<TEntity>(
 
         if (reconciliationResult.RequeueAfter.HasValue)
         {
-            requeue
+            await requeue
                 .Enqueue(
                     reconciliationResult.Entity,
                     RequeueType.Modified,
@@ -157,7 +157,7 @@ internal sealed class Reconciler<TEntity>(
 
     public async Task<ReconciliationResult<TEntity>> ReconcileDeletion(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        requeue.Remove(reconciliationContext.Entity);
+        await requeue.Remove(reconciliationContext.Entity);
 
         await using var scope = provider.CreateAsyncScope();
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
@@ -170,10 +170,11 @@ internal sealed class Reconciler<TEntity>(
 
         if (result.RequeueAfter.HasValue)
         {
-            requeue.Enqueue(
-                result.Entity,
-                RequeueType.Deleted,
-                result.RequeueAfter.Value);
+            await requeue
+                .Enqueue(
+                    result.Entity,
+                    RequeueType.Deleted,
+                    result.RequeueAfter.Value);
         }
 
         return result;
