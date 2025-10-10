@@ -24,7 +24,7 @@
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.14.0" />
-        <PackageReference Include="Spectre.Console" Version="0.51.1" />
+        <PackageReference Include="Spectre.Console" Version="0.52.0" />
         <PackageReference Include="Spectre.Console.Analyzer" Version="1.0.0">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
