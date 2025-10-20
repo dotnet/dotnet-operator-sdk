@@ -143,20 +143,30 @@ public class ResourceWatcher<TEntity>(
         switch (type)
         {
             case WatchEventType.Added:
-                cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
+                switch (entity)
+                {
+                    case { Metadata.DeletionTimestamp: null }:
+                        cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
 
-                if (!cachedGeneration.HasValue)
-                {
-                    // Only perform reconciliation if the entity was not already in the cache.
-                    await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 0, token: cancellationToken);
-                    await ReconcileModificationAsync(entity, cancellationToken);
-                }
-                else
-                {
-                    logger.LogDebug(
-                        """Received ADDED event for entity "{Kind}/{Name}" which was already in the cache. Skip event.""",
-                        entity.Kind,
-                        entity.Name());
+                        if (!cachedGeneration.HasValue)
+                        {
+                            // Only perform reconciliation if the entity was not already in the cache.
+                            await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 0, token: cancellationToken);
+                            await ReconcileModificationAsync(entity, cancellationToken);
+                        }
+                        else
+                        {
+                            logger.LogDebug(
+                                """Received ADDED event for entity "{Kind}/{Name}" which was already in the cache. Skip event.""",
+                                entity.Kind,
+                                entity.Name());
+                        }
+
+                        break;
+
+                    case { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }:
+                        await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
+                        break;
                 }
 
                 break;
