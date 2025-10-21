@@ -8,7 +8,6 @@ using k8s.Models;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
-using KubeOps.Operator.Reconciliation;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
