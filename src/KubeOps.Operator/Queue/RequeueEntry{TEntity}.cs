@@ -2,12 +2,15 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Text.Json.Serialization;
+
 using KubeOps.Abstractions.Reconciliation.Queue;
 
 namespace KubeOps.Operator.Queue;
 
 public sealed record RequeueEntry<TEntity>
 {
+    [JsonConstructor]
     private RequeueEntry(TEntity entity, RequeueType requeueType)
     {
         Entity = entity;
