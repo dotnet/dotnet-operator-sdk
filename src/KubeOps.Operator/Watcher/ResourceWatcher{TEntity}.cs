@@ -140,61 +140,49 @@ public class ResourceWatcher<TEntity>(
     {
         MaybeValue<long?> cachedGeneration;
 
+        // Make sure Finalizers are running if Termination has began.
+        if (type != WatchEventType.Deleted && entity.Metadata.DeletionTimestamp is not null && entity.Metadata.Finalizers.Count > 0)
+        {
+            await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
+            return;
+        }
+
         switch (type)
         {
             case WatchEventType.Added:
-                switch (entity)
+                cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
+
+                if (!cachedGeneration.HasValue)
                 {
-                    case { Metadata.DeletionTimestamp: null }:
-                        cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
-
-                        if (!cachedGeneration.HasValue)
-                        {
-                            // Only perform reconciliation if the entity was not already in the cache.
-                            await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 0, token: cancellationToken);
-                            await ReconcileModificationAsync(entity, cancellationToken);
-                        }
-                        else
-                        {
-                            logger.LogDebug(
-                                """Received ADDED event for entity "{Kind}/{Name}" which was already in the cache. Skip event.""",
-                                entity.Kind,
-                                entity.Name());
-                        }
-
-                        break;
-
-                    case { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }:
-                        await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
-                        break;
+                    // Only perform reconciliation if the entity was not already in the cache.
+                    await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 0, token: cancellationToken);
+                    await ReconcileModificationAsync(entity, cancellationToken);
+                }
+                else
+                {
+                    logger.LogDebug(
+                        """Received ADDED event for entity "{Kind}/{Name}" which was already in the cache. Skip event.""",
+                        entity.Kind,
+                        entity.Name());
                 }
 
                 break;
             case WatchEventType.Modified:
-                switch (entity)
+                cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
+
+                // Check if entity spec has changed through "Generation" value increment. Skip reconcile if not changed.
+                if (cachedGeneration.HasValue && cachedGeneration >= entity.Generation())
                 {
-                    case { Metadata.DeletionTimestamp: null }:
-                        cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
-
-                        // Check if entity spec has changed through "Generation" value increment. Skip reconcile if not changed.
-                        if (cachedGeneration.HasValue && cachedGeneration >= entity.Generation())
-                        {
-                            logger.LogDebug(
-                                """Entity "{Kind}/{Name}" modification did not modify generation. Skip event.""",
-                                entity.Kind,
-                                entity.Name());
-                            return;
-                        }
-
-                        // update cached generation since generation now changed
-                        await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 1, token: cancellationToken);
-                        await ReconcileModificationAsync(entity, cancellationToken);
-
-                        break;
-                    case { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }:
-                        await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
-                        break;
+                    logger.LogDebug(
+                        """Entity "{Kind}/{Name}" modification did not modify generation. Skip event.""",
+                        entity.Kind,
+                        entity.Name());
+                    return;
                 }
+
+                // update cached generation since generation now changed
+                await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 1, token: cancellationToken);
+                await ReconcileModificationAsync(entity, cancellationToken);
 
                 break;
             case WatchEventType.Deleted:
