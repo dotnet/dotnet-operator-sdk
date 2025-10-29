@@ -48,13 +48,13 @@ public static class Crds
     {
         type = context.GetContextType(type);
         var (meta, scope) = context.ToEntityMetadata(type);
-        var crd = new V1CustomResourceDefinition(new()).Initialize();
+        var crd = new V1CustomResourceDefinition { Spec = new() }.Initialize();
 
         crd.Metadata.Name = $"{meta.PluralName}.{meta.Group}";
         crd.Spec.Group = meta.Group;
 
         crd.Spec.Names =
-            new V1CustomResourceDefinitionNames
+            new()
             {
                 Kind = meta.Kind,
                 ListKind = meta.ListKind,
@@ -68,25 +68,32 @@ public static class Crds
             crd.Spec.Names.ShortNames = shortNames.Select(a => a.Value?.ToString()).ToList();
         }
 
-        var version = new V1CustomResourceDefinitionVersion(meta.Version, true, true);
+        var version = new V1CustomResourceDefinitionVersion { Name = meta.Version, Served = true, Storage = true };
         if
             (type.GetProperty("Status") != null
              || type.GetProperty("status") != null)
         {
-            version.Subresources = new V1CustomResourceSubresources(null, new object());
+            version.Subresources = new()
+            {
+                Scale = null,
+                Status = new(),
+            };
         }
 
-        version.Schema = new V1CustomResourceValidation(new V1JSONSchemaProps
+        version.Schema = new()
         {
-            Type = Object,
-            Description =
-                type.GetCustomAttributeData<DescriptionAttribute>()?.GetCustomAttributeCtorArg<string>(context, 0),
-            Properties = type.GetProperties()
-                .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
-                            && p.GetCustomAttributeData<IgnoreAttribute>() == null)
-                .Select(p => (Name: p.GetPropertyName(context), Schema: context.Map(p)))
-                .ToDictionary(t => t.Name, t => t.Schema),
-        });
+            OpenAPIV3Schema = new()
+            {
+                Type = Object,
+                Description =
+                    type.GetCustomAttributeData<DescriptionAttribute>()?.GetCustomAttributeCtorArg<string>(context, 0),
+                Properties = type.GetProperties()
+                    .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
+                                && p.GetCustomAttributeData<IgnoreAttribute>() == null)
+                    .Select(p => (Name: p.GetPropertyName(context), Schema: context.Map(p)))
+                    .ToDictionary(t => t.Name, t => t.Schema),
+            },
+        };
 
         version.AdditionalPrinterColumns = context.MapPrinterColumns(type).ToList() switch
         {
