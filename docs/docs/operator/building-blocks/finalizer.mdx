@@ -67,7 +67,9 @@ public class DemoEntityFinalizer(
 
 ## Using Finalizers
 
-Finalizers are automatically attached to entities using the `EntityFinalizerAttacher` delegate. This delegate is injected into your controller and handles the finalizer attachment:
+By default, KubeOps automatically attaches finalizers to entities during reconciliation. This behavior can be configured through `OperatorSettings`. See [Advanced Configuration](../advanced-configuration#finalizer-management) for details on controlling automatic finalizer attachment.
+
+If you need manual control, you can use the `EntityFinalizerAttacher` delegate, which is injected into your controller:
 
 ```csharp
 [EntityRbac(typeof(V1DemoEntity), Verbs = RbacVerb.All)]

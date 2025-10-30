@@ -189,6 +189,10 @@ This is useful for:
 - Periodic status checks
 - Waiting for external dependencies
 
+:::info Durable Requeue Mechanisms
+By default, requeue requests are stored in memory and will be lost on operator restart. For production scenarios requiring persistence, see [Advanced Configuration - Custom Requeue Mechanism](../advanced-configuration#custom-requeue-mechanism) to learn how to implement durable queues using Azure Service Bus, RabbitMQ, or other messaging systems.
+:::
+
 ### Error Handling with Results
 
 The `ReconciliationResult` provides structured error handling:
