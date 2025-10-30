@@ -75,7 +75,7 @@ internal sealed class Reconciler<TEntity>(
         return result;
     }
 
-    public async Task<ReconciliationResult<TEntity>> ReconcileModification(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
+    private async Task<ReconciliationResult<TEntity>> ReconcileModification(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
         switch (reconciliationContext.Entity)
         {

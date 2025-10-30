@@ -45,7 +45,6 @@ public sealed class OperatorBuilderTest
     [Fact]
     public void Should_Use_Specific_EntityLabelSelector_Implementation()
     {
-        // Arrange
         var services = new ServiceCollection();
 
         // Register the default and specific implementations
@@ -54,10 +53,8 @@ public sealed class OperatorBuilderTest
 
         var serviceProvider = services.BuildServiceProvider();
 
-        // Act
         var resolvedService = serviceProvider.GetRequiredService<IEntityLabelSelector<V1OperatorIntegrationTestEntity>>();
 
-        // Assert
         Assert.IsType<TestLabelSelector>(resolvedService);
     }
 
