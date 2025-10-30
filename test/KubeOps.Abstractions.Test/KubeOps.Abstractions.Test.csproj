@@ -2,7 +2,4 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\KubeOps.Abstractions\KubeOps.Abstractions.csproj"/>
     </ItemGroup>
-    <ItemGroup>
-      <Folder Include="Reconciliation\" />
-    </ItemGroup>
 </Project>
