@@ -17,16 +17,22 @@ public class V1DemoEntityController(
     ILogger<V1DemoEntityController> logger,
     IKubernetesClient client) : IEntityController<V1DemoEntity>
 {
-    public async Task ReconcileAsync(V1DemoEntity entity, CancellationToken token)
+    public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
     {
         logger.LogInformation("Reconciling entity {Entity}.", entity);
         // Implement your reconciliation logic here
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
     }
 
-    public async Task DeletedAsync(V1DemoEntity entity, CancellationToken token)
+    public async Task<ReconciliationResult<V1DemoEntity>> DeletedAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
     {
         logger.LogInformation("Deleting entity {Entity}.", entity);
         // Implement your cleanup logic here
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
     }
 }
 ```
@@ -52,41 +58,48 @@ This method is called when:
 - The operator starts up and discovers existing resources
 
 ```csharp
-public async Task ReconcileAsync(V1DemoEntity entity, CancellationToken token)
+public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
 {
     // Check if required resources exist
     var deployment = await client.GetAsync<V1Deployment>(
         entity.Spec.DeploymentName,
-        entity.Namespace());
+        entity.Namespace(),
+        cancellationToken);
 
     if (deployment == null)
     {
         // Create the deployment if it doesn't exist
-        await client.CreateAsync(new V1Deployment
-        {
-            Metadata = new V1ObjectMeta
+        await client.CreateAsync(
+            new V1Deployment
             {
-                Name = entity.Spec.DeploymentName,
-                NamespaceProperty = entity.Namespace()
+                Metadata = new V1ObjectMeta
+                {
+                    Name = entity.Spec.DeploymentName,
+                    NamespaceProperty = entity.Namespace()
+                },
+                Spec = new V1DeploymentSpec
+                {
+                    Replicas = entity.Spec.Replicas,
+                    // ... other deployment configuration
+                }
             },
-            Spec = new V1DeploymentSpec
-            {
-                Replicas = entity.Spec.Replicas,
-                // ... other deployment configuration
-            }
-        });
+            cancellationToken);
     }
 
     // Update status to reflect current state
     entity.Status.LastReconciled = DateTime.UtcNow;
-    await client.UpdateStatusAsync(entity);
+    await client.UpdateStatusAsync(entity, cancellationToken);
+
+    return ReconciliationResult<V1DemoEntity>.Success(entity);
 }
 ```
 
 ### DeletedAsync
 
 :::warning Important
-The `DeletedAsync` method is purely informative and "fire and forget". It is called when a resource is deleted, but it cannot guarantee proper cleanup of resources. For reliable resource cleanup, you must use [Finalizers](./finalizer).
+The `DeletedAsync` method is informational only and executes asynchronously without guarantees. While it is called when a resource is deleted, it cannot ensure proper cleanup. For reliable resource cleanup, use [finalizers](./finalizer).
 :::
 
 This method is called when a resource is deleted, but should only be used for:
@@ -96,13 +109,126 @@ This method is called when a resource is deleted, but should only be used for:
 - Updating external systems about the deletion
 
 ```csharp
-public async Task DeletedAsync(V1DemoEntity entity, CancellationToken token)
+public async Task<ReconciliationResult<V1DemoEntity>> DeletedAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
 {
     // Log the deletion event
     logger.LogInformation("Entity {Entity} was deleted.", entity);
 
     // Update external systems if needed
-    await NotifyExternalSystem(entity);
+    await NotifyExternalSystem(entity, cancellationToken);
+
+    return ReconciliationResult<V1DemoEntity>.Success(entity);
+}
+```
+
+## Reconciliation Results
+
+All reconciliation methods must return a `ReconciliationResult<TEntity>`. This provides a standardized way to communicate the outcome of reconciliation operations.
+
+### Success Results
+
+Return a success result when reconciliation completes without errors:
+
+```csharp
+public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
+{
+    // Perform reconciliation
+    await ApplyDesiredState(entity, cancellationToken);
+
+    // Return success
+    return ReconciliationResult<V1DemoEntity>.Success(entity);
+}
+```
+
+### Failure Results
+
+Return a failure result when reconciliation encounters an error:
+
+```csharp
+public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
+{
+    try
+    {
+        await ApplyDesiredState(entity, cancellationToken);
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to reconcile entity {Name}", entity.Name());
+        return ReconciliationResult<V1DemoEntity>.Failure(
+            entity,
+            "Failed to apply desired state",
+            ex);
+    }
+}
+```
+
+### Requeuing Entities
+
+You can request automatic requeuing by specifying a `requeueAfter` parameter:
+
+```csharp
+// Requeue after 5 minutes
+return ReconciliationResult<V1DemoEntity>.Success(entity, TimeSpan.FromMinutes(5));
+
+// Or set it after creation
+var result = ReconciliationResult<V1DemoEntity>.Success(entity);
+result.RequeueAfter = TimeSpan.FromSeconds(30);
+return result;
+```
+
+This is useful for:
+- Polling external resources
+- Implementing retry logic with backoff
+- Periodic status checks
+- Waiting for external dependencies
+
+### Error Handling with Results
+
+The `ReconciliationResult` provides structured error handling:
+
+```csharp
+public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
+{
+    if (!await ValidateConfiguration(entity))
+    {
+        return ReconciliationResult<V1DemoEntity>.Failure(
+            entity,
+            "Configuration validation failed: Required field 'DeploymentName' is empty",
+            requeueAfter: TimeSpan.FromMinutes(1));
+    }
+
+    try
+    {
+        await ReconcileInternal(entity, cancellationToken);
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
+    }
+    catch (KubernetesException ex) when (ex.Status.Code == 409)
+    {
+        // Conflict - retry after short delay
+        return ReconciliationResult<V1DemoEntity>.Failure(
+            entity,
+            "Resource conflict detected",
+            ex,
+            requeueAfter: TimeSpan.FromSeconds(5));
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Unexpected error during reconciliation");
+        return ReconciliationResult<V1DemoEntity>.Failure(
+            entity,
+            $"Reconciliation failed: {ex.Message}",
+            ex,
+            requeueAfter: TimeSpan.FromMinutes(5));
+    }
 }
 ```
 
@@ -145,38 +271,47 @@ For more details about RBAC configuration, see the [RBAC documentation](../rbac)
 - Always check the current state before making changes
 
 ```csharp
-public async Task ReconcileAsync(V1DemoEntity entity, CancellationToken token)
+public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
 {
     // Check if required resources exist
-    if (await IsDesiredState(entity))
+    if (await IsDesiredState(entity, cancellationToken))
     {
-        return;
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
     }
 
     // Only make changes if needed
-    await ApplyDesiredState(entity);
+    await ApplyDesiredState(entity, cancellationToken);
+    return ReconciliationResult<V1DemoEntity>.Success(entity);
 }
 ```
 
 ### Error Handling
 
-- Handle errors gracefully
-- Log errors with appropriate context
-- Consider implementing retry logic for transient failures
+- Use `ReconciliationResult.Failure()` for errors
+- Include meaningful error messages
+- Use the `requeueAfter` parameter for retry logic
+- Preserve exception information
 
 ```csharp
-public async Task ReconcileAsync(V1DemoEntity entity, CancellationToken token)
+public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
 {
     try
     {
-        await ReconcileInternal(entity, token);
+        await ReconcileInternal(entity, cancellationToken);
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Error reconciling entity {Entity}", entity);
-        // Update status to reflect the error
-        entity.Status.Error = ex.Message;
-        await client.UpdateStatusAsync(entity);
+        logger.LogError(ex, "Error reconciling entity {Name}", entity.Name());
+        return ReconciliationResult<V1DemoEntity>.Failure(
+            entity,
+            $"Reconciliation failed: {ex.Message}",
+            ex,
+            requeueAfter: TimeSpan.FromMinutes(1));
     }
 }
 ```
@@ -198,5 +333,5 @@ public async Task ReconcileAsync(V1DemoEntity entity, CancellationToken token)
 1. **Infinite Loops**: Avoid creating reconciliation loops that trigger themselves
 2. **Missing Error Handling**: Always handle potential errors
 3. **Resource Leaks**: Ensure proper cleanup of resources
-4. **Missing RBAC**: Configure appropriate permissions
+4. **Missing RBAC Configuration**: Configure appropriate permissions
 5. **Status Updates**: Remember that status updates don't trigger reconciliation

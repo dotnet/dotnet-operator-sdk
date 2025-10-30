@@ -16,7 +16,7 @@ Before you begin, ensure you have the following installed:
 - A local Kubernetes cluster (like [kind](https://kind.sigs.k8s.io/) or [minikube](https://minikube.sigs.k8s.io/))
 
 :::warning Development Environment
-For local development, we recommend using `kind` or Docker Desktop as it provides a lightweight Kubernetes cluster that's perfect for operator development. Make sure your cluster is running before proceeding with the installation steps.
+For local development, we recommend using `kind` or Docker Desktop, which provide lightweight Kubernetes clusters ideal for operator development. Ensure your cluster is running before proceeding with the installation steps.
 :::
 
 ## Installing KubeOps Templates
@@ -150,10 +150,20 @@ Controllers implement the reconciliation logic for your custom resources:
 [EntityRbac(typeof(V1DemoEntity), Verbs = RbacVerb.All)]
 public class DemoController : IEntityController<V1DemoEntity>
 {
-    public Task ReconcileAsync(V1DemoEntity entity, CancellationToken cancellationToken)
+    public Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
     {
         // Implement your reconciliation logic here
-        return Task.CompletedTask;
+        return Task.FromResult(ReconciliationResult<V1DemoEntity>.Success(entity));
+    }
+
+    public Task<ReconciliationResult<V1DemoEntity>> DeletedAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
+    {
+        // Handle deletion event
+        return Task.FromResult(ReconciliationResult<V1DemoEntity>.Success(entity));
     }
 }
 ```
@@ -165,10 +175,12 @@ Finalizers handle cleanup when resources are deleted:
 ```csharp
 public class DemoFinalizer : IEntityFinalizer<V1DemoEntity>
 {
-    public Task FinalizeAsync(V1DemoEntity entity, CancellationToken cancellationToken)
+    public Task<ReconciliationResult<V1DemoEntity>> FinalizeAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
     {
         // Implement your cleanup logic here
-        return Task.CompletedTask;
+        return Task.FromResult(ReconciliationResult<V1DemoEntity>.Success(entity));
     }
 }
 ```
