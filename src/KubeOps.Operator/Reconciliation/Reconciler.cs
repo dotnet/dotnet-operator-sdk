@@ -9,7 +9,6 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
-using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Constants;
 using KubeOps.Operator.Queue;
@@ -47,55 +46,28 @@ internal sealed class Reconciler<TEntity>(
 {
     private readonly IFusionCache _entityCache = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
 
-    public async Task<ReconciliationResult<TEntity>> ReconcileCreation(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
+    public async Task<ReconciliationResult<TEntity>> Reconcile(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
         await requeue
             .Remove(
                 reconciliationContext.Entity,
                 cancellationToken);
 
-        if (reconciliationContext.Entity.Metadata.DeletionTimestamp is not null)
+        var result = reconciliationContext.EventType switch
         {
-            logger.LogDebug(
-                """Received ADDED event for entity "{Kind}/{Name}" which already has a deletion timestamp "{DeletionTimestamp}". Skip event.""",
-                reconciliationContext.Entity.Kind,
-                reconciliationContext.Entity.Name(),
-                reconciliationContext.Entity.Metadata.DeletionTimestamp.Value.ToString("O"));
-
-            return ReconciliationResult<TEntity>.Success(reconciliationContext.Entity);
-        }
-
-        if (reconciliationContext.IsTriggeredByApiServer())
-        {
-            var cachedGeneration =
-                await _entityCache.TryGetAsync<long?>(reconciliationContext.Entity.Uid(), token: cancellationToken);
-
-            // Only perform reconciliation if the entity was not already in the cache.
-            if (cachedGeneration.HasValue)
-            {
-                logger.LogDebug(
-                    """Received ADDED event for entity "{Kind}/{Name}" which was already in the cache. Skip event.""",
-                    reconciliationContext.Entity.Kind,
-                    reconciliationContext.Entity.Name());
-
-                return ReconciliationResult<TEntity>.Success(reconciliationContext.Entity);
-            }
-
-            await _entityCache
-                .SetAsync(
-                    reconciliationContext.Entity.Uid(),
-                    reconciliationContext.Entity.Generation() ?? 0,
-                    token: cancellationToken);
-        }
-
-        var result = await ReconcileModificationAsync(reconciliationContext.Entity, cancellationToken);
+            WatchEventType.Added or WatchEventType.Modified =>
+                await ReconcileModification(reconciliationContext, cancellationToken),
+            WatchEventType.Deleted =>
+                await ReconcileDeletion(reconciliationContext, cancellationToken),
+            _ => throw new NotSupportedException($"Reconciliation event type {reconciliationContext.EventType} is not supported!"),
+        };
 
         if (result.RequeueAfter.HasValue)
         {
             await requeue
                 .Enqueue(
                     result.Entity,
-                    result.IsSuccess ? RequeueType.Modified : RequeueType.Added,
+                    reconciliationContext.EventType.ToRequeueType(),
                     result.RequeueAfter.Value,
                     cancellationToken);
         }
@@ -105,13 +77,6 @@ internal sealed class Reconciler<TEntity>(
 
     public async Task<ReconciliationResult<TEntity>> ReconcileModification(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        await requeue
-            .Remove(
-                reconciliationContext.Entity,
-                cancellationToken);
-
-        ReconciliationResult<TEntity> reconciliationResult;
-
         switch (reconciliationContext.Entity)
         {
             case { Metadata.DeletionTimestamp: null }:
@@ -139,39 +104,16 @@ internal sealed class Reconciler<TEntity>(
                         token: cancellationToken);
                 }
 
-                reconciliationResult = await ReconcileModificationAsync(reconciliationContext.Entity, cancellationToken);
-
-                break;
+                return await ReconcileModificationAsync(reconciliationContext.Entity, cancellationToken);
             case { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }:
-                reconciliationResult = await ReconcileFinalizersSequentialAsync(reconciliationContext.Entity, cancellationToken);
-
-                break;
+                return await ReconcileFinalizersSequentialAsync(reconciliationContext.Entity, cancellationToken);
             default:
-                reconciliationResult = ReconciliationResult<TEntity>.Success(reconciliationContext.Entity);
-
-                break;
+                return ReconciliationResult<TEntity>.Success(reconciliationContext.Entity);
         }
-
-        if (reconciliationResult.RequeueAfter.HasValue)
-        {
-            await requeue
-                .Enqueue(
-                    reconciliationResult.Entity,
-                    RequeueType.Modified,
-                    reconciliationResult.RequeueAfter.Value,
-                    cancellationToken);
-        }
-
-        return reconciliationResult;
     }
 
-    public async Task<ReconciliationResult<TEntity>> ReconcileDeletion(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
+    private async Task<ReconciliationResult<TEntity>> ReconcileDeletion(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        await requeue
-            .Remove(
-                reconciliationContext.Entity,
-                cancellationToken);
-
         await using var scope = provider.CreateAsyncScope();
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
         var result = await controller.DeletedAsync(reconciliationContext.Entity, cancellationToken);
@@ -181,24 +123,34 @@ internal sealed class Reconciler<TEntity>(
             await _entityCache.RemoveAsync(reconciliationContext.Entity.Uid(), token: cancellationToken);
         }
 
-        if (result.RequeueAfter.HasValue)
+        return result;
+    }
+
+    private async Task<ReconciliationResult<TEntity>> ReconcileModificationAsync(TEntity entity, CancellationToken cancellationToken)
+    {
+        await using var scope = provider.CreateAsyncScope();
+
+        if (settings.AutoAttachFinalizers)
         {
-            await requeue
-                .Enqueue(
-                    result.Entity,
-                    RequeueType.Deleted,
-                    result.RequeueAfter.Value,
-                    cancellationToken);
+            var finalizers = scope.ServiceProvider.GetKeyedServices<IEntityFinalizer<TEntity>>(KeyedService.AnyKey);
+
+            foreach (var finalizer in finalizers)
+            {
+                entity.AddFinalizer(finalizer.GetIdentifierName(entity));
+            }
+
+            entity = await client.UpdateAsync(entity, cancellationToken);
         }
 
-        return result;
+        var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
+        return await controller.ReconcileAsync(entity, cancellationToken);
     }
 
     private async Task<ReconciliationResult<TEntity>> ReconcileFinalizersSequentialAsync(TEntity entity, CancellationToken cancellationToken)
     {
         await using var scope = provider.CreateAsyncScope();
 
-        // condition to call ReconcileFinalizersSequentialAsync is:
+        // the condition to call ReconcileFinalizersSequentialAsync is:
         // { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }
         // which implies that there is at least a single finalizer
         var identifier = entity.Finalizers()[0];
@@ -236,25 +188,5 @@ internal sealed class Reconciler<TEntity>(
             identifier);
 
         return ReconciliationResult<TEntity>.Success(entity, result.RequeueAfter);
-    }
-
-    private async Task<ReconciliationResult<TEntity>> ReconcileModificationAsync(TEntity entity, CancellationToken cancellationToken)
-    {
-        await using var scope = provider.CreateAsyncScope();
-
-        if (settings.AutoAttachFinalizers)
-        {
-            var finalizers = scope.ServiceProvider.GetKeyedServices<IEntityFinalizer<TEntity>>(KeyedService.AnyKey);
-
-            foreach (var finalizer in finalizers)
-            {
-                entity.AddFinalizer(finalizer.GetIdentifierName(entity));
-            }
-
-            entity = await client.UpdateAsync(entity, cancellationToken);
-        }
-
-        var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
-        return await controller.ReconcileAsync(entity, cancellationToken);
     }
 }

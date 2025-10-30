@@ -125,32 +125,10 @@ public class ResourceWatcher<TEntity>(
         }
     }
 
-    protected virtual async Task<ReconciliationResult<TEntity>> OnEventAsync(WatchEventType type, TEntity entity, CancellationToken cancellationToken)
-    {
-        var reconciliationContext = ReconciliationContext<TEntity>.CreateFromApiServerEvent(entity);
-
-        switch (type)
-        {
-            case WatchEventType.Added:
-                return await reconciler.ReconcileCreation(reconciliationContext, cancellationToken);
-
-            case WatchEventType.Modified:
-                return await reconciler.ReconcileModification(reconciliationContext, cancellationToken);
-
-            case WatchEventType.Deleted:
-                return await reconciler.ReconcileDeletion(reconciliationContext, cancellationToken);
-
-            default:
-                logger.LogWarning(
-                    """Received unsupported event "{EventType}" for "{Kind}/{Name}".""",
-                    type,
-                    entity.Kind,
-                    entity.Name());
-                break;
-        }
-
-        return ReconciliationResult<TEntity>.Success(entity);
-    }
+    protected virtual async Task<ReconciliationResult<TEntity>> OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
+        => await reconciler.Reconcile(
+            ReconciliationContext<TEntity>.CreateFromApiServerEvent(entity, eventType),
+            cancellationToken);
 
     private async Task WatchClientEventsAsync(CancellationToken stoppingToken)
     {

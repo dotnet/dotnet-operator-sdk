@@ -19,26 +19,10 @@ public interface IReconciler<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     /// <summary>
-    /// Handles the reconciliation process when a new entity is created.
+    /// Handles the reconciliation process for a Kubernetes entity.
     /// </summary>
-    /// <param name="reconciliationContext">The context of the entity to reconcile during its creation.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation, yielding the result of the reconciliation process.</returns>
-    Task<ReconciliationResult<TEntity>> ReconcileCreation(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Handles the reconciliation process when an existing entity is modified.
-    /// </summary>
-    /// <param name="reconciliationContext">The context of the entity to reconcile during its creation.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation, with a result of the reconciliation process.</returns>
-    Task<ReconciliationResult<TEntity>> ReconcileModification(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Handles the reconciliation process when an entity is deleted.
-    /// </summary>
-    /// <param name="reconciliationContext">The context of the entity to reconcile during its creation.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation, with a result of the reconciliation process.</returns>
-    Task<ReconciliationResult<TEntity>> ReconcileDeletion(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken);
+    /// <param name="reconciliationContext">The context containing details of the entity to reconcile.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests during the reconciliation process.</param>
+    /// <returns>A task that represents the asynchronous reconciliation operation, returning the result of the reconciliation process.</returns>
+    Task<ReconciliationResult<TEntity>> Reconcile(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken);
 }

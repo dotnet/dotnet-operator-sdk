@@ -104,34 +104,23 @@ public class EntityRequeueBackgroundService<TEntity>(
         }
     }
 
-    protected virtual async Task ReconcileSingleAsync(RequeueEntry<TEntity> queuedEntry, CancellationToken cancellationToken)
+    protected virtual async Task ReconcileSingleAsync(RequeueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
-        logger.LogTrace("""Execute requested requeued reconciliation for "{Name}".""", queuedEntry.Entity.Name());
+        logger.LogTrace("""Execute requested requeued reconciliation for "{Name}".""", entry.Entity.Name());
 
-        if (await client.GetAsync<TEntity>(queuedEntry.Entity.Name(), queuedEntry.Entity.Namespace(), cancellationToken) is not
+        if (await client.GetAsync<TEntity>(entry.Entity.Name(), entry.Entity.Namespace(), cancellationToken) is not
             { } entity)
         {
             logger.LogWarning(
-                """Requeued entity "{Name}" was not found. Skipping reconciliation.""", queuedEntry.Entity.Name());
+                """Requeued entity "{Name}" was not found. Skipping reconciliation.""", entry.Entity.Name());
             return;
         }
 
-        var reconciliationContext = ReconciliationContext<TEntity>.CreateFromOperatorEvent(entity);
-
-        switch (queuedEntry.RequeueType)
-        {
-            case RequeueType.Added:
-                await reconciler.ReconcileCreation(reconciliationContext, cancellationToken);
-                break;
-            case RequeueType.Modified:
-                await reconciler.ReconcileModification(reconciliationContext, cancellationToken);
-                break;
-            case RequeueType.Deleted:
-                await reconciler.ReconcileDeletion(reconciliationContext, cancellationToken);
-                break;
-            default:
-                throw new NotSupportedException($"RequeueType '{queuedEntry.RequeueType}' is not supported!");
-        }
+        await reconciler.Reconcile(
+            ReconciliationContext<TEntity>.CreateFromOperatorEvent(
+                entity,
+                entry.RequeueType.ToWatchEventType()),
+            cancellationToken);
     }
 
     private async Task WatchAsync(CancellationToken cancellationToken)

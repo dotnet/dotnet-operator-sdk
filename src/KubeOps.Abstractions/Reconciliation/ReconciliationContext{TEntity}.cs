@@ -19,9 +19,10 @@ namespace KubeOps.Abstractions.Reconciliation;
 public sealed record ReconciliationContext<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private ReconciliationContext(TEntity entity, ReconciliationTriggerSource reconciliationTriggerSource)
+    private ReconciliationContext(TEntity entity, WatchEventType eventType, ReconciliationTriggerSource reconciliationTriggerSource)
     {
         Entity = entity;
+        EventType = eventType;
         ReconciliationTriggerSource = reconciliationTriggerSource;
     }
 
@@ -31,37 +32,46 @@ public sealed record ReconciliationContext<TEntity>
     public TEntity Entity { get; }
 
     /// <summary>
+    /// Specifies the type of Kubernetes watch event that triggered the reconciliation process.
+    /// This property provides information about the nature of the change detected
+    /// within the Kubernetes resource, such as addition, modification, or deletion.
+    /// </summary>
+    public WatchEventType EventType { get; }
+
+    /// <summary>
     /// Specifies the source that initiated the reconciliation process.
     /// </summary>
     public ReconciliationTriggerSource ReconciliationTriggerSource { get; }
 
     /// <summary>
-    /// Creates a new instance of the <see cref="ReconciliationContext{TEntity}"/> class
-    /// using an event triggered by the Kubernetes API server as the source of reconciliation.
+    /// Creates a new instance of <see cref="ReconciliationContext{TEntity}"/> from an API server event.
     /// </summary>
     /// <param name="entity">
-    /// The Kubernetes resource instance that is being reconciled. This must implement
-    /// <see cref="IKubernetesObject{V1ObjectMeta}"/>.
+    /// The Kubernetes entity associated with the reconciliation context.
+    /// </param>
+    /// <param name="eventType">
+    /// The type of watch event that triggered the context creation.
     /// </param>
     /// <returns>
-    /// A new instance of <see cref="ReconciliationContext{TEntity}"/> with
-    /// <see cref="ReconciliationTriggerSource.ApiServer"/> as the trigger source.
+    /// A new <see cref="ReconciliationContext{TEntity}"/> instance representing the reconciliation context
+    /// for the specified entity and event type, triggered by the API server.
     /// </returns>
-    public static ReconciliationContext<TEntity> CreateFromApiServerEvent(TEntity entity)
-        => new(entity, ReconciliationTriggerSource.ApiServer);
+    public static ReconciliationContext<TEntity> CreateFromApiServerEvent(TEntity entity, WatchEventType eventType)
+        => new(entity, eventType, ReconciliationTriggerSource.ApiServer);
 
     /// <summary>
-    /// Creates a new instance of the <see cref="ReconciliationContext{TEntity}"/> class
-    /// using an event triggered by the operator as the source of reconciliation.
+    /// Creates a new instance of <see cref="ReconciliationContext{TEntity}"/> from an operator-driven event.
     /// </summary>
     /// <param name="entity">
-    /// The Kubernetes resource instance that is being reconciled. This must implement
-    /// <see cref="IKubernetesObject{V1ObjectMeta}"/>.
+    /// The Kubernetes entity associated with the reconciliation context.
+    /// </param>
+    /// <param name="eventType">
+    /// The type of watch event that triggered the context creation.
     /// </param>
     /// <returns>
-    /// A new instance of <see cref="ReconciliationContext{TEntity}"/> with
-    /// <see cref="ReconciliationTriggerSource.Operator"/> as the trigger source.
+    /// A new <see cref="ReconciliationContext{TEntity}"/> instance representing the reconciliation context
+    /// for the specified entity and event type, triggered by the operator.
     /// </returns>
-    public static ReconciliationContext<TEntity> CreateFromOperatorEvent(TEntity entity)
-        => new(entity, ReconciliationTriggerSource.Operator);
+    public static ReconciliationContext<TEntity> CreateFromOperatorEvent(TEntity entity, WatchEventType eventType)
+        => new(entity, eventType, ReconciliationTriggerSource.Operator);
 }
