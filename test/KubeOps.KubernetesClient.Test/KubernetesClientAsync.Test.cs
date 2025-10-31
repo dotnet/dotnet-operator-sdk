@@ -8,7 +8,7 @@ using k8s.Models;
 
 namespace KubeOps.KubernetesClient.Test;
 
-public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
+public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
 {
     private readonly IKubernetesClient _client =
         new KubernetesClient();
@@ -30,7 +30,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
             });
 
@@ -48,7 +52,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
             });
 
@@ -58,7 +66,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
             }));
         _objects.Add(await _client.CreateAsync(
@@ -66,7 +78,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
             }));
 
@@ -82,7 +98,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new V1ObjectMeta(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
             });
         var r1 = config.Metadata.ResourceVersion;
@@ -103,7 +123,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
             });
         var config2 = await _client.CreateAsync(
@@ -111,7 +135,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
             });
 
@@ -132,7 +160,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
             });
         var config2 = await _client.CreateAsync(
@@ -140,7 +172,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
             });
         _objects.Add(config1);
@@ -161,7 +197,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
         {
             Kind = V1ConfigMap.KubeKind,
             ApiVersion = V1ConfigMap.KubeApiVersion,
-            Metadata = new(name: RandomName(), namespaceProperty: "default"),
+            Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
             Data = new Dictionary<string, string> { { "Hello", "World" } },
         };
         await _client.DeleteAsync(config);
@@ -176,7 +216,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "foo", "bar" } },
             });
         _objects.Add(config);
@@ -213,7 +257,11 @@ public class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             {
                 Kind = V1ConfigMap.KubeKind,
                 ApiVersion = V1ConfigMap.KubeApiVersion,
-                Metadata = new(name: RandomName(), namespaceProperty: "default"),
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
                 Data = new Dictionary<string, string> { { "foo", "bar" } },
             });
         _objects.Add(original);

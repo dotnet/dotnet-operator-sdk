@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using System.CommandLine;
-using System.CommandLine.Invocation;
 using System.Text;
 
 using k8s;
@@ -116,7 +115,7 @@ internal static class OperatorGenerator
 
         result.Add(
             $"namespace.{format.GetFileExtension()}",
-            new V1Namespace(metadata: new(name: "system")).Initialize());
+            new V1Namespace { Metadata = new() { Name = "system" } }.Initialize());
 
         result.Add(
             $"kustomization.{format.GetFileExtension()}",
@@ -124,7 +123,7 @@ internal static class OperatorGenerator
             {
                 NamePrefix = $"{name}-",
                 Namespace = $"{name}-system",
-                Labels = [new KustomizationCommonLabels(new Dictionary<string, string> { { "operator", name }, })],
+                Labels = [new(new Dictionary<string, string> { { "operator", name }, })],
                 Resources = result.DefaultFormatFiles.ToList(),
                 Images =
                     new List<KustomizationImage>
