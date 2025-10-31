@@ -30,24 +30,24 @@ internal sealed class RbacGenerator(
         output.Add($"operator-role.{outputFormat.GetFileExtension()}", role);
 
         var roleBinding = new V1ClusterRoleBinding
+        {
+            RoleRef = new()
             {
-                RoleRef = new()
+                ApiGroup = V1ClusterRole.KubeGroup,
+                Kind = V1ClusterRole.KubeKind,
+                Name = "operator-role",
+            },
+            Subjects = new List<Rbacv1Subject>
+            {
+                new()
                 {
-                    ApiGroup = V1ClusterRole.KubeGroup,
-                    Kind = V1ClusterRole.KubeKind,
-                    Name = "operator-role",
+                    Kind = V1ServiceAccount.KubeKind,
+                    Name = "default",
+                    NamespaceProperty = "system",
                 },
-                Subjects = new List<Rbacv1Subject>
-                {
-                    new()
-                    {
-                        Kind = V1ServiceAccount.KubeKind,
-                        Name = "default",
-                        NamespaceProperty = "system",
-                    },
-                },
-            }
-            .Initialize();
+            },
+        }
+        .Initialize();
         roleBinding.Metadata.Name = "operator-role-binding";
         output.Add($"operator-role-binding.{outputFormat.GetFileExtension()}", roleBinding);
     }

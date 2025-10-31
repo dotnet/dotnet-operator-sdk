@@ -58,7 +58,8 @@ public sealed class NamespacedOperatorIntegrationTest : IntegrationTestBase
     {
         await base.InitializeAsync();
         _otherNamespace =
-            await _client.CreateAsync(new V1Namespace
+            await _client.CreateAsync(
+                new V1Namespace
                 {
                     Metadata = new() { Name = Guid.NewGuid().ToString().ToLower() },
                 }
