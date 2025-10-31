@@ -17,7 +17,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test;
 
-public class NamespacedOperatorIntegrationTest : IntegrationTestBase
+public sealed class NamespacedOperatorIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
     private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
@@ -59,7 +59,11 @@ public class NamespacedOperatorIntegrationTest : IntegrationTestBase
     {
         await base.InitializeAsync();
         _otherNamespace =
-            await _client.CreateAsync(new V1Namespace(metadata: new(name: Guid.NewGuid().ToString().ToLower()))
+            await _client.CreateAsync(
+                new V1Namespace
+                {
+                    Metadata = new() { Name = Guid.NewGuid().ToString().ToLower() },
+                }
                 .Initialize());
         await _ns.InitializeAsync();
     }
@@ -80,7 +84,8 @@ public class NamespacedOperatorIntegrationTest : IntegrationTestBase
             .AddController<TestController, V1OperatorIntegrationTestEntity>();
     }
 
-    private class TestController(InvocationCounter<V1OperatorIntegrationTestEntity> svc) : IEntityController<V1OperatorIntegrationTestEntity>
+    private class TestController(InvocationCounter<V1OperatorIntegrationTestEntity> svc)
+        : IEntityController<V1OperatorIntegrationTestEntity>
     {
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {

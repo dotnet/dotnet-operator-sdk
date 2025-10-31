@@ -9,24 +9,33 @@ using KubeOps.Cli.Output;
 
 namespace KubeOps.Cli.Generators;
 
-internal class DeploymentGenerator(OutputFormat format) : IConfigGenerator
+internal sealed class DeploymentGenerator(OutputFormat format) : IConfigGenerator
 {
     public void Generate(ResultOutput output)
     {
-        var deployment = new V1Deployment(metadata: new V1ObjectMeta(
-            labels: new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } },
-            name: "operator")).Initialize();
-        deployment.Spec = new V1DeploymentSpec
+        var deployment = new V1Deployment
+        {
+            Metadata = new()
+            {
+                Name = "operator",
+                Labels = new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } },
+            },
+        }.Initialize();
+        deployment.Spec = new()
         {
             Replicas = 1,
             RevisionHistoryLimit = 0,
-            Selector = new V1LabelSelector(
-                matchLabels: new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } }),
-            Template = new V1PodTemplateSpec
+            Selector = new()
             {
-                Metadata = new V1ObjectMeta(
-                    labels: new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } }),
-                Spec = new V1PodSpec
+                MatchLabels = new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } },
+            },
+            Template = new()
+            {
+                Metadata = new()
+                {
+                    Labels = new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } },
+                },
+                Spec = new()
                 {
                     TerminationGracePeriodSeconds = 10,
                     Containers = new List<V1Container>
@@ -41,26 +50,26 @@ internal class DeploymentGenerator(OutputFormat format) : IConfigGenerator
                                 {
                                     Name = "POD_NAMESPACE",
                                     ValueFrom =
-                                        new V1EnvVarSource
+                                        new()
                                         {
-                                            FieldRef = new V1ObjectFieldSelector
+                                            FieldRef = new()
                                             {
                                                 FieldPath = "metadata.namespace",
                                             },
                                         },
                                 },
                             },
-                            Resources = new V1ResourceRequirements
+                            Resources = new()
                             {
                                 Requests = new Dictionary<string, ResourceQuantity>
                                 {
-                                    { "cpu", new ResourceQuantity("100m") },
-                                    { "memory", new ResourceQuantity("64Mi") },
+                                    { "cpu", new("100m") },
+                                    { "memory", new("64Mi") },
                                 },
                                 Limits = new Dictionary<string, ResourceQuantity>
                                 {
-                                    { "cpu", new ResourceQuantity("100m") },
-                                    { "memory", new ResourceQuantity("128Mi") },
+                                    { "cpu", new("100m") },
+                                    { "memory", new("128Mi") },
                                 },
                             },
                         },

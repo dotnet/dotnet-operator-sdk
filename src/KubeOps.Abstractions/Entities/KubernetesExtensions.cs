@@ -85,11 +85,13 @@ public static class KubernetesExtensions
     /// <param name="kubernetesObject">The object that should be translated.</param>
     /// <returns>The created <see cref="V1OwnerReference"/>.</returns>
     public static V1OwnerReference MakeOwnerReference(this IKubernetesObject<V1ObjectMeta> kubernetesObject)
-        => new(
-            kubernetesObject.ApiVersion,
-            kubernetesObject.Kind,
-            kubernetesObject.Metadata.Name,
-            kubernetesObject.Metadata.Uid);
+        => new()
+        {
+            ApiVersion = kubernetesObject.ApiVersion,
+            Kind = kubernetesObject.Kind,
+            Name = kubernetesObject.Metadata.Name,
+            Uid = kubernetesObject.Metadata.Uid,
+        };
 
     /// <summary>
     /// Retrieves the <see cref="KubernetesEntityAttribute"/> applied to the specified Kubernetes object type, if it exists.

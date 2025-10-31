@@ -10,7 +10,7 @@ using KubeOps.Cli.Transpilation;
 
 namespace KubeOps.Cli.Generators;
 
-internal class ValidationWebhookGenerator
+internal sealed class ValidationWebhookGenerator
     (List<ValidationWebhook> webhooks, byte[] caBundle, OutputFormat format) : IConfigGenerator
 {
     public void Generate(ResultOutput output)
@@ -20,13 +20,15 @@ internal class ValidationWebhookGenerator
             return;
         }
 
-        var validatorConfig = new V1ValidatingWebhookConfiguration(
-            metadata: new V1ObjectMeta(name: "validators"),
-            webhooks: new List<V1ValidatingWebhook>()).Initialize();
+        var validatorConfig = new V1ValidatingWebhookConfiguration
+        {
+            Metadata = new() { Name = "validators" },
+            Webhooks = new List<V1ValidatingWebhook>(),
+        }.Initialize();
 
         foreach (var hook in webhooks)
         {
-            validatorConfig.Webhooks.Add(new V1ValidatingWebhook
+            validatorConfig.Webhooks.Add(new()
             {
                 Name = $"validate.{hook.Metadata.SingularName}.{hook.Metadata.Group}.{hook.Metadata.Version}",
                 MatchPolicy = "Exact",
@@ -42,10 +44,10 @@ internal class ValidationWebhookGenerator
                         ApiVersions = new[] { hook.Metadata.Version },
                     },
                 },
-                ClientConfig = new Admissionregistrationv1WebhookClientConfig
+                ClientConfig = new()
                 {
                     CaBundle = caBundle,
-                    Service = new Admissionregistrationv1ServiceReference
+                    Service = new()
                     {
                         Name = "operator",
                         Path = hook.WebhookPath,

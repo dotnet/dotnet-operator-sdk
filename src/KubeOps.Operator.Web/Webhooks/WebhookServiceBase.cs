@@ -50,12 +50,13 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
             }
 
             var whUrl = $"{Uri}convert/{metadata.Group}/{metadata.PluralName}";
-            crd.Spec.Conversion = new V1CustomResourceConversion("Webhook")
+            crd.Spec.Conversion = new()
             {
-                Webhook = new V1WebhookConversion
+                Strategy = "Webhook",
+                Webhook = new()
                 {
                     ConversionReviewVersions = new[] { "v1" },
-                    ClientConfig = new Apiextensionsv1WebhookClientConfig
+                    ClientConfig = new()
                     {
                         Url = whUrl,
                         CaBundle = CaBundle,
@@ -89,16 +90,18 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
                         ApiVersions = new[] { hook.Metadata.Version },
                     },
                 },
-                ClientConfig = new Admissionregistrationv1WebhookClientConfig
+                ClientConfig = new()
                 {
                     Url = $"{Uri}mutate/{hook.HookTypeName}",
                     CaBundle = CaBundle,
                 },
             });
 
-        var mutatorConfig = new V1MutatingWebhookConfiguration(
-            metadata: new V1ObjectMeta(name: "dev-mutators"),
-            webhooks: mutationWebhooks.ToList()).Initialize();
+        var mutatorConfig = new V1MutatingWebhookConfiguration()
+        {
+            Metadata = new() { Name = "dev-mutators" },
+            Webhooks = mutationWebhooks.ToList(),
+        }.Initialize();
 
         if (mutatorConfig.Webhooks.Any())
         {
@@ -106,7 +109,10 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
         }
     }
 
-    internal async Task RegisterValidators()
+    private static string Defaulted(string? value, string defaultValue) =>
+        string.IsNullOrWhiteSpace(value) ? defaultValue : value;
+
+    private async Task RegisterValidators()
     {
         var validationWebhooks = loader
             .ValidationWebhooks
@@ -128,23 +134,22 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
                         ApiVersions = new[] { hook.Metadata.Version },
                     },
                 },
-                ClientConfig = new Admissionregistrationv1WebhookClientConfig
+                ClientConfig = new()
                 {
                     Url = $"{Uri}validate/{hook.HookTypeName}",
                     CaBundle = CaBundle,
                 },
             });
 
-        var validatorConfig = new V1ValidatingWebhookConfiguration(
-            metadata: new V1ObjectMeta(name: "dev-validators"),
-            webhooks: validationWebhooks.ToList()).Initialize();
+        var validatorConfig = new V1ValidatingWebhookConfiguration()
+        {
+            Metadata = new() { Name = "dev-validators" },
+            Webhooks = validationWebhooks.ToList(),
+        }.Initialize();
 
         if (validatorConfig.Webhooks.Any())
         {
             await Client.SaveAsync(validatorConfig);
         }
     }
-
-    private static string Defaulted(string? value, string defaultValue) =>
-        string.IsNullOrWhiteSpace(value) ? defaultValue : value;
 }

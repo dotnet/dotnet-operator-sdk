@@ -64,7 +64,10 @@ public sealed class TestNamespaceProvider : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _namespace =
-            await _client.CreateAsync(new V1Namespace(metadata: new V1ObjectMeta(name: Namespace)).Initialize());
+            await _client.CreateAsync(new V1Namespace()
+            {
+                Metadata = new() { Name = Namespace },
+            }.Initialize());
     }
 
     public async Task DisposeAsync()

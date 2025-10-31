@@ -769,7 +769,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
     private class IntstrOrStringEntity : CustomKubernetesEntity
     {
-        public IntstrIntOrString Property { get; set; } = null!;
+        public IntOrString Property { get; set; } = null!;
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
