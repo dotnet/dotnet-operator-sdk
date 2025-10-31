@@ -16,7 +16,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.Finalizer;
 
-public class EntityFinalizerIntegrationTest : IntegrationTestBase
+public sealed class EntityFinalizerIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
     private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
@@ -91,7 +91,9 @@ public class EntityFinalizerIntegrationTest : IntegrationTestBase
         await watcherCounter.WaitForInvocations;
 
         var result = await _client.GetAsync<V1OperatorIntegrationTestEntity>("first-second", _ns.Namespace);
-        result!.Metadata.Finalizers.Should().Contain("first");
+        result.Should().NotBeNull();
+        result.Metadata.Should().NotBeNull();
+        result.Metadata.Finalizers.Should().Contain("first");
         result.Metadata.Finalizers.Should().Contain("second");
     }
 

@@ -9,7 +9,7 @@ using KubeOps.Abstractions.Entities;
 namespace KubeOps.Operator.Test.TestEntities;
 
 [KubernetesEntity(Group = "operator.test", ApiVersion = "v1", Kind = "OperatorIntegrationTest")]
-public class V1OperatorIntegrationTestEntity : CustomKubernetesEntity<V1OperatorIntegrationTestEntity.EntitySpec,
+public sealed class V1OperatorIntegrationTestEntity : CustomKubernetesEntity<V1OperatorIntegrationTestEntity.EntitySpec,
     V1OperatorIntegrationTestEntity.EntityStatus>
 {
     public V1OperatorIntegrationTestEntity()
@@ -27,12 +27,12 @@ public class V1OperatorIntegrationTestEntity : CustomKubernetesEntity<V1Operator
 
     public override string ToString() => $"Test Entity ({Metadata.Name}): {Spec.Username}";
 
-    public class EntitySpec
+    public sealed class EntitySpec
     {
         public string Username { get; set; } = string.Empty;
     }
 
-    public class EntityStatus
+    public sealed class EntityStatus
     {
         public string Status { get; set; } = string.Empty;
     }

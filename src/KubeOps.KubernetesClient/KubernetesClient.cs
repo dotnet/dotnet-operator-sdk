@@ -16,6 +16,8 @@ using KubeOps.Transpiler;
 
 namespace KubeOps.KubernetesClient;
 
+#pragma warning disable CS0618 // Type or member is obsolete - TODO: clarify with k8s team
+
 /// <inheritdoc cref="IKubernetesClient"/>
 public class KubernetesClient : IKubernetesClient
 {

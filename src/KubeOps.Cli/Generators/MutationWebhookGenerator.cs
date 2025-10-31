@@ -20,13 +20,15 @@ internal class MutationWebhookGenerator
             return;
         }
 
-        var mutatorConfig = new V1MutatingWebhookConfiguration(
-            metadata: new V1ObjectMeta(name: "mutators"),
-            webhooks: new List<V1MutatingWebhook>()).Initialize();
+        var mutatorConfig = new V1MutatingWebhookConfiguration
+        {
+            Metadata = new() { Name = "mutators" },
+            Webhooks = new List<V1MutatingWebhook>(),
+        }.Initialize();
 
         foreach (var hook in webhooks)
         {
-            mutatorConfig.Webhooks.Add(new V1MutatingWebhook
+            mutatorConfig.Webhooks.Add(new()
             {
                 Name = $"mutate.{hook.Metadata.SingularName}.{hook.Metadata.Group}.{hook.Metadata.Version}",
                 MatchPolicy = "Exact",
@@ -42,10 +44,10 @@ internal class MutationWebhookGenerator
                         ApiVersions = new[] { hook.Metadata.Version },
                     },
                 },
-                ClientConfig = new Admissionregistrationv1WebhookClientConfig
+                ClientConfig = new()
                 {
                     CaBundle = caBundle,
-                    Service = new Admissionregistrationv1ServiceReference
+                    Service = new()
                     {
                         Name = "operator",
                         Path = hook.WebhookPath,

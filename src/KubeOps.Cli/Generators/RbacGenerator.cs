@@ -14,7 +14,8 @@ using KubeOps.Transpiler;
 
 namespace KubeOps.Cli.Generators;
 
-internal class RbacGenerator(MetadataLoadContext parser,
+internal sealed class RbacGenerator(
+    MetadataLoadContext parser,
     OutputFormat outputFormat) : IConfigGenerator
 {
     public void Generate(ResultOutput output)
@@ -24,17 +25,29 @@ internal class RbacGenerator(MetadataLoadContext parser,
             .Concat(parser.GetContextType<DefaultRbacAttributes>().GetCustomAttributesData<EntityRbacAttribute>())
             .ToList();
 
-        var role = new V1ClusterRole(rules: parser.Transpile(attributes).ToList()).Initialize();
+        var role = new V1ClusterRole { Rules = parser.Transpile(attributes).ToList() }.Initialize();
         role.Metadata.Name = "operator-role";
         output.Add($"operator-role.{outputFormat.GetFileExtension()}", role);
 
-        var roleBinding = new V1ClusterRoleBinding(
-                roleRef: new V1RoleRef(V1ClusterRole.KubeGroup, V1ClusterRole.KubeKind, "operator-role"),
-                subjects: new List<Rbacv1Subject>
+        var roleBinding = new V1ClusterRoleBinding
+        {
+            RoleRef = new()
+            {
+                ApiGroup = V1ClusterRole.KubeGroup,
+                Kind = V1ClusterRole.KubeKind,
+                Name = "operator-role",
+            },
+            Subjects = new List<Rbacv1Subject>
+            {
+                new()
                 {
-                    new(V1ServiceAccount.KubeKind, "default", namespaceProperty: "system"),
-                })
-            .Initialize();
+                    Kind = V1ServiceAccount.KubeKind,
+                    Name = "default",
+                    NamespaceProperty = "system",
+                },
+            },
+        }
+        .Initialize();
         roleBinding.Metadata.Name = "operator-role-binding";
         output.Add($"operator-role-binding.{outputFormat.GetFileExtension()}", roleBinding);
     }
