@@ -2,37 +2,40 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Reflection;
-
 using k8s;
 using k8s.Models;
 
 using KubeOps.Cli.Output;
-using KubeOps.Cli.Transpilation;
-using KubeOps.Transpiler;
 
 namespace KubeOps.Cli.Generators;
 
-internal class WebhookDeploymentGenerator(OutputFormat format) : IConfigGenerator
+internal sealed class WebhookDeploymentGenerator(OutputFormat format) : IConfigGenerator
 {
     public void Generate(ResultOutput output)
     {
-        var deployment = new V1Deployment(metadata: new V1ObjectMeta(
-            labels: new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } },
-            name: "operator")).Initialize();
-        deployment.Spec = new V1DeploymentSpec
+        var deployment = new V1Deployment
+        {
+            Metadata = new()
+            {
+                Name = "operator",
+                Labels = new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } },
+            },
+        }.Initialize();
+        deployment.Spec = new()
         {
             Replicas = 1,
             RevisionHistoryLimit = 0,
-            Selector = new V1LabelSelector(
-                matchLabels:
-                new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } }),
-            Template = new V1PodTemplateSpec
+            Selector = new()
             {
-                Metadata = new V1ObjectMeta(
-                    labels:
-                    new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" }, }),
-                Spec = new V1PodSpec
+                MatchLabels = new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } },
+            },
+            Template = new()
+            {
+                Metadata = new()
+                {
+                    Labels = new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" } },
+                },
+                Spec = new()
                 {
                     TerminationGracePeriodSeconds = 10,
                     Volumes = new List<V1Volume>
@@ -57,9 +60,9 @@ internal class WebhookDeploymentGenerator(OutputFormat format) : IConfigGenerato
                                 {
                                     Name = "POD_NAMESPACE",
                                     ValueFrom =
-                                        new V1EnvVarSource
+                                        new()
                                         {
-                                            FieldRef = new V1ObjectFieldSelector
+                                            FieldRef = new()
                                             {
                                                 FieldPath = "metadata.namespace",
                                             },
@@ -71,18 +74,18 @@ internal class WebhookDeploymentGenerator(OutputFormat format) : IConfigGenerato
                                 {
                                     new() { ConfigMapRef = new() { Name = "webhook-config" } },
                                 },
-                            Ports = new List<V1ContainerPort> { new(5001, name: "https"), },
-                            Resources = new V1ResourceRequirements
+                            Ports = new List<V1ContainerPort> { new() { HostPort = 5001, Name = "https" } },
+                            Resources = new()
                             {
                                 Requests = new Dictionary<string, ResourceQuantity>
                                 {
-                                    { "cpu", new ResourceQuantity("100m") },
-                                    { "memory", new ResourceQuantity("64Mi") },
+                                    { "cpu", new("100m") },
+                                    { "memory", new("64Mi") },
                                 },
                                 Limits = new Dictionary<string, ResourceQuantity>
                                 {
-                                    { "cpu", new ResourceQuantity("100m") },
-                                    { "memory", new ResourceQuantity("128Mi") },
+                                    { "cpu", new("100m") },
+                                    { "memory", new("128Mi") },
                                 },
                             },
                         },
@@ -94,13 +97,26 @@ internal class WebhookDeploymentGenerator(OutputFormat format) : IConfigGenerato
 
         output.Add(
             $"service.{format.GetFileExtension()}",
-            new V1Service(
-                metadata: new V1ObjectMeta(name: "operator"),
-                spec: new V1ServiceSpec
+            new V1Service
+            {
+                Metadata = new() { Name = "operator" },
+                Spec = new()
                 {
                     Ports =
-                        new List<V1ServicePort> { new() { Name = "https", TargetPort = "https", Port = 443, }, },
-                    Selector = new Dictionary<string, string> { { "operator-deployment", "kubernetes-operator" }, },
-                }).Initialize());
+                        new List<V1ServicePort>
+                        {
+                            new()
+                            {
+                                Name = "https",
+                                TargetPort = "https",
+                                Port = 443,
+                            },
+                        },
+                    Selector = new Dictionary<string, string>
+                    {
+                        { "operator-deployment", "kubernetes-operator" },
+                    },
+                },
+            }.Initialize());
     }
 }
