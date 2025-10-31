@@ -79,7 +79,6 @@ builder.Services
 
 When `AutoDetachFinalizers` is enabled:
 - Finalizers are automatically removed when `FinalizeAsync` returns success
-- The entity is then allowed to be deleted by Kubernetes
 
 When disabled:
 ```csharp
@@ -291,8 +290,7 @@ public sealed class DurableTimedEntityQueue<TEntity>(
 
     public Task Remove(TEntity entity, CancellationToken cancellationToken)
     {
-        // Azure Service Bus doesn't support removing scheduled messages
-        // Consider using message deduplication or message properties to skip processing
+        // will be automatically removed when the message is processed
         return Task.CompletedTask;
     }
 
