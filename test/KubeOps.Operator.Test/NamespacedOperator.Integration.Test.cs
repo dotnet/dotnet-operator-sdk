@@ -82,7 +82,8 @@ public sealed class NamespacedOperatorIntegrationTest : IntegrationTestBase
             .AddController<TestController, V1OperatorIntegrationTestEntity>();
     }
 
-    private class TestController(InvocationCounter<V1OperatorIntegrationTestEntity> svc) : IEntityController<V1OperatorIntegrationTestEntity>
+    private class TestController(InvocationCounter<V1OperatorIntegrationTestEntity> svc)
+        : IEntityController<V1OperatorIntegrationTestEntity>
     {
         public Task ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {

@@ -198,10 +198,10 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             Kind = V1ConfigMap.KubeKind,
             ApiVersion = V1ConfigMap.KubeApiVersion,
             Metadata = new()
-                {
-                    Name = RandomName(),
-                    NamespaceProperty = "default",
-                },
+            {
+                Name = RandomName(),
+                NamespaceProperty = "default",
+            },
             Data = new Dictionary<string, string> { { "Hello", "World" } },
         };
         await _client.DeleteAsync(config);
@@ -237,7 +237,11 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             Kind = V1ConfigMap.KubeKind,
             ApiVersion = V1ConfigMap.KubeApiVersion,
             Metadata = from.Metadata,
-            Data = new Dictionary<string, string> { { "foo", "baz" }, { "hello", "world" } },
+            Data = new Dictionary<string, string>
+            {
+                { "foo", "baz" },
+                { "hello", "world" }
+            },
         };
         config = await _client.PatchAsync(from, to);
         config.Data["foo"].Should().Be("baz");
@@ -283,5 +287,6 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
         _client.Delete(_objects);
     }
 
-    private static string RandomName() => "cm-" + Guid.NewGuid().ToString().ToLower();
+    private static string RandomName()
+        => "cm-" + Guid.NewGuid().ToString().ToLower();
 }

@@ -14,7 +14,8 @@ using KubeOps.Transpiler;
 
 namespace KubeOps.Cli.Generators;
 
-internal sealed class RbacGenerator(MetadataLoadContext parser,
+internal sealed class RbacGenerator(
+    MetadataLoadContext parser,
     OutputFormat outputFormat) : IConfigGenerator
 {
     public void Generate(ResultOutput output)
