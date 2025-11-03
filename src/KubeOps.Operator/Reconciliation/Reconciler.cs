@@ -37,9 +37,9 @@ namespace KubeOps.Operator.Reconciliation;
 internal sealed class Reconciler<TEntity>(
     ILogger<Reconciler<TEntity>> logger,
     IFusionCacheProvider cacheProvider,
-    IServiceProvider provider,
-    OperatorSettings settings,
-    ITimedEntityQueue<TEntity> requeue,
+    IServiceProvider serviceProvider,
+    OperatorSettings operatorSettings,
+    ITimedEntityQueue<TEntity> entityQueue,
     IKubernetesClient client)
     : IReconciler<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
@@ -48,7 +48,7 @@ internal sealed class Reconciler<TEntity>(
 
     public async Task<ReconciliationResult<TEntity>> Reconcile(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        await requeue
+        await entityQueue
             .Remove(
                 reconciliationContext.Entity,
                 cancellationToken);
@@ -64,7 +64,7 @@ internal sealed class Reconciler<TEntity>(
 
         if (result.RequeueAfter.HasValue)
         {
-            await requeue
+            await entityQueue
                 .Enqueue(
                     result.Entity,
                     reconciliationContext.EventType.ToRequeueType(),
@@ -104,9 +104,9 @@ internal sealed class Reconciler<TEntity>(
                         token: cancellationToken);
                 }
 
-                return await ReconcileModificationAsync(reconciliationContext.Entity, cancellationToken);
+                return await ReconcileEntity(reconciliationContext.Entity, cancellationToken);
             case { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }:
-                return await ReconcileFinalizersSequentialAsync(reconciliationContext.Entity, cancellationToken);
+                return await ReconcileFinalizersSequential(reconciliationContext.Entity, cancellationToken);
             default:
                 return ReconciliationResult<TEntity>.Success(reconciliationContext.Entity);
         }
@@ -114,7 +114,7 @@ internal sealed class Reconciler<TEntity>(
 
     private async Task<ReconciliationResult<TEntity>> ReconcileDeletion(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        await using var scope = provider.CreateAsyncScope();
+        await using var scope = serviceProvider.CreateAsyncScope();
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
         var result = await controller.DeletedAsync(reconciliationContext.Entity, cancellationToken);
 
@@ -126,11 +126,11 @@ internal sealed class Reconciler<TEntity>(
         return result;
     }
 
-    private async Task<ReconciliationResult<TEntity>> ReconcileModificationAsync(TEntity entity, CancellationToken cancellationToken)
+    private async Task<ReconciliationResult<TEntity>> ReconcileEntity(TEntity entity, CancellationToken cancellationToken)
     {
-        await using var scope = provider.CreateAsyncScope();
+        await using var scope = serviceProvider.CreateAsyncScope();
 
-        if (settings.AutoAttachFinalizers)
+        if (operatorSettings.AutoAttachFinalizers)
         {
             var finalizers = scope.ServiceProvider.GetKeyedServices<IEntityFinalizer<TEntity>>(KeyedService.AnyKey);
 
@@ -146,9 +146,9 @@ internal sealed class Reconciler<TEntity>(
         return await controller.ReconcileAsync(entity, cancellationToken);
     }
 
-    private async Task<ReconciliationResult<TEntity>> ReconcileFinalizersSequentialAsync(TEntity entity, CancellationToken cancellationToken)
+    private async Task<ReconciliationResult<TEntity>> ReconcileFinalizersSequential(TEntity entity, CancellationToken cancellationToken)
     {
-        await using var scope = provider.CreateAsyncScope();
+        await using var scope = serviceProvider.CreateAsyncScope();
 
         // the condition to call ReconcileFinalizersSequentialAsync is:
         // { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }
@@ -175,7 +175,7 @@ internal sealed class Reconciler<TEntity>(
 
         entity = result.Entity;
 
-        if (settings.AutoDetachFinalizers)
+        if (operatorSettings.AutoDetachFinalizers)
         {
             entity.RemoveFinalizer(identifier);
             entity = await client.UpdateAsync(entity, cancellationToken);
