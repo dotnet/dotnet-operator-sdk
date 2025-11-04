@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using k8s.Models;
+
 using KubeOps.Abstractions.Rbac;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
@@ -15,13 +17,13 @@ public sealed class V1TestEntityController(ILogger<V1TestEntityController> logge
 {
     public Task<ReconciliationResult<V1TestEntity>> ReconcileAsync(V1TestEntity entity, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Reconciling entity {Entity}.", entity);
+        logger.LogInformation("Reconciling entity {Namespace}/{Name}.", entity.Namespace(), entity.Name());
         return Task.FromResult(ReconciliationResult<V1TestEntity>.Success(entity));
     }
 
     public Task<ReconciliationResult<V1TestEntity>> DeletedAsync(V1TestEntity entity, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Deleted entity {Entity}.", entity);
+        logger.LogInformation("Deleted entity {Namespace}/{Name}.", entity.Namespace(), entity.Name());
         return Task.FromResult(ReconciliationResult<V1TestEntity>.Success(entity));
     }
 }

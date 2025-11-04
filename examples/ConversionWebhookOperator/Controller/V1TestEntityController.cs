@@ -4,6 +4,8 @@
 
 using ConversionWebhookOperator.Entities;
 
+using k8s.Models;
+
 using KubeOps.Abstractions.Rbac;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
@@ -15,13 +17,13 @@ public class V1TestEntityController(ILogger<V1TestEntityController> logger) : IE
 {
     public Task<ReconciliationResult<V1TestEntity>> ReconcileAsync(V1TestEntity entity, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Reconciling entity {Entity}.", entity);
+        logger.LogInformation("Reconciling entity {Namespace}/{Name}.", entity.Namespace(), entity.Name());
         return Task.FromResult(ReconciliationResult<V1TestEntity>.Success(entity));
     }
 
     public Task<ReconciliationResult<V1TestEntity>> DeletedAsync(V1TestEntity entity, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Deleted entity {Entity}.", entity);
+        logger.LogInformation("Deleted entity {Namespace}/{Name}.", entity.Namespace(), entity.Name());
         return Task.FromResult(ReconciliationResult<V1TestEntity>.Success(entity));
     }
 }
