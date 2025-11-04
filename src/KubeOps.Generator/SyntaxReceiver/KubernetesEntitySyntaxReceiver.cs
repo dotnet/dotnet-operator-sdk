@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace KubeOps.Generator.SyntaxReceiver;
@@ -29,37 +28,21 @@ internal sealed class KubernetesEntitySyntaxReceiver : ISyntaxContextReceiver
 
         Entities.Add(new(
             cls,
-            GetArgumentValue(cls, attr, KindName) ?? cls.Identifier.ToString(),
-            GetArgumentValue(cls, attr, VersionName) ?? DefaultVersion,
-            GetArgumentValue(cls, attr, GroupName),
-            GetArgumentValue(cls, attr, PluralName)));
+            GetArgumentValue(context, attr, KindName) ?? cls.Identifier.ToString(),
+            GetArgumentValue(context, attr, VersionName) ?? DefaultVersion,
+            GetArgumentValue(context, attr, GroupName),
+            GetArgumentValue(context, attr, PluralName)));
     }
 
-    private static string? GetArgumentValue(ClassDeclarationSyntax cls, AttributeSyntax attr, string argName)
+    private static string? GetArgumentValue(GeneratorSyntaxContext context, AttributeSyntax attr, string argName)
     {
-        var argument = attr.ArgumentList?.Arguments.FirstOrDefault(a => a.NameEquals?.Name.ToString() == argName);
+        var argument = attr.ArgumentList?.Arguments.FirstOrDefault(a => a.NameEquals?.Name.ToString() == argName)?.Expression;
         if (argument != null)
         {
-            if (argument.Expression is LiteralExpressionSyntax { Token.ValueText: { } value })
+            var constValue = context.SemanticModel.GetConstantValue(argument);
+            if (constValue is { HasValue: true, Value: string attrValue })
             {
-                return value;
-            }
-
-            if (argument.Expression is IdentifierNameSyntax { Identifier.ValueText: { } ident })
-            {
-                var field = cls.Members
-                    .OfType<FieldDeclarationSyntax>()
-                    .FirstOrDefault(f => f.Modifiers.Any(SyntaxKind.ConstKeyword) &&
-                                         f.Declaration.Variables.Any(v => v.Identifier.ValueText == ident));
-                if (field != null)
-                {
-                    var variable = field.Declaration.Variables
-                                        .First(v => v.Identifier.ValueText == ident);
-                    if (variable.Initializer?.Value is LiteralExpressionSyntax { Token.ValueText: { } fieldValue })
-                    {
-                        return fieldValue;
-                    }
-                }
+                return attrValue;
             }
         }
 
