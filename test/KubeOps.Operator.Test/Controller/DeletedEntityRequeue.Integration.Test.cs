@@ -32,7 +32,10 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(2);
-        Services.GetRequiredService<TimedEntityQueue<V1OperatorIntegrationTestEntity>>().Count.Should().Be(0);
+        var timedEntityQueue = Services.GetRequiredService<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        timedEntityQueue.Should().NotBeNull();
+        timedEntityQueue.Should().BeOfType<TimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        timedEntityQueue.As<TimedEntityQueue<V1OperatorIntegrationTestEntity>>().Count.Should().Be(0);
     }
 
     public override async Task InitializeAsync()
