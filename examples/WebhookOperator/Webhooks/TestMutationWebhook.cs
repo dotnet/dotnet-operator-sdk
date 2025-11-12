@@ -9,7 +9,7 @@ using WebhookOperator.Entities;
 namespace WebhookOperator.Webhooks;
 
 [MutationWebhook(typeof(V1TestEntity))]
-public class TestMutationWebhook : MutationWebhook<V1TestEntity>
+public sealed class TestMutationWebhook : MutationWebhook<V1TestEntity>
 {
     public override MutationResult<V1TestEntity> Create(V1TestEntity entity, bool dryRun)
     {

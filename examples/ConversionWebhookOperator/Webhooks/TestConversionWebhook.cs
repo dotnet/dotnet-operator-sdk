@@ -9,7 +9,7 @@ using KubeOps.Operator.Web.Webhooks.Conversion;
 namespace ConversionWebhookOperator.Webhooks;
 
 [ConversionWebhook(typeof(V3TestEntity))]
-public class TestConversionWebhook : ConversionWebhook<V3TestEntity>
+public sealed class TestConversionWebhook : ConversionWebhook<V3TestEntity>
 {
     protected override IEnumerable<IEntityConverter<V3TestEntity>> Converters => new IEntityConverter<V3TestEntity>[]
     {
