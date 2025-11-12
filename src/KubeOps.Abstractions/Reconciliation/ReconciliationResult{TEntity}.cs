@@ -48,15 +48,6 @@ public sealed record ReconciliationResult<TEntity>
     public bool IsSuccess { get; }
 
     /// <summary>
-    /// Indicates whether the operation has failed.
-    /// Returns true when the operation was unsuccessful, as represented by <see cref="IsSuccess"/> being false.
-    /// Typically used to distinguish failure states and to conditionally handle error scenarios such as logging or retries.
-    /// When this property is true, <see cref="ErrorMessage"/> will be non-null, providing additional details about the error.
-    /// </summary>
-    [MemberNotNullWhen(true, nameof(ErrorMessage))]
-    public bool IsFailure => !IsSuccess;
-
-    /// <summary>
     /// Contains a descriptive message associated with a failure when the operation does not succeed.
     /// Used to provide context or details about the failure, assisting in debugging and logging.
     /// This property is typically set when <see cref="IsSuccess"/> is false.

@@ -326,7 +326,7 @@ public sealed class ReconcilerTest
 
         var result = await reconciler.Reconcile(context, CancellationToken.None);
 
-        result.IsFailure.Should().BeTrue();
+        result.IsSuccess.Should().BeFalse();
         result.ErrorMessage.Should().Be(errorMessage);
     }
 

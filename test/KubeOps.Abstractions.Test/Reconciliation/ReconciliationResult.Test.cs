@@ -20,7 +20,6 @@ public sealed class ReconciliationResultTest
         var result = ReconciliationResult<V1ConfigMap>.Success(entity);
 
         result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
         result.Entity.Should().Be(entity);
         result.ErrorMessage.Should().BeNull();
         result.Error.Should().BeNull();
@@ -60,7 +59,6 @@ public sealed class ReconciliationResultTest
         var result = ReconciliationResult<V1ConfigMap>.Failure(entity, errorMessage);
 
         result.IsSuccess.Should().BeFalse();
-        result.IsFailure.Should().BeTrue();
         result.Entity.Should().Be(entity);
         result.ErrorMessage.Should().Be(errorMessage);
         result.Error.Should().BeNull();
@@ -76,7 +74,7 @@ public sealed class ReconciliationResultTest
 
         var result = ReconciliationResult<V1ConfigMap>.Failure(entity, errorMessage, exception);
 
-        result.IsFailure.Should().BeTrue();
+        result.IsSuccess.Should().BeFalse();
         result.ErrorMessage.Should().Be(errorMessage);
         result.Error.Should().Be(exception);
         result.Error.Message.Should().Be("Invalid state detected");
@@ -94,7 +92,7 @@ public sealed class ReconciliationResultTest
             errorMessage,
             requeueAfter: requeueAfter);
 
-        result.IsFailure.Should().BeTrue();
+        result.IsSuccess.Should().BeFalse();
         result.ErrorMessage.Should().Be(errorMessage);
         result.RequeueAfter.Should().Be(requeueAfter);
     }
@@ -113,7 +111,7 @@ public sealed class ReconciliationResultTest
             exception,
             requeueAfter);
 
-        result.IsFailure.Should().BeTrue();
+        result.IsSuccess.Should().BeFalse();
         result.ErrorMessage.Should().Be(errorMessage);
         result.Error.Should().Be(exception);
         result.RequeueAfter.Should().Be(requeueAfter);
@@ -163,10 +161,7 @@ public sealed class ReconciliationResultTest
         var failureResult = ReconciliationResult<V1ConfigMap>.Failure(entity, "Error");
 
         successResult.IsSuccess.Should().BeTrue();
-        successResult.IsFailure.Should().BeFalse();
-
         failureResult.IsSuccess.Should().BeFalse();
-        failureResult.IsFailure.Should().BeTrue();
     }
 
     [Fact]
@@ -190,7 +185,7 @@ public sealed class ReconciliationResultTest
 
         var result = ReconciliationResult<V1ConfigMap>.Failure(entity, errorMessage);
 
-        if (result.IsFailure)
+        if (!result.IsSuccess)
         {
             // This should compile without nullable warning due to MemberNotNullWhen attribute
             string message = result.ErrorMessage;

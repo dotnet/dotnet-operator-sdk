@@ -165,7 +165,7 @@ public class ResourceWatcher<TEntity>(
                     {
                         var result = await OnEventAsync(type, entity, stoppingToken);
 
-                        if (result.IsFailure)
+                        if (!result.IsSuccess)
                         {
                             logger.LogError(
                                 result.Error,
