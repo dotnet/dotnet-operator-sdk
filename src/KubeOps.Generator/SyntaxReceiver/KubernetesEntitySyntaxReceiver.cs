@@ -11,7 +11,7 @@ internal sealed class KubernetesEntitySyntaxReceiver : ISyntaxContextReceiver
 {
     private const string KindName = "Kind";
     private const string GroupName = "Group";
-    private const string PluralName = "Plural";
+    private const string PluralName = "PluralName";
     private const string VersionName = "ApiVersion";
     private const string DefaultVersion = "v1";
 
@@ -28,15 +28,24 @@ internal sealed class KubernetesEntitySyntaxReceiver : ISyntaxContextReceiver
 
         Entities.Add(new(
             cls,
-            GetArgumentValue(attr, KindName) ?? cls.Identifier.ToString(),
-            GetArgumentValue(attr, VersionName) ?? DefaultVersion,
-            GetArgumentValue(attr, GroupName),
-            GetArgumentValue(attr, PluralName)));
+            GetArgumentValue(context, attr, KindName) ?? cls.Identifier.ToString(),
+            GetArgumentValue(context, attr, VersionName) ?? DefaultVersion,
+            GetArgumentValue(context, attr, GroupName),
+            GetArgumentValue(context, attr, PluralName)));
     }
 
-    private static string? GetArgumentValue(AttributeSyntax attr, string argName) =>
-        attr.ArgumentList?.Arguments.FirstOrDefault(a => a.NameEquals?.Name.ToString() == argName) is
-        { Expression: LiteralExpressionSyntax { Token.ValueText: { } value } }
-            ? value
-            : null;
+    private static string? GetArgumentValue(GeneratorSyntaxContext context, AttributeSyntax attr, string argName)
+    {
+        var argument = attr.ArgumentList?.Arguments.FirstOrDefault(a => a.NameEquals?.Name.ToString() == argName)?.Expression;
+        if (argument != null)
+        {
+            var constValue = context.SemanticModel.GetConstantValue(argument);
+            if (constValue is { HasValue: true, Value: string attrValue })
+            {
+                return attrValue;
+            }
+        }
+
+        return null;
+    }
 }
