@@ -6,7 +6,6 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Reconciliation;
-using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
 
 using Microsoft.Extensions.Hosting;
@@ -14,6 +13,13 @@ using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Queue;
 
+/// <summary>
+/// A background service responsible for managing the requeue mechanism of Kubernetes entities.
+/// It processes entities from a timed queue and invokes the reconciliation logic for each entity.
+/// </summary>
+/// <typeparam name="TEntity">
+/// The type of the Kubernetes entity being managed. This entity must implement the <see cref="IKubernetesObject{V1ObjectMeta}"/> interface.
+/// </typeparam>
 public class EntityRequeueBackgroundService<TEntity>(
     IKubernetesClient client,
     ITimedEntityQueue<TEntity> queue,

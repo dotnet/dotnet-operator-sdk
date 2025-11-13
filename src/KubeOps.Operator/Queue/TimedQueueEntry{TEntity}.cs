@@ -54,7 +54,11 @@ internal sealed record TimedQueueEntry<TEntity> : IDisposable
                 return;
             }
 
-            collection.TryAdd(RequeueEntry<TEntity>.CreateFor(_entity, _requeueType));
+            collection.TryAdd(new()
+            {
+                Entity = _entity,
+                RequeueType = _requeueType,
+            });
         }
         catch (TaskCanceledException)
         {
