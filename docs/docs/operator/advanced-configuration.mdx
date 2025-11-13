@@ -278,7 +278,7 @@ public sealed class DurableTimedEntityQueue<TEntity>(
         TimeSpan requeueIn,
         CancellationToken cancellationToken)
     {
-        var entry = RequeueEntry<TEntity>.CreateFor(entity, type);
+        var entry = new RequeueEntry<TEntity>() { Entity = entity, RequeueType = type };
         var message = new ServiceBusMessage(BinaryData.FromObjectAsJson(entry));
 
         // Schedule the message for future delivery
