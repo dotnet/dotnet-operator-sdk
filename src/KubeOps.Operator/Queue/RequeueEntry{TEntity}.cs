@@ -14,9 +14,4 @@ namespace KubeOps.Operator.Queue;
 /// <typeparam name="TEntity">
 /// The type of the entity associated with the requeue entry.
 /// </typeparam>
-public struct RequeueEntry<TEntity>
-{
-    public required TEntity Entity { get; init; }
-
-    public required RequeueType RequeueType { get; init; }
-}
+public readonly record struct RequeueEntry<TEntity>(TEntity Entity, RequeueType RequeueType);
