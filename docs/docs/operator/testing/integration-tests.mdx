@@ -238,10 +238,19 @@ public class EntityControllerIntegrationTest : IntegrationTestBase
             _svc = svc;
         }
 
-        public Task ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(
+            V1OperatorIntegrationTestEntity entity,
+            CancellationToken cancellationToken)
         {
             _svc.Invocation(entity);
-            return Task.CompletedTask;
+            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
+        }
+
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(
+            V1OperatorIntegrationTestEntity entity,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
     }
 }

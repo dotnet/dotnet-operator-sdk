@@ -5,7 +5,7 @@
 using k8s;
 using k8s.Models;
 
-namespace KubeOps.Abstractions.Finalizer;
+namespace KubeOps.Abstractions.Reconciliation.Finalizer;
 
 /// <summary>
 /// <para>

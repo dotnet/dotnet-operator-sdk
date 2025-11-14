@@ -36,19 +36,18 @@ public sealed partial class OperatorSettings
     public string? Namespace { get; set; }
 
     /// <summary>
-    /// <para>
-    /// Whether the leader elector should run. You should enable
-    /// this if you plan to run the operator redundantly.
-    /// </para>
-    /// <para>
-    /// If this is disabled and an operator runs in multiple instances
-    /// (in the same namespace), it can lead to a "split brain" problem.
-    /// </para>
-    /// <para>
-    /// Defaults to `false`.
-    /// </para>
+    /// Defines the type of leader election mechanism to be used by the operator.
+    /// Determines how resources and controllers are coordinated in a distributed environment.
+    /// Defaults to <see cref="LeaderElectionType.None"/> indicating no leader election is configured.
     /// </summary>
-    public bool EnableLeaderElection { get; set; } = false;
+    public LeaderElectionType LeaderElectionType { get; set; } = LeaderElectionType.None;
+
+    /// <summary>
+    /// Defines the strategy for requeuing reconciliation events within the operator.
+    /// Determines how reconciliation events are managed and requeued during operator execution.
+    /// Defaults to <see cref="RequeueStrategy.InMemory"/> when not explicitly configured.
+    /// </summary>
+    public RequeueStrategy RequeueStrategy { get; set; } = RequeueStrategy.InMemory;
 
     /// <summary>
     /// Defines how long one lease is valid for any leader.
@@ -72,6 +71,19 @@ public sealed partial class OperatorSettings
     /// If not set, a default cache configuration is applied.
     /// </summary>
     public Action<IFusionCacheBuilder>? ConfigureResourceWatcherEntityCache { get; set; }
+
+    /// <summary>
+    /// Indicates whether finalizers should be automatically attached to Kubernetes entities during reconciliation.
+    /// When enabled, the operator will ensure that all defined finalizers for the entity are added if they are not already present.
+    /// Defaults to true.
+    /// </summary>
+    public bool AutoAttachFinalizers { get; set; } = true;
+
+    /// <summary>
+    /// Indicates whether finalizers should be automatically removed from Kubernetes resources
+    /// upon successful completion of their finalization process. Defaults to true.
+    /// </summary>
+    public bool AutoDetachFinalizers { get; set; } = true;
 
     [GeneratedRegex(@"(\W|_)", RegexOptions.CultureInvariant)]
     private static partial Regex OperatorNameRegex();

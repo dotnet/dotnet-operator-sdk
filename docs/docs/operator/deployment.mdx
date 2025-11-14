@@ -1,7 +1,7 @@
 ---
 title: Deployment
 description: Deploying your KubeOps Operator
-sidebar_position: 8
+sidebar_position: 9
 ---
 
 # Deployment
@@ -177,7 +177,14 @@ kubectl apply -f https://github.com/your-org/your-operator/releases/download/v1.
    - Configure resource limits
    - Implement logging and metrics
 
-4. **Updates**:
+4. **High Availability**:
+
+   - Run multiple replicas for redundancy
+   - Configure leader election for coordinated operation (see [Advanced Configuration - Leader Election](./advanced-configuration#custom-leader-election))
+   - Consider namespace-based distribution for horizontal scaling
+   - Implement durable requeue mechanisms for reliability (see [Advanced Configuration - Custom Requeue Mechanism](./advanced-configuration#custom-requeue-mechanism))
+
+5. **Updates**:
    - Document upgrade procedures
    - Test upgrades in staging
    - Provide rollback instructions

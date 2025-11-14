@@ -64,7 +64,9 @@ KubeOps provides an `EventPublisher` to create and update events for your custom
 ```csharp
 public class DemoController(EventPublisher eventPublisher) : IEntityController<V1DemoEntity>
 {
-    public async Task ReconcileAsync(V1DemoEntity entity, CancellationToken token)
+    public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -74,7 +76,9 @@ public class DemoController(EventPublisher eventPublisher) : IEntityController<V
                 "Reconciled",
                 "Entity was successfully reconciled",
                 EventType.Normal,
-                token);
+                cancellationToken);
+
+            return ReconciliationResult<V1DemoEntity>.Success(entity);
         }
         catch (Exception ex)
         {
@@ -83,8 +87,20 @@ public class DemoController(EventPublisher eventPublisher) : IEntityController<V
                 "ReconcileFailed",
                 $"Failed to reconcile entity: {ex.Message}",
                 EventType.Warning,
-                token);
+                cancellationToken);
+
+            return ReconciliationResult<V1DemoEntity>.Failure(
+                entity,
+                "Reconciliation failed",
+                ex);
         }
+    }
+
+    public Task<ReconciliationResult<V1DemoEntity>> DeletedAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ReconciliationResult<V1DemoEntity>.Success(entity));
     }
 }
 ```
@@ -100,8 +116,8 @@ KubeOps provides two event types:
 
 1. **Event Naming**:
 
-   - Use consistent, machine-readable reasons
-   - Make messages human-readable and descriptive
+   - Use consistent, machine-readable reason codes
+   - Write human-readable, descriptive messages
    - Include relevant details in the message
 
 2. **Event Frequency**:

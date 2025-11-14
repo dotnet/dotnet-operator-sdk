@@ -35,7 +35,7 @@ public sealed class ControllerRegistrationGeneratorTest
     [InlineData("""
                 using k8s;
                 using k8s.Models;
-                using KubeOps.Abstractions.Controller;
+                using KubeOps.Abstractions.Reconciliation.Controller;
                 
                 [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
                 public class V1TestEntity : IKubernetesObject<V1ObjectMeta>
@@ -65,7 +65,7 @@ public sealed class ControllerRegistrationGeneratorTest
     [InlineData("""
                 using k8s;
                 using k8s.Models;
-                using KubeOps.Abstractions.Controller;
+                using KubeOps.Abstractions.Reconciliation.Controller;
 
                 [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
                 public sealed class V1TestEntity : IKubernetesObject<V1ObjectMeta>

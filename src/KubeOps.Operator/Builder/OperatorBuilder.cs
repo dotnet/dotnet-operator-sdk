@@ -8,18 +8,20 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Builder;
-using KubeOps.Abstractions.Controller;
 using KubeOps.Abstractions.Crds;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Events;
-using KubeOps.Abstractions.Finalizer;
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
+using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Crds;
 using KubeOps.Operator.Events;
 using KubeOps.Operator.Finalizer;
 using KubeOps.Operator.LeaderElection;
 using KubeOps.Operator.Queue;
+using KubeOps.Operator.Reconciliation;
 using KubeOps.Operator.Watcher;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -29,35 +31,44 @@ namespace KubeOps.Operator.Builder;
 
 internal sealed class OperatorBuilder : IOperatorBuilder
 {
-    private readonly OperatorSettings _settings;
-
     public OperatorBuilder(IServiceCollection services, OperatorSettings settings)
     {
-        _settings = settings;
+        Settings = settings;
         Services = services;
         AddOperatorBase();
     }
 
     public IServiceCollection Services { get; }
 
+    public OperatorSettings Settings { get; }
+
     public IOperatorBuilder AddController<TImplementation, TEntity>()
         where TImplementation : class, IEntityController<TEntity>
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
-        Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
         Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
-        Services.TryAddSingleton(new TimedEntityQueue<TEntity>());
+        Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
+
+        // Requeue
         Services.TryAddTransient<IEntityRequeueFactory, KubeOpsEntityRequeueFactory>();
         Services.TryAddTransient<EntityRequeue<TEntity>>(services =>
             services.GetRequiredService<IEntityRequeueFactory>().Create<TEntity>());
 
-        if (_settings.EnableLeaderElection)
+        if (Settings.RequeueStrategy == RequeueStrategy.InMemory)
         {
-            Services.AddHostedService<LeaderAwareResourceWatcher<TEntity>>();
+            Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
+            Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
         }
-        else
+
+        // Leader Election
+        switch (Settings.LeaderElectionType)
         {
-            Services.AddHostedService<ResourceWatcher<TEntity>>();
+            case LeaderElectionType.None:
+                Services.AddHostedService<ResourceWatcher<TEntity>>();
+                break;
+            case LeaderElectionType.Single:
+                Services.AddHostedService<LeaderAwareResourceWatcher<TEntity>>();
+                break;
         }
 
         return this;
@@ -68,22 +79,8 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         where TEntity : IKubernetesObject<V1ObjectMeta>
         where TLabelSelector : class, IEntityLabelSelector<TEntity>
     {
-        Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
-        Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
-        Services.TryAddSingleton(new TimedEntityQueue<TEntity>());
-        Services.TryAddTransient<IEntityRequeueFactory, KubeOpsEntityRequeueFactory>();
-        Services.TryAddTransient<EntityRequeue<TEntity>>(services =>
-            services.GetRequiredService<IEntityRequeueFactory>().Create<TEntity>());
+        AddController<TImplementation, TEntity>();
         Services.TryAddSingleton<IEntityLabelSelector<TEntity>, TLabelSelector>();
-
-        if (_settings.EnableLeaderElection)
-        {
-            Services.AddHostedService<LeaderAwareResourceWatcher<TEntity>>();
-        }
-        else
-        {
-            Services.AddHostedService<ResourceWatcher<TEntity>>();
-        }
 
         return this;
     }
@@ -112,19 +109,19 @@ internal sealed class OperatorBuilder : IOperatorBuilder
 
     private void AddOperatorBase()
     {
-        Services.AddSingleton(_settings);
-        Services.AddSingleton(new ActivitySource(_settings.Name));
+        Services.AddSingleton(Settings);
+        Services.AddSingleton(new ActivitySource(Settings.Name));
 
         // add and configure resource watcher entity cache
-        Services.WithResourceWatcherEntityCaching(_settings);
+        Services.WithResourceWatcherEntityCaching(Settings);
 
         // Add the default configuration and the client separately. This allows external users to override either
         // just the config (e.g. for integration tests) or to replace the whole client, e.g. with a mock.
-        // We also add the k8s.IKubernetes as a singleton service, in order to allow to access internal services
-        // and also external users to make use of it's features that might not be implemented in the adapted client.
+        // We also add the k8s.IKubernetes as a singleton service, in order to allow accessing internal services
+        // and also external users to make use of its features that might not be implemented in the adapted client.
         //
         // Due to a memory leak in the Kubernetes client, it is important that the client is registered with
-        // with the same lifetime as the KubernetesClientConfiguration. This is tracked in kubernetes/csharp#1446.
+        // the same lifetime as the KubernetesClientConfiguration. This is tracked in kubernetes/csharp#1446.
         // https://github.com/kubernetes-client/csharp/issues/1446
         //
         // The missing ability to inject a custom HTTP client and therefore the possibility to use the .AddHttpClient()
@@ -140,7 +137,7 @@ internal sealed class OperatorBuilder : IOperatorBuilder
 
         Services.AddSingleton(typeof(IEntityLabelSelector<>), typeof(DefaultEntityLabelSelector<>));
 
-        if (_settings.EnableLeaderElection)
+        if (Settings.LeaderElectionType == LeaderElectionType.Single)
         {
             Services.AddLeaderElection();
         }

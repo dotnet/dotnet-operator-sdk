@@ -30,6 +30,7 @@ bld/
 coverage.json
 coverage.info
 .vs
+[Tt]est[Rr]esults/
 
 # Docs
 _site

@@ -21,7 +21,7 @@ namespace KubeOps.Operator.Web.Webhooks.Admission.Mutation;
 /// </summary>
 /// <param name="ModifiedObject">The modified entity if any changes are requested.</param>
 /// <typeparam name="TEntity">The type of the entity.</typeparam>
-public record MutationResult<TEntity>(TEntity? ModifiedObject = default) : IActionResult
+public sealed record MutationResult<TEntity>(TEntity? ModifiedObject = default) : IActionResult
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private const string JsonPatch = "JSONPatch";

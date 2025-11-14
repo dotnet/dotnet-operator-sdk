@@ -25,10 +25,10 @@ When a resource is marked for deletion:
 3. Each finalizer must explicitly remove itself after completing its cleanup
 4. Only when all finalizers are removed is the resource actually deleted
 
-This mechanism ensures that cleanup operations are:
+This mechanism guarantees that cleanup operations are:
 
 - Guaranteed to run
-- Run in a controlled manner
+- Executed in a controlled sequence
 - Completed before resource deletion
 
 ## Implementing Finalizers
@@ -40,19 +40,26 @@ public class DemoEntityFinalizer(
     ILogger<DemoEntityFinalizer> logger,
     IKubernetesClient client) : IEntityFinalizer<V1DemoEntity>
 {
-    public async Task FinalizeAsync(V1DemoEntity entity, CancellationToken token)
+    public async Task<ReconciliationResult<V1DemoEntity>> FinalizeAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
     {
         logger.LogInformation("Finalizing entity {Entity}", entity);
 
         try
         {
             // Clean up resources
-            await CleanupResources(entity);
+            await CleanupResources(entity, cancellationToken);
+            return ReconciliationResult<V1DemoEntity>.Success(entity);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error finalizing entity {Entity}", entity);
-            throw; // Re-throw to prevent finalizer removal
+            // Return failure to prevent finalizer removal
+            return ReconciliationResult<V1DemoEntity>.Failure(
+                entity,
+                $"Finalization failed: {ex.Message}",
+                ex);
         }
     }
 }
@@ -60,7 +67,9 @@ public class DemoEntityFinalizer(
 
 ## Using Finalizers
 
-Finalizers are automatically attached to entities using the `EntityFinalizerAttacher` delegate. This delegate is injected into your controller and handles the finalizer attachment:
+By default, KubeOps automatically attaches finalizers to entities during reconciliation. This behavior can be configured through `OperatorSettings`. See [Advanced Configuration](../advanced-configuration#finalizer-management) for details on controlling automatic finalizer attachment.
+
+If you need manual control, you can use the `EntityFinalizerAttacher` delegate, which is injected into your controller:
 
 ```csharp
 [EntityRbac(typeof(V1DemoEntity), Verbs = RbacVerb.All)]
@@ -69,18 +78,25 @@ public class V1DemoEntityController(
     EntityFinalizerAttacher<DemoEntityFinalizer, V1DemoEntity> finalizer)
     : IEntityController<V1DemoEntity>
 {
-    public async Task ReconcileAsync(V1DemoEntity entity, CancellationToken token)
+    public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
     {
         // Attach the finalizer to the entity
-        entity = await finalizer(entity, token);
+        entity = await finalizer(entity, cancellationToken);
 
         // Continue with reconciliation logic
         logger.LogInformation("Reconciling entity {Entity}", entity);
+
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
     }
 
-    public async Task DeletedAsync(V1DemoEntity entity, CancellationToken token)
+    public async Task<ReconciliationResult<V1DemoEntity>> DeletedAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
     {
         logger.LogInformation("Entity {Entity} was deleted", entity);
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
     }
 }
 ```
@@ -94,39 +110,50 @@ public class V1DemoEntityController(
 - Check resource existence before attempting cleanup
 
 ```csharp
-public async Task FinalizeAsync(V1DemoEntity entity, CancellationToken token)
+public async Task<ReconciliationResult<V1DemoEntity>> FinalizeAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
 {
     // Check if resources still exist before cleanup
-    var resources = await GetResources(entity);
+    var resources = await GetResources(entity, cancellationToken);
     if (!resources.Any())
     {
         // Resources already cleaned up
-        return;
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
     }
 
     // Perform cleanup
-    await CleanupResources(resources);
+    await CleanupResources(resources, cancellationToken);
+    return ReconciliationResult<V1DemoEntity>.Success(entity);
 }
 ```
 
 ### 2. Error Handling
 
-- Handle errors gracefully
+- Use `ReconciliationResult.Failure()` for errors
+- Return failure results to prevent finalizer removal
 - Log errors with appropriate context
-- Consider implementing retry logic for transient failures
+- Include retry delays when appropriate
 
 ```csharp
-public async Task FinalizeAsync(V1DemoEntity entity, CancellationToken token)
+public async Task<ReconciliationResult<V1DemoEntity>> FinalizeAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
 {
     try
     {
-        await FinalizeInternal(entity, token);
+        await FinalizeInternal(entity, cancellationToken);
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
     }
     catch (Exception ex)
     {
         logger.LogError(ex, "Error finalizing entity {Entity}", entity);
-        // Re-throw to prevent finalizer removal
-        throw;
+        // Return failure to prevent finalizer removal
+        return ReconciliationResult<V1DemoEntity>.Failure(
+            entity,
+            $"Finalization failed: {ex.Message}",
+            ex,
+            requeueAfter: TimeSpan.FromMinutes(1));
     }
 }
 ```
@@ -137,6 +164,50 @@ public async Task FinalizeAsync(V1DemoEntity entity, CancellationToken token)
 - Handle dependencies between resources
 - Consider cleanup order (e.g., delete pods before services)
 
+### 4. Finalizer Results
+
+The finalizer must return a `ReconciliationResult<TEntity>`:
+
+- **Success**: The finalizer is removed, and the entity is deleted
+- **Failure**: The finalizer remains, and the entity is requeued for retry
+
+```csharp
+public async Task<ReconciliationResult<V1DemoEntity>> FinalizeAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
+{
+    // Check if external resources exist
+    var externalResource = await GetExternalResource(entity.Spec.ResourceId);
+
+    if (externalResource == null)
+    {
+        // Already cleaned up
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
+    }
+
+    try
+    {
+        await DeleteExternalResource(externalResource, cancellationToken);
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
+    }
+    catch (Exception ex) when (IsRetryable(ex))
+    {
+        // Transient error - retry after delay
+        return ReconciliationResult<V1DemoEntity>.Failure(
+            entity,
+            "Failed to delete external resource",
+            ex,
+            requeueAfter: TimeSpan.FromSeconds(30));
+    }
+    catch (Exception ex)
+    {
+        // Permanent error - log and succeed to prevent stuck resource
+        logger.LogError(ex, "Permanent error during finalization, allowing deletion");
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
+    }
+}
+```
+
 ## Common Pitfalls
 
 ### 1. Stuck Resources
@@ -145,13 +216,15 @@ If a finalizer fails to complete:
 
 - The resource will remain in the cluster
 - It will be marked for deletion but never actually deleted
-- Manual intervention may be required
+- The finalizer will be retried based on the `requeueAfter` value
+- Manual intervention may be required for permanent failures
 
 To fix stuck resources:
 
 1. Identify the failing finalizer
 2. Fix the underlying issue
-3. Manually remove the finalizer only if necessary:
+3. Check if the finalizer is being retried
+4. Manually remove the finalizer only if necessary:
    ```bash
    kubectl patch <resource> <name> -p '{"metadata":{"finalizers":[]}}' --type=merge
    ```

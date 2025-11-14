@@ -9,7 +9,7 @@ namespace KubeOps.Generator.SyntaxReceiver;
 
 internal sealed class EntityFinalizerSyntaxReceiver : ISyntaxContextReceiver
 {
-    private const string IEntityFinalizerMetadataName = "KubeOps.Abstractions.Finalizer.IEntityFinalizer`1";
+    private const string IEntityFinalizerMetadataName = "KubeOps.Abstractions.Reconciliation.Finalizer.IEntityFinalizer`1";
 
     public List<(ClassDeclarationSyntax Finalizer, string EntityName)> Finalizer { get; } = [];
 

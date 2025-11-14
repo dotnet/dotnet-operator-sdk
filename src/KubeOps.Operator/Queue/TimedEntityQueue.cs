@@ -7,6 +7,10 @@ using System.Collections.Concurrent;
 using k8s;
 using k8s.Models;
 
+using KubeOps.Abstractions.Reconciliation.Queue;
+
+using Microsoft.Extensions.Logging;
+
 namespace KubeOps.Operator.Queue;
 
 /// <summary>
@@ -14,7 +18,9 @@ namespace KubeOps.Operator.Queue;
 /// The given enumerable only contains items that should be considered for reconciliations.
 /// </summary>
 /// <typeparam name="TEntity">The type of the inner entity.</typeparam>
-public sealed class TimedEntityQueue<TEntity> : IDisposable
+public sealed class TimedEntityQueue<TEntity>(
+    ILogger<TimedEntityQueue<TEntity>> logger)
+    : ITimedEntityQueue<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     // A shared task factory for all the created tasks.
@@ -24,47 +30,58 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
     private readonly ConcurrentDictionary<string, TimedQueueEntry<TEntity>> _management = new();
 
     // The actual queue containing all the entries that have to be reconciled.
-    private readonly BlockingCollection<TEntity> _queue = new(new ConcurrentQueue<TEntity>());
+    private readonly BlockingCollection<RequeueEntry<TEntity>> _queue = new(new ConcurrentQueue<RequeueEntry<TEntity>>());
 
     internal int Count => _management.Count;
 
-    /// <summary>
-    /// Enqueues the given <paramref name="entity"/> to happen in <paramref name="requeueIn"/>.
-    /// If the item already exists, the existing entry is updated.
-    /// </summary>
-    /// <param name="entity">The entity.</param>
-    /// <param name="requeueIn">The time after <see cref="DateTimeOffset.Now"/>, where the item is reevaluated again.</param>
-    public void Enqueue(TEntity entity, TimeSpan requeueIn)
+    /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Enqueue"/>
+    public Task Enqueue(TEntity entity, RequeueType type, TimeSpan requeueIn, CancellationToken cancellationToken)
     {
-        _management.AddOrUpdate(
-            TimedEntityQueue<TEntity>.GetKey(entity) ?? throw new InvalidOperationException("Cannot enqueue entities without name."),
-            key =>
-            {
-                var entry = new TimedQueueEntry<TEntity>(entity, requeueIn);
-                _scheduledEntries.StartNew(
-                    async () =>
-                    {
-                        await entry.AddAfterDelay(_queue);
-                        _management.TryRemove(key, out _);
-                    },
-                    entry.Token);
-                return entry;
-            },
-            (key, oldEntry) =>
-            {
-                oldEntry.Cancel();
-                var entry = new TimedQueueEntry<TEntity>(entity, requeueIn);
-                _scheduledEntries.StartNew(
-                    async () =>
-                    {
-                        await entry.AddAfterDelay(_queue);
-                        _management.TryRemove(key, out _);
-                    },
-                    entry.Token);
-                return entry;
-            });
+        _management
+            .AddOrUpdate(
+                this.GetKey(entity) ?? throw new InvalidOperationException("Cannot enqueue entities without name."),
+                key =>
+                {
+                    logger.LogTrace(
+                        """Adding schedule for entity "{Kind}/{Name}" to reconcile in {Seconds}s.""",
+                        entity.Kind,
+                        entity.Name(),
+                        requeueIn.TotalSeconds);
+
+                    var entry = new TimedQueueEntry<TEntity>(entity, type, requeueIn);
+                    _scheduledEntries.StartNew(
+                        async () =>
+                        {
+                            await entry.AddAfterDelay(_queue);
+                            _management.TryRemove(key, out _);
+                        },
+                        entry.Token);
+                    return entry;
+                },
+                (key, oldEntry) =>
+                {
+                    logger.LogTrace(
+                        """Updating schedule for entity "{Kind}/{Name}" to reconcile in {Seconds}s.""",
+                        entity.Kind,
+                        entity.Name(),
+                        requeueIn.TotalSeconds);
+
+                    oldEntry.Cancel();
+                    var entry = new TimedQueueEntry<TEntity>(entity, type, requeueIn);
+                    _scheduledEntries.StartNew(
+                        async () =>
+                        {
+                            await entry.AddAfterDelay(_queue);
+                            _management.TryRemove(key, out _);
+                        },
+                        entry.Token);
+                    return entry;
+                });
+
+        return Task.CompletedTask;
     }
 
+    /// <inheritdoc cref="IDisposable.Dispose"/>
     public void Dispose()
     {
         _queue.Dispose();
@@ -74,7 +91,8 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
         }
     }
 
-    public async IAsyncEnumerator<TEntity> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+    /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator"/>
+    public async IAsyncEnumerator<RequeueEntry<TEntity>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
     {
         await Task.Yield();
         foreach (var entry in _queue.GetConsumingEnumerable(cancellationToken))
@@ -83,32 +101,20 @@ public sealed class TimedEntityQueue<TEntity> : IDisposable
         }
     }
 
-    public void Remove(TEntity entity)
+    /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Remove"/>
+    public Task Remove(TEntity entity, CancellationToken cancellationToken)
     {
-        var key = TimedEntityQueue<TEntity>.GetKey(entity);
+        var key = this.GetKey(entity);
         if (key is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         if (_management.Remove(key, out var task))
         {
             task.Cancel();
         }
-    }
 
-    private static string? GetKey(TEntity entity)
-    {
-        if (entity.Name() is null)
-        {
-            return null;
-        }
-
-        if (entity.Namespace() is null)
-        {
-            return entity.Name();
-        }
-
-        return $"{entity.Namespace()}/{entity.Name()}";
+        return Task.CompletedTask;
     }
 }

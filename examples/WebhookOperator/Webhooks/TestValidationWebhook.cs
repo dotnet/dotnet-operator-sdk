@@ -9,7 +9,7 @@ using WebhookOperator.Entities;
 namespace WebhookOperator.Webhooks;
 
 [ValidationWebhook(typeof(V1TestEntity))]
-public class TestValidationWebhook : ValidationWebhook<V1TestEntity>
+public sealed class TestValidationWebhook : ValidationWebhook<V1TestEntity>
 {
     public override ValidationResult Create(V1TestEntity entity, bool dryRun)
     {

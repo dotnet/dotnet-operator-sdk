@@ -2,22 +2,32 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics;
+
 using k8s;
 using k8s.Models;
 
-using KubeOps.Abstractions.Controller;
+using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Queue;
 
-internal sealed class EntityRequeueBackgroundService<TEntity>(
+/// <summary>
+/// A background service responsible for managing the requeue mechanism of Kubernetes entities.
+/// It processes entities from a timed queue and invokes the reconciliation logic for each entity.
+/// </summary>
+/// <typeparam name="TEntity">
+/// The type of the Kubernetes entity being managed. This entity must implement the <see cref="IKubernetesObject{V1ObjectMeta}"/> interface.
+/// </typeparam>
+public class EntityRequeueBackgroundService<TEntity>(
+    ActivitySource activitySource,
     IKubernetesClient client,
-    TimedEntityQueue<TEntity> queue,
-    IServiceProvider provider,
+    ITimedEntityQueue<TEntity> queue,
+    IReconciler<TEntity> reconciler,
     ILogger<EntityRequeueBackgroundService<TEntity>> logger) : IHostedService, IDisposable, IAsyncDisposable
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
@@ -53,6 +63,23 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
 
     public void Dispose()
     {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeAsync(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing)
+        {
+            return;
+        }
+
         _cts.Dispose();
         client.Dispose();
         queue.Dispose();
@@ -60,13 +87,19 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
         _disposed = true;
     }
 
-    public async ValueTask DisposeAsync()
+    protected virtual async ValueTask DisposeAsync(bool disposing)
     {
+        if (!disposing)
+        {
+            return;
+        }
+
         await CastAndDispose(_cts);
         await CastAndDispose(client);
         await CastAndDispose(queue);
 
         _disposed = true;
+        return;
 
         static async ValueTask CastAndDispose(IDisposable resource)
         {
@@ -81,13 +114,35 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
         }
     }
 
+    protected virtual async Task ReconcileSingleAsync(RequeueEntry<TEntity> entry, CancellationToken cancellationToken)
+    {
+        using var activity = activitySource.StartActivity($"""Processing requeued "{entry.RequeueType}" event""", ActivityKind.Consumer);
+        using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.RequeueType, entry.Entity));
+
+        logger.LogTrace("""Executing requested requeued reconciliation for "{Name}".""", entry.Entity.Name());
+
+        if (await client.GetAsync<TEntity>(entry.Entity.Name(), entry.Entity.Namespace(), cancellationToken) is not
+            { } entity)
+        {
+            logger.LogWarning(
+                """Requeued entity "{Name}" was not found. Skipping reconciliation.""", entry.Entity.Name());
+            return;
+        }
+
+        await reconciler.Reconcile(
+            ReconciliationContext<TEntity>.CreateFromOperatorEvent(
+                entity,
+                entry.RequeueType.ToWatchEventType()),
+            cancellationToken);
+    }
+
     private async Task WatchAsync(CancellationToken cancellationToken)
     {
-        await foreach (var entity in queue)
+        await foreach (var entry in queue)
         {
             try
             {
-                await ReconcileSingleAsync(entity, cancellationToken);
+                await ReconcileSingleAsync(entry, cancellationToken);
             }
             catch (OperationCanceledException e) when (!cancellationToken.IsCancellationRequested)
             {
@@ -95,8 +150,8 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
                     e,
                     """Queued reconciliation for the entity of type {ResourceType} for "{Kind}/{Name}" failed.""",
                     typeof(TEntity).Name,
-                    entity.Kind,
-                    entity.Name());
+                    entry.Entity.Kind,
+                    entry.Entity.Name());
             }
             catch (Exception e)
             {
@@ -104,26 +159,9 @@ internal sealed class EntityRequeueBackgroundService<TEntity>(
                     e,
                     """Queued reconciliation for the entity of type {ResourceType} for "{Kind}/{Name}" failed.""",
                     typeof(TEntity).Name,
-                    entity.Kind,
-                    entity.Name());
+                    entry.Entity.Kind,
+                    entry.Entity.Name());
             }
         }
-    }
-
-    private async Task ReconcileSingleAsync(TEntity queued, CancellationToken cancellationToken)
-    {
-        logger.LogTrace("""Execute requested requeued reconciliation for "{Name}".""", queued.Name());
-
-        if (await client.GetAsync<TEntity>(queued.Name(), queued.Namespace(), cancellationToken) is not
-            { } entity)
-        {
-            logger.LogWarning(
-                """Requeued entity "{Name}" was not found. Skipping reconciliation.""", queued.Name());
-            return;
-        }
-
-        await using var scope = provider.CreateAsyncScope();
-        var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
-        await controller.ReconcileAsync(entity, cancellationToken);
     }
 }

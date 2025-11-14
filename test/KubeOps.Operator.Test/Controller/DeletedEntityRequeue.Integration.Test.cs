@@ -4,8 +4,9 @@
 
 using FluentAssertions;
 
-using KubeOps.Abstractions.Controller;
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
@@ -15,7 +16,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.Controller;
 
-public class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
+public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
     private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
@@ -31,7 +32,10 @@ public class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(2);
-        Services.GetRequiredService<TimedEntityQueue<V1OperatorIntegrationTestEntity>>().Count.Should().Be(0);
+        var timedEntityQueue = Services.GetRequiredService<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        timedEntityQueue.Should().NotBeNull();
+        timedEntityQueue.Should().BeOfType<TimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        timedEntityQueue.As<TimedEntityQueue<V1OperatorIntegrationTestEntity>>().Count.Should().Be(0);
     }
 
     public override async Task InitializeAsync()
@@ -59,17 +63,17 @@ public class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
             EntityRequeue<V1OperatorIntegrationTestEntity> requeue)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public Task ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            requeue(entity, TimeSpan.FromMilliseconds(1000));
-            return Task.CompletedTask;
+            requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(1000), CancellationToken.None);
+            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
 
-        public Task DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            return Task.CompletedTask;
+            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
     }
 }

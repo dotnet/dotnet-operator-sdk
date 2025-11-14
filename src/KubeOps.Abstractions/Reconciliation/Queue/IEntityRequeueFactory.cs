@@ -5,10 +5,10 @@
 using k8s;
 using k8s.Models;
 
-namespace KubeOps.Abstractions.Queue;
+namespace KubeOps.Abstractions.Reconciliation.Queue;
 
 /// <summary>
-/// Represents a type used to create delegates of type <see cref="EntityRequeue{TEntity}"/> for requeueing entities.
+/// Represents a type used to create delegates of type <see cref="EntityRequeue{TEntity}"/> for requeuing entities.
 /// </summary>
 public interface IEntityRequeueFactory
 {

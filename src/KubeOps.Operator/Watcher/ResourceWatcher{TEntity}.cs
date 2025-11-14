@@ -11,35 +11,26 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Builder;
-using KubeOps.Abstractions.Controller;
 using KubeOps.Abstractions.Entities;
-using KubeOps.Abstractions.Finalizer;
+using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
-using KubeOps.Operator.Constants;
 using KubeOps.Operator.Logging;
-using KubeOps.Operator.Queue;
 
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-
-using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Watcher;
 
 public class ResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<ResourceWatcher<TEntity>> logger,
-    IServiceProvider provider,
-    TimedEntityQueue<TEntity> requeue,
+    IReconciler<TEntity> reconciler,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
-    IFusionCacheProvider cacheProvider,
     IKubernetesClient client)
     : IHostedService, IAsyncDisposable, IDisposable
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private readonly IFusionCache _entityCache = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
     private CancellationTokenSource _cancellationTokenSource = new();
     private uint _watcherReconnectRetries;
     private Task? _eventWatcher;
@@ -54,7 +45,7 @@ public class ResourceWatcher<TEntity>(
         if (_cancellationTokenSource.IsCancellationRequested)
         {
             _cancellationTokenSource.Dispose();
-            _cancellationTokenSource = new CancellationTokenSource();
+            _cancellationTokenSource = new();
         }
 
         _eventWatcher = WatchClientEventsAsync(_cancellationTokenSource.Token);
@@ -102,7 +93,6 @@ public class ResourceWatcher<TEntity>(
 
         _cancellationTokenSource.Dispose();
         _eventWatcher?.Dispose();
-        requeue.Dispose();
         client.Dispose();
 
         _disposed = true;
@@ -116,7 +106,6 @@ public class ResourceWatcher<TEntity>(
         }
 
         await CastAndDispose(_cancellationTokenSource);
-        await CastAndDispose(requeue);
         await CastAndDispose(client);
 
         _disposed = true;
@@ -136,71 +125,15 @@ public class ResourceWatcher<TEntity>(
         }
     }
 
-    protected virtual async Task OnEventAsync(WatchEventType type, TEntity entity, CancellationToken cancellationToken)
-    {
-        MaybeValue<long?> cachedGeneration;
-
-        // Make sure Finalizers are running if Termination has began.
-        if (type != WatchEventType.Deleted && entity.Metadata.DeletionTimestamp is not null && entity.Metadata.Finalizers.Count > 0)
-        {
-            await ReconcileFinalizersSequentialAsync(entity, cancellationToken);
-            return;
-        }
-
-        switch (type)
-        {
-            case WatchEventType.Added:
-                cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
-
-                if (!cachedGeneration.HasValue)
-                {
-                    // Only perform reconciliation if the entity was not already in the cache.
-                    await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 0, token: cancellationToken);
-                    await ReconcileModificationAsync(entity, cancellationToken);
-                }
-                else
-                {
-                    logger.LogDebug(
-                        """Received ADDED event for entity "{Kind}/{Name}" which was already in the cache. Skip event.""",
-                        entity.Kind,
-                        entity.Name());
-                }
-
-                break;
-            case WatchEventType.Modified:
-                cachedGeneration = await _entityCache.TryGetAsync<long?>(entity.Uid(), token: cancellationToken);
-
-                // Check if entity spec has changed through "Generation" value increment. Skip reconcile if not changed.
-                if (cachedGeneration.HasValue && cachedGeneration >= entity.Generation())
-                {
-                    logger.LogDebug(
-                        """Entity "{Kind}/{Name}" modification did not modify generation. Skip event.""",
-                        entity.Kind,
-                        entity.Name());
-                    return;
-                }
-
-                // update cached generation since generation now changed
-                await _entityCache.SetAsync(entity.Uid(), entity.Generation() ?? 1, token: cancellationToken);
-                await ReconcileModificationAsync(entity, cancellationToken);
-
-                break;
-            case WatchEventType.Deleted:
-                await ReconcileDeletionAsync(entity, cancellationToken);
-                break;
-            default:
-                logger.LogWarning(
-                    """Received unsupported event "{EventType}" for "{Kind}/{Name}".""",
-                    type,
-                    entity.Kind,
-                    entity.Name());
-                break;
-        }
-    }
+    protected virtual async Task<ReconciliationResult<TEntity>> OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
+        => await reconciler.Reconcile(
+            ReconciliationContext<TEntity>.CreateFromApiServerEvent(entity, eventType),
+            cancellationToken);
 
     private async Task WatchClientEventsAsync(CancellationToken stoppingToken)
     {
         string? currentVersion = null;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -212,9 +145,9 @@ public class ResourceWatcher<TEntity>(
                                    allowWatchBookmarks: true,
                                    cancellationToken: stoppingToken))
                 {
-#pragma warning disable SA1312
-                    using var __ = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
-                    using var _ = logger.BeginScope(EntityLoggingScope.CreateFor(type, entity));
+                    using var activity = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
+                    using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(type, entity));
+
                     logger.LogInformation(
                         """Received watch event "{EventType}" for "{Kind}/{Name}", last observed resource version: {ResourceVersion}.""",
                         type,
@@ -230,7 +163,18 @@ public class ResourceWatcher<TEntity>(
 
                     try
                     {
-                        await OnEventAsync(type, entity, stoppingToken);
+                        var result = await OnEventAsync(type, entity, stoppingToken);
+
+                        if (!result.IsSuccess)
+                        {
+                            logger.LogError(
+                                result.Error,
+                                "Reconciliation of {EventType} for {Kind}/{Name} failed with message '{Message}'.",
+                                type,
+                                entity.Kind,
+                                entity.Name(),
+                                result.ErrorMessage);
+                        }
                     }
                     catch (KubernetesException e) when (e.Status.Code is (int)HttpStatusCode.GatewayTimeout)
                     {
@@ -244,13 +188,8 @@ public class ResourceWatcher<TEntity>(
                     }
                     catch (Exception e)
                     {
-                        LogReconciliationFailed(e);
-                    }
-
-                    void LogReconciliationFailed(Exception exception)
-                    {
                         logger.LogError(
-                            exception,
+                            e,
                             "Reconciliation of {EventType} for {Kind}/{Name} failed.",
                             type,
                             entity.Kind,
@@ -316,56 +255,5 @@ public class ResourceWatcher<TEntity>(
             _watcherReconnectRetries,
             delay.TotalSeconds);
         await Task.Delay(delay);
-    }
-
-    private async Task ReconcileDeletionAsync(TEntity entity, CancellationToken cancellationToken)
-    {
-        requeue.Remove(entity);
-        await _entityCache.RemoveAsync(entity.Uid(), token: cancellationToken);
-
-        await using var scope = provider.CreateAsyncScope();
-        var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
-        await controller.DeletedAsync(entity, cancellationToken);
-    }
-
-    private async Task ReconcileFinalizersSequentialAsync(TEntity entity, CancellationToken cancellationToken)
-    {
-        requeue.Remove(entity);
-        await using var scope = provider.CreateAsyncScope();
-
-        var identifier = entity.Finalizers().FirstOrDefault();
-        if (identifier is null)
-        {
-            return;
-        }
-
-        if (scope.ServiceProvider.GetKeyedService<IEntityFinalizer<TEntity>>(identifier) is not
-            { } finalizer)
-        {
-            logger.LogDebug(
-                """Entity "{Kind}/{Name}" is finalizing but this operator has no registered finalizers for the identifier {FinalizerIdentifier}.""",
-                entity.Kind,
-                entity.Name(),
-                identifier);
-            return;
-        }
-
-        await finalizer.FinalizeAsync(entity, cancellationToken);
-        entity.RemoveFinalizer(identifier);
-        await client.UpdateAsync(entity, cancellationToken);
-        logger.LogInformation(
-            """Entity "{Kind}/{Name}" finalized with "{Finalizer}".""",
-            entity.Kind,
-            entity.Name(),
-            identifier);
-    }
-
-    private async Task ReconcileModificationAsync(TEntity entity, CancellationToken cancellationToken)
-    {
-        // Re-queue should requested in the controller reconcile method. Invalidate any existing queues.
-        requeue.Remove(entity);
-        await using var scope = provider.CreateAsyncScope();
-        var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
-        await controller.ReconcileAsync(entity, cancellationToken);
     }
 }

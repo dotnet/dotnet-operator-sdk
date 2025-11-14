@@ -30,11 +30,11 @@
             <PackagePath>build/</PackagePath>
         </Content>
     </ItemGroup>
-    
+
     <ItemGroup>
         <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
             <_Parameter1>$(MSBuildProjectName).Web.Test</_Parameter1>
         </AssemblyAttribute>
     </ItemGroup>
-    
+
 </Project>
