@@ -145,9 +145,9 @@ public class ResourceWatcher<TEntity>(
                                    allowWatchBookmarks: true,
                                    cancellationToken: stoppingToken))
                 {
-#pragma warning disable SA1312
-                    using var __ = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
-                    using var _ = logger.BeginScope(EntityLoggingScope.CreateFor(type, entity));
+                    using var activity = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
+                    using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(type, entity));
+
                     logger.LogInformation(
                         """Received watch event "{EventType}" for "{Kind}/{Name}", last observed resource version: {ResourceVersion}.""",
                         type,

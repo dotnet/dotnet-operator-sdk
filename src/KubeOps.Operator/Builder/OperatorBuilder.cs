@@ -47,20 +47,26 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
         Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
-        Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
         Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
+
+        // Requeue
         Services.TryAddTransient<IEntityRequeueFactory, KubeOpsEntityRequeueFactory>();
         Services.TryAddTransient<EntityRequeue<TEntity>>(services =>
             services.GetRequiredService<IEntityRequeueFactory>().Create<TEntity>());
 
+        if (Settings.RequeueStrategy == RequeueStrategy.InMemory)
+        {
+            Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
+            Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
+        }
+
+        // Leader Election
         switch (Settings.LeaderElectionType)
         {
             case LeaderElectionType.None:
-                Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
                 Services.AddHostedService<ResourceWatcher<TEntity>>();
                 break;
             case LeaderElectionType.Single:
-                Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
                 Services.AddHostedService<LeaderAwareResourceWatcher<TEntity>>();
                 break;
         }

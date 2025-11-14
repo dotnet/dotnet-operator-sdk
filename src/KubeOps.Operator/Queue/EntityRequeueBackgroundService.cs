@@ -2,11 +2,14 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics;
+
 using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -21,6 +24,7 @@ namespace KubeOps.Operator.Queue;
 /// The type of the Kubernetes entity being managed. This entity must implement the <see cref="IKubernetesObject{V1ObjectMeta}"/> interface.
 /// </typeparam>
 public class EntityRequeueBackgroundService<TEntity>(
+    ActivitySource activitySource,
     IKubernetesClient client,
     ITimedEntityQueue<TEntity> queue,
     IReconciler<TEntity> reconciler,
@@ -112,7 +116,10 @@ public class EntityRequeueBackgroundService<TEntity>(
 
     protected virtual async Task ReconcileSingleAsync(RequeueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
-        logger.LogTrace("""Execute requested requeued reconciliation for "{Name}".""", entry.Entity.Name());
+        using var activity = activitySource.StartActivity($"""Processing requeued "{entry.RequeueType}" event""", ActivityKind.Consumer);
+        using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.RequeueType, entry.Entity));
+
+        logger.LogTrace("""Executing requested requeued reconciliation for "{Name}".""", entry.Entity.Name());
 
         if (await client.GetAsync<TEntity>(entry.Entity.Name(), entry.Entity.Namespace(), cancellationToken) is not
             { } entity)

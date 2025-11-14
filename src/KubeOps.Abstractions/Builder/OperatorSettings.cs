@@ -43,6 +43,13 @@ public sealed partial class OperatorSettings
     public LeaderElectionType LeaderElectionType { get; set; } = LeaderElectionType.None;
 
     /// <summary>
+    /// Defines the strategy for requeuing reconciliation events within the operator.
+    /// Determines how reconciliation events are managed and requeued during operator execution.
+    /// Defaults to <see cref="RequeueStrategy.InMemory"/> when not explicitly configured.
+    /// </summary>
+    public RequeueStrategy RequeueStrategy { get; set; } = RequeueStrategy.InMemory;
+
+    /// <summary>
     /// Defines how long one lease is valid for any leader.
     /// Defaults to 15 seconds.
     /// </summary>
