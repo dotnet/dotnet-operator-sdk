@@ -15,7 +15,7 @@ To install the template package, use the `dotnet` cli
 (or you may use the exact version as provided in the link above):
 
 ```bash
-dotnet new --install KubeOps.Templates::*
+dotnet new install KubeOps.Templates
 ```
 
 As soon as the templates are installed, you may use them with the short names below:
