@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Runtime.Versioning;
+
 using ConversionWebhookOperator.Entities;
 
 using KubeOps.Operator.Web.Webhooks.Conversion;
@@ -9,6 +11,7 @@ using KubeOps.Operator.Web.Webhooks.Conversion;
 namespace ConversionWebhookOperator.Webhooks;
 
 [ConversionWebhook(typeof(V3TestEntity))]
+[RequiresPreviewFeatures]
 public class TestConversionWebhook : ConversionWebhook<V3TestEntity>
 {
     protected override IEnumerable<IEntityConverter<V3TestEntity>> Converters => new IEntityConverter<V3TestEntity>[]
