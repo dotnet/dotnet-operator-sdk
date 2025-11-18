@@ -34,7 +34,7 @@ dotnet tool install --local KubeOps.Cli
 Generates Custom Resource Definitions (CRDs) and other Kubernetes-related resources for your operator.
 
 ```bash
-dotnet kubeops generate
+kubeops generate
 ```
 
 The `generate operator` command creates all necessary resources for deploying your operator to Kubernetes:
@@ -58,7 +58,7 @@ If your operator includes webhooks (mutations or validations), additional resour
 Installs the operator and its CRDs into a Kubernetes cluster.
 
 ```bash
-dotnet kubeops install
+kubeops install
 ```
 
 ### Uninstall
@@ -66,7 +66,7 @@ dotnet kubeops install
 Removes the operator and its CRDs from a Kubernetes cluster.
 
 ```bash
-dotnet kubeops uninstall
+kubeops uninstall
 ```
 
 ### Version
@@ -74,7 +74,7 @@ dotnet kubeops uninstall
 Displays the current version of the KubeOps CLI.
 
 ```bash
-dotnet kubeops version
+kubeops version
 ```
 
 ## Usage
@@ -84,5 +84,5 @@ The KubeOps CLI is designed to be used within .NET projects that implement Kuber
 For more detailed information about each command, use the `--help` flag:
 
 ```bash
-dotnet kubeops [command] --help
+kubeops [command] --help
 ```

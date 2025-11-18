@@ -93,10 +93,10 @@ foreach (var crd in crds)
 
 ### Use Cases
 
-- **KubeOps CLI:** This package is the engine behind the `dotnet kubeops generate crd` command.
+- **KubeOps CLI:** This package is the engine behind the `kubeops generate crd` command.
 - **Custom Build Tasks:** Integrate CRD generation directly into your MSBuild process.
 - **Schema Validation Tools:** Use the generated CRD schema for validating custom resource YAML files.
 
-The assembly inspection and attribute processing logic within this package is also leveraged by the KubeOps CLI (`dotnet kubeops generate operator`) command. The CLI uses this package's capabilities to find types decorated with `[EntityRbac]` attributes when generating the RBAC manifests (`Role`/`ClusterRole`) for your operator.
+The assembly inspection and attribute processing logic within this package is also leveraged by the KubeOps CLI (`kubeops generate operator`) command. The CLI uses this package's capabilities to find types decorated with `[EntityRbac]` attributes when generating the RBAC manifests (`Role`/`ClusterRole`) for your operator.
 
 For more details on defining the C# classes themselves, see the main KubeOps documentation.

@@ -18,7 +18,7 @@ The documentation is also provided within the code itself (description of method
 - **Controller Logic:** Implement reconciliation logic using the `IEntityController<TEntity>` interface.
 - **Finalizers:** Easily add cleanup logic before resource deletion with `IEntityFinalizer<TEntity>`.
 - **Webhooks:** Create [Admission](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/) (validating/mutating) and [Conversion](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#webhook-conversion) webhooks integrated with ASP.NET Core.
-- **Code Generation:** Includes Roslyn source generators and a CLI tool (`dotnet kubeops`) to automate boilerplate code for CRDs, controllers, and RBAC rules.
+- **Code Generation:** Includes Roslyn source generators and a CLI tool (`kubeops`) to automate boilerplate code for CRDs, controllers, and RBAC rules.
 - **Enhanced Kubernetes Client:** Provides convenience methods built on top of the official client library.
 - **Leader Election:** Automatic handling for high-availability operator deployments.
 
