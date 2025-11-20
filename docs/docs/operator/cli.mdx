@@ -32,7 +32,7 @@ During local development, you'll primarily use the `install` and `uninstall` com
 To install your operator's CRDs into your development cluster:
 
 ```bash
-dotnet kubeops install ./MyOperator.csproj
+kubeops install ./MyOperator.csproj
 ```
 
 This command:
@@ -50,7 +50,7 @@ The `install` and `uninstall` commands are primarily intended for development pu
 To remove your operator's CRDs from the development cluster:
 
 ```bash
-dotnet kubeops uninstall ./MyOperator.csproj
+kubeops uninstall ./MyOperator.csproj
 ```
 
 This is useful when:
@@ -64,7 +64,7 @@ This is useful when:
 The `generate` command creates all necessary Kubernetes resources for your operator:
 
 ```bash
-dotnet kubeops generate operator MyOperator ./MyOperator.csproj
+kubeops generate operator MyOperator ./MyOperator.csproj
 ```
 
 This generates:
@@ -85,7 +85,7 @@ The resource generation is automatically included in the build process. You don'
 The generate command supports several options:
 
 ```bash
-dotnet kubeops generate operator MyOperator ./MyOperator.csproj --out ./k8s --format yaml
+kubeops generate operator MyOperator ./MyOperator.csproj --out ./k8s --format yaml
 ```
 
 Common options:
@@ -101,7 +101,7 @@ Common options:
 The `version` command shows information about your current Kubernetes cluster:
 
 ```bash
-dotnet kubeops api-version
+kubeops api-version
 ```
 
 This displays:
@@ -133,24 +133,24 @@ All commands support these options:
 
    ```bash
    # Install CRDs for development
-   dotnet kubeops install ./MyOperator.csproj
+   kubeops install ./MyOperator.csproj
 
    # Generate resources for deployment
-   dotnet kubeops generate operator MyOperator ./MyOperator.csproj
+   kubeops generate operator MyOperator ./MyOperator.csproj
    ```
 
 2. **Testing Different Versions**:
 
    ```bash
    # Uninstall current version
-   dotnet kubeops uninstall ./MyOperator.csproj
+   kubeops uninstall ./MyOperator.csproj
 
    # Install new version
-   dotnet kubeops install ./MyOperator.csproj
+   kubeops install ./MyOperator.csproj
    ```
 
 3. **Custom Resource Generation**:
    ```bash
    # Generate resources with custom output
-   dotnet kubeops generate operator MyOperator ./MyOperator.csproj --out ./k8s --format yaml
+   kubeops generate operator MyOperator ./MyOperator.csproj --out ./k8s --format yaml
    ```

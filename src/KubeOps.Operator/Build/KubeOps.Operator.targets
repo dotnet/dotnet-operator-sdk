@@ -2,7 +2,7 @@
     <Target Name="BaseConfig">
         <PropertyGroup>
             <OperatorName Condition="'$(OperatorName)' == ''">$(AssemblyName.ToLowerInvariant())</OperatorName>
-            <KubeOpsCli Condition="'$(KubeOpsCli)' == ''">dotnet kubeops</KubeOpsCli>
+            <KubeOpsCli Condition="'$(KubeOpsCli)' == ''">kubeops</KubeOpsCli>
             <KubeOpsConfigOut Condition="'$(KubeOpsConfigOut)' == ''">$(MSBuildProjectDirectory)\config</KubeOpsConfigOut>
             <GenerateOperatorResources Condition="'$(GenerateOperatorResources)' == '' And '$(Configuration)' == 'Release'">true</GenerateOperatorResources>
         </PropertyGroup>
