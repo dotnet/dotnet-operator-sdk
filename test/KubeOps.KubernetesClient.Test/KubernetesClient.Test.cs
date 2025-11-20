@@ -8,6 +8,8 @@ using k8s.Models;
 
 namespace KubeOps.KubernetesClient.Test;
 
+#pragma warning disable CA2252 // Opt in to preview features before using them
+
 public sealed class KubernetesClientTest : IntegrationTestBase, IDisposable
 {
     private readonly IKubernetesClient _client =

@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Runtime.Versioning;
-
 using FluentAssertions;
 
 using KubeOps.Abstractions.Builder;
@@ -18,7 +16,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Web.Test.Builder;
-[RequiresPreviewFeatures]
+
+#pragma warning disable CA2252 // Opt in to preview features before using them
+
 public class OperatorBuilderExtensionsTest : IDisposable
 {
     private readonly IOperatorBuilder _builder = new OperatorBuilder(new ServiceCollection(), new());
