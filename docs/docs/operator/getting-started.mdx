@@ -24,7 +24,7 @@ For local development, we recommend using `kind` or Docker Desktop, which provid
 KubeOps provides templates to help you get started quickly. Install them using the .NET CLI:
 
 ```bash
-dotnet new --install KubeOps.Templates::*
+dotnet new install KubeOps.Templates
 ```
 
 KubeOps offers several template types:
@@ -75,7 +75,7 @@ The CLI provides several useful commands:
 Generate all necessary Kubernetes resources for your operator:
 
 ```bash
-dotnet kubeops generate operator MyOperator ./MyFirstOperator.csproj
+kubeops generate operator MyOperator ./MyFirstOperator.csproj
 ```
 
 :::note Automatic Generation
@@ -107,7 +107,7 @@ Make sure to handle these certificates securely in production environments.
 Install your operator's CRDs into your Kubernetes cluster:
 
 ```bash
-dotnet kubeops install ./MyFirstOperator.csproj
+kubeops install ./MyFirstOperator.csproj
 ```
 
 ### Uninstall CRDs
@@ -115,7 +115,7 @@ dotnet kubeops install ./MyFirstOperator.csproj
 Remove your operator's CRDs from the cluster:
 
 ```bash
-dotnet kubeops uninstall ./MyFirstOperator.csproj
+kubeops uninstall ./MyFirstOperator.csproj
 ```
 
 ## Building Blocks of an Operator
