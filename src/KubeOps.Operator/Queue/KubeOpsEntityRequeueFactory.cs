@@ -5,7 +5,7 @@
 using k8s;
 using k8s.Models;
 
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation.Queue;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,10 +17,10 @@ internal sealed class KubeOpsEntityRequeueFactory(IServiceProvider services)
 {
     public EntityRequeue<TEntity> Create<TEntity>()
         where TEntity : IKubernetesObject<V1ObjectMeta> =>
-        (entity, timeSpan) =>
+        (entity, type, timeSpan, cancellationToken) =>
         {
             var logger = services.GetService<ILogger<EntityRequeue<TEntity>>>();
-            var queue = services.GetRequiredService<TimedEntityQueue<TEntity>>();
+            var queue = services.GetRequiredService<ITimedEntityQueue<TEntity>>();
 
             logger?.LogTrace(
                 """Requeue entity "{Kind}/{Name}" in {Milliseconds}ms.""",
@@ -28,6 +28,6 @@ internal sealed class KubeOpsEntityRequeueFactory(IServiceProvider services)
                 entity.Name(),
                 timeSpan.TotalMilliseconds);
 
-            queue.Enqueue(entity, timeSpan);
+            queue.Enqueue(entity, type, timeSpan, cancellationToken);
         };
 }

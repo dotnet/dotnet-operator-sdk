@@ -5,7 +5,7 @@
 using k8s;
 using k8s.Models;
 
-using KubeOps.Abstractions.Finalizer;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.KubernetesClient;
 
 using Microsoft.Extensions.Logging;

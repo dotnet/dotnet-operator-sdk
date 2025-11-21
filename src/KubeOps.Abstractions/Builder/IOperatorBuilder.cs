@@ -5,10 +5,10 @@
 using k8s;
 using k8s.Models;
 
-using KubeOps.Abstractions.Controller;
 using KubeOps.Abstractions.Crds;
 using KubeOps.Abstractions.Entities;
-using KubeOps.Abstractions.Finalizer;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -23,6 +23,11 @@ public interface IOperatorBuilder
     /// The original service collection.
     /// </summary>
     IServiceCollection Services { get; }
+
+    /// <summary>
+    /// Configuration settings for the operator.
+    /// </summary>
+    OperatorSettings Settings { get; }
 
     /// <summary>
     /// Add a controller implementation for a specific entity to the operator.

@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Reflection;
+
 using k8s;
 using k8s.Models;
 
@@ -90,6 +92,14 @@ public static class KubernetesExtensions
             Name = kubernetesObject.Metadata.Name,
             Uid = kubernetesObject.Metadata.Uid,
         };
+
+    /// <summary>
+    /// Retrieves the <see cref="KubernetesEntityAttribute"/> applied to the specified Kubernetes object type, if it exists.
+    /// </summary>
+    /// <param name="entity">The Kubernetes object to inspect for the attribute.</param>
+    /// <returns>The <see cref="KubernetesEntityAttribute"/> if found; otherwise, null.</returns>
+    public static KubernetesEntityAttribute? GetKubernetesEntityAttribute(this IKubernetesObject<V1ObjectMeta> entity)
+        => entity.GetType().GetCustomAttribute<KubernetesEntityAttribute>(true);
 
     private static IList<V1OwnerReference> EnsureOwnerReferences(this V1ObjectMeta meta) =>
         meta.OwnerReferences ??= new List<V1OwnerReference>();

@@ -9,7 +9,7 @@ namespace KubeOps.Generator.SyntaxReceiver;
 
 internal sealed class EntityControllerSyntaxReceiver : ISyntaxContextReceiver
 {
-    private const string IEntityControllerMetadataName = "KubeOps.Abstractions.Controller.IEntityController`1";
+    private const string IEntityControllerMetadataName = "KubeOps.Abstractions.Reconciliation.Controller.IEntityController`1";
 
     public List<(ClassDeclarationSyntax Controller, string EntityName)> Controllers { get; } = [];
 

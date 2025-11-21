@@ -4,23 +4,26 @@
 
 using ConversionWebhookOperator.Entities;
 
-using KubeOps.Abstractions.Controller;
+using k8s.Models;
+
 using KubeOps.Abstractions.Rbac;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
 
 namespace ConversionWebhookOperator.Controller;
 
 [EntityRbac(typeof(V1TestEntity), Verbs = RbacVerb.All)]
-public class V1TestEntityController(ILogger<V1TestEntityController> logger) : IEntityController<V1TestEntity>
+public sealed class V1TestEntityController(ILogger<V1TestEntityController> logger) : IEntityController<V1TestEntity>
 {
-    public Task ReconcileAsync(V1TestEntity entity, CancellationToken cancellationToken)
+    public Task<ReconciliationResult<V1TestEntity>> ReconcileAsync(V1TestEntity entity, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Reconciling entity {Entity}.", entity);
-        return Task.CompletedTask;
+        logger.LogInformation("Reconciling entity {Namespace}/{Name}.", entity.Namespace(), entity.Name());
+        return Task.FromResult(ReconciliationResult<V1TestEntity>.Success(entity));
     }
 
-    public Task DeletedAsync(V1TestEntity entity, CancellationToken cancellationToken)
+    public Task<ReconciliationResult<V1TestEntity>> DeletedAsync(V1TestEntity entity, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Deleted entity {Entity}.", entity);
-        return Task.CompletedTask;
+        logger.LogInformation("Deleted entity {Namespace}/{Name}.", entity.Namespace(), entity.Name());
+        return Task.FromResult(ReconciliationResult<V1TestEntity>.Success(entity));
     }
 }

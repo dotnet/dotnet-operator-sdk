@@ -10,35 +10,29 @@ using k8s.Models;
 
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
+using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
-using KubeOps.Operator.Queue;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-
-using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Watcher;
 
 internal sealed class LeaderAwareResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<LeaderAwareResourceWatcher<TEntity>> logger,
-    IServiceProvider provider,
-    TimedEntityQueue<TEntity> queue,
+    IReconciler<TEntity> reconciler,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
-    IFusionCacheProvider cacheProvider,
     IKubernetesClient client,
     IHostApplicationLifetime hostApplicationLifetime,
     LeaderElector elector)
     : ResourceWatcher<TEntity>(
         activitySource,
         logger,
-        provider,
-        queue,
+        reconciler,
         settings,
         labelSelector,
-        cacheProvider,
         client)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
@@ -94,7 +88,7 @@ internal sealed class LeaderAwareResourceWatcher<TEntity>(
         if (_cts.IsCancellationRequested)
         {
             _cts.Dispose();
-            _cts = new CancellationTokenSource();
+            _cts = new();
         }
 
         base.StartAsync(_cts.Token);
@@ -107,7 +101,7 @@ internal sealed class LeaderAwareResourceWatcher<TEntity>(
         logger.LogInformation("This instance stopped leading, stopping watcher.");
 
         // Stop the base implementation using the 'ApplicationStopped' cancellation token.
-        // The cancellation token should only be marked cancelled when the stop should no longer be graceful.
+        // The cancellation token should only be marked as canceled when the stop should no longer be graceful.
         base.StopAsync(hostApplicationLifetime.ApplicationStopped).Wait();
     }
 }

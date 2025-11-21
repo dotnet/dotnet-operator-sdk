@@ -5,13 +5,13 @@
 using k8s;
 using k8s.Models;
 
-namespace KubeOps.Abstractions.Finalizer;
+namespace KubeOps.Abstractions.Reconciliation.Finalizer;
 
 /// <summary>
 /// Finalizer for an entity.
 /// </summary>
 /// <typeparam name="TEntity">The type of the entity.</typeparam>
-public interface IEntityFinalizer<in TEntity>
+public interface IEntityFinalizer<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     /// <summary>
@@ -19,6 +19,6 @@ public interface IEntityFinalizer<in TEntity>
     /// </summary>
     /// <param name="entity">The kubernetes entity that needs to be finalized.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
-    /// <returns>A task that resolves when the operation is done.</returns>
-    Task FinalizeAsync(TEntity entity, CancellationToken cancellationToken);
+    /// <returns>A task that represents the asynchronous operation and contains the result of the reconcile process.</returns>
+    Task<ReconciliationResult<TEntity>> FinalizeAsync(TEntity entity, CancellationToken cancellationToken);
 }

@@ -62,7 +62,7 @@ To create an entity, implement the `IKubernetesObject<V1ObjectMeta>` interface. 
 
 ```csharp
 [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
-public class V1TestEntity :
+public sealed class V1TestEntity :
     CustomKubernetesEntity<V1TestEntity.EntitySpec, V1TestEntity.EntityStatus>
 {
     public override string ToString()
@@ -88,34 +88,29 @@ A controller reconciles a specific entity type. Implement controllers using the 
 Example controller implementation:
 
 ```csharp
-using KubeOps.Abstractions.Controller;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Rbac;
 using KubeOps.KubernetesClient;
 using Microsoft.Extensions.Logging;
 
 [EntityRbac(typeof(V1TestEntity), Verbs = RbacVerb.All)]
-public class V1TestEntityController : IEntityController<V1TestEntity>
+public sealed class V1TestEntityController : IEntityController<V1TestEntity>
 {
     private readonly IKubernetesClient _client;
-    private readonly EntityFinalizerAttacher<FinalizerOne, V1TestEntity> _finalizer1;
     private readonly ILogger<V1TestEntityController> _logger;
 
     public V1TestEntityController(
         IKubernetesClient client,
-        EntityFinalizerAttacher<FinalizerOne, V1TestEntity> finalizer1,
         ILogger<V1TestEntityController> logger)
     {
         _client = client;
-        _finalizer1 = finalizer1;
         _logger = logger;
     }
 
-    public async Task ReconcileAsync(V1TestEntity entity, CancellationToken cancellationToken)
+    public async Task<ReconciliationResult<V1TestEntity>> ReconcileAsync(V1TestEntity entity, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Reconciling entity {Entity}.", entity);
-
-        // Attach finalizer and get updated entity
-        entity = await _finalizer1(entity);
 
         // Update status to indicate reconciliation in progress
         entity.Status.Status = "Reconciling";
@@ -124,22 +119,23 @@ public class V1TestEntityController : IEntityController<V1TestEntity>
         // Update status to indicate reconciliation complete
         entity.Status.Status = "Reconciled";
         await _client.UpdateStatus(entity);
+        
+        return ReconciliationResult<V1TestEntity>.Success(entity);
     }
 
-    public Task DeletedAsync(V1TestEntity entity, CancellationToken cancellationToken)
+    public Task<ReconciliationResult<V1TestEntity>> DeletedAsync(V1TestEntity entity, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Entity {Entity} deleted.", entity);
-        return Task.CompletedTask;
+        return Task.FromResult(ReconciliationResult<V1TestEntity>.Success(entity));
     }
 }
 ```
 
 This controller:
 
-1. Attaches a finalizer to the entity
-2. Updates the entity's status to indicate reconciliation is in progress
-3. Updates the status again to indicate reconciliation is complete
-4. Implements the required `DeletedAsync` method for handling deletion events
+1. Updates the entity's status to indicate reconciliation is in progress
+2. Updates the status again to indicate reconciliation is complete
+3. Implements the required `DeletedAsync` method for handling deletion events
 
 > **CAUTION:**
 > Always use the returned values from modifying actions of the Kubernetes client. Failure to do so will result in "HTTP CONFLICT" errors due to the resource version field in the entity.
@@ -151,17 +147,20 @@ This controller:
 
 A [finalizer](https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/) is a mechanism for asynchronous cleanup in Kubernetes. Implement finalizers using the `IEntityFinalizer<TEntity>` interface.
 
-Finalizers are attached using an `EntityFinalizerAttacher` and are called when the entity is marked for deletion.
+KubeOps provides automatic finalizer attachment and detachment to ensure proper resource cleanup. 
+If you need special handling this automation can be disabled by configuration.
+Finalizers then are attached using an `EntityFinalizerAttacher` and are called when the entity is marked for deletion.
 
 ```csharp
-using KubeOps.Abstractions.Finalizer;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
 
-public class FinalizerOne : IEntityFinalizer<V1TestEntity>
+public sealed class FinalizerOne : IEntityFinalizer<V1TestEntity>
 {
-    public Task FinalizeAsync(V1TestEntity entity, CancellationToken cancellationToken)
+    public Task<ReconciliationResult<V1TestEntity>> FinalizeAsync(V1TestEntity entity, CancellationToken cancellationToken)
     {
         // Implement cleanup logic here
-        return Task.CompletedTask;
+        return Task.FromResult(ReconciliationResult<V1TestEntity>.Success(entity));
     }
 }
 ```

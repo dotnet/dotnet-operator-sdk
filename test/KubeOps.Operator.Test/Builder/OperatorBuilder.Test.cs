@@ -5,14 +5,14 @@
 using FluentAssertions;
 
 using KubeOps.Abstractions.Builder;
-using KubeOps.Abstractions.Controller;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Events;
-using KubeOps.Abstractions.Finalizer;
-using KubeOps.Abstractions.Queue;
+using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Abstractions.Reconciliation.Controller;
+using KubeOps.Abstractions.Reconciliation.Finalizer;
+using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient.LabelSelectors;
 using KubeOps.Operator.Builder;
-using KubeOps.Operator.Finalizer;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 using KubeOps.Operator.Watcher;
@@ -23,7 +23,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.Builder;
 
-public class OperatorBuilderTest
+public sealed class OperatorBuilderTest
 {
     private readonly IOperatorBuilder _builder = new OperatorBuilder(new ServiceCollection(), new());
 
@@ -45,7 +45,6 @@ public class OperatorBuilderTest
     [Fact]
     public void Should_Use_Specific_EntityLabelSelector_Implementation()
     {
-        // Arrange
         var services = new ServiceCollection();
 
         // Register the default and specific implementations
@@ -54,10 +53,8 @@ public class OperatorBuilderTest
 
         var serviceProvider = services.BuildServiceProvider();
 
-        // Act
         var resolvedService = serviceProvider.GetRequiredService<IEntityLabelSelector<V1OperatorIntegrationTestEntity>>();
 
-        // Assert
         Assert.IsType<TestLabelSelector>(resolvedService);
     }
 
@@ -75,7 +72,7 @@ public class OperatorBuilderTest
             s.ImplementationType == typeof(ResourceWatcher<V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Singleton);
         _builder.Services.Should().Contain(s =>
-            s.ServiceType == typeof(TimedEntityQueue<V1OperatorIntegrationTestEntity>) &&
+            s.ServiceType == typeof(ITimedEntityQueue<V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Singleton);
         _builder.Services.Should().Contain(s =>
             s.ServiceType == typeof(EntityRequeue<V1OperatorIntegrationTestEntity>) &&
@@ -96,7 +93,7 @@ public class OperatorBuilderTest
             s.ImplementationType == typeof(ResourceWatcher<V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Singleton);
         _builder.Services.Should().Contain(s =>
-            s.ServiceType == typeof(TimedEntityQueue<V1OperatorIntegrationTestEntity>) &&
+            s.ServiceType == typeof(ITimedEntityQueue<V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Singleton);
         _builder.Services.Should().Contain(s =>
             s.ServiceType == typeof(EntityRequeue<V1OperatorIntegrationTestEntity>) &&
@@ -124,7 +121,7 @@ public class OperatorBuilderTest
     [Fact]
     public void Should_Add_Leader_Elector()
     {
-        var builder = new OperatorBuilder(new ServiceCollection(), new() { EnableLeaderElection = true });
+        var builder = new OperatorBuilder(new ServiceCollection(), new() { LeaderElectionType = LeaderElectionType.Single });
         builder.Services.Should().Contain(s =>
             s.ServiceType == typeof(k8s.LeaderElection.LeaderElector) &&
             s.Lifetime == ServiceLifetime.Singleton);
@@ -133,7 +130,7 @@ public class OperatorBuilderTest
     [Fact]
     public void Should_Add_LeaderAwareResourceWatcher()
     {
-        var builder = new OperatorBuilder(new ServiceCollection(), new() { EnableLeaderElection = true });
+        var builder = new OperatorBuilder(new ServiceCollection(), new() { LeaderElectionType = LeaderElectionType.Single });
         builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
 
         builder.Services.Should().Contain(s =>
@@ -146,22 +143,22 @@ public class OperatorBuilderTest
             s.Lifetime == ServiceLifetime.Singleton);
     }
 
-    private class TestController : IEntityController<V1OperatorIntegrationTestEntity>
+    private sealed class TestController : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public Task ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
+            Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
 
-        public Task DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
+            Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
     }
 
-    private class TestFinalizer : IEntityFinalizer<V1OperatorIntegrationTestEntity>
+    private sealed class TestFinalizer : IEntityFinalizer<V1OperatorIntegrationTestEntity>
     {
-        public Task FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> FinalizeAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
+            Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
     }
 
-    private class TestLabelSelector : IEntityLabelSelector<V1OperatorIntegrationTestEntity>
+    private sealed class TestLabelSelector : IEntityLabelSelector<V1OperatorIntegrationTestEntity>
     {
         public ValueTask<string?> GetLabelSelectorAsync(CancellationToken cancellationToken)
         {

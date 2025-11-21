@@ -5,7 +5,7 @@
 using k8s;
 using k8s.Models;
 
-namespace KubeOps.Abstractions.Controller;
+namespace KubeOps.Abstractions.Reconciliation.Controller;
 
 /// <summary>
 /// Generic entity controller. The controller manages the reconcile loop
@@ -37,24 +37,23 @@ namespace KubeOps.Abstractions.Controller;
 /// }
 /// </code>
 /// </example>
-public interface IEntityController<in TEntity>
+public interface IEntityController<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     /// <summary>
-    /// Called for `added` and `modified` events from the watcher.
+    /// Reconciles the state of the specified entity with the desired state.
+    /// This method is triggered for `added` and `modified` events from the watcher.
     /// </summary>
-    /// <param name="entity">The entity that fired the reconcile event.</param>
-    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
-    /// <returns>A task that completes when the reconciliation is done.</returns>
-    Task ReconcileAsync(TEntity entity, CancellationToken cancellationToken);
+    /// <param name="entity">The entity that initiated the reconcile operation.</param>
+    /// <param name="cancellationToken">The token used to signal cancellation of the operation.</param>
+    /// <returns>A task that represents the asynchronous operation and contains the result of the reconcile process.</returns>
+    Task<ReconciliationResult<TEntity>> ReconcileAsync(TEntity entity, CancellationToken cancellationToken);
 
     /// <summary>
     /// Called for `delete` events for a given entity.
     /// </summary>
     /// <param name="entity">The entity that fired the deleted event.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
-    /// <returns>
-    /// A task that completes, when the reconciliation is done.
-    /// </returns>
-    Task DeletedAsync(TEntity entity, CancellationToken cancellationToken);
+    /// <returns>A task that represents the asynchronous operation and contains the result of the reconcile process.</returns>
+    Task<ReconciliationResult<TEntity>> DeletedAsync(TEntity entity, CancellationToken cancellationToken);
 }
