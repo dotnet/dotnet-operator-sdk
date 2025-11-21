@@ -19,11 +19,11 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.Build.Locator" Version="1.10.12" />
-        <PackageReference Include="Microsoft.CodeAnalysis" Version="4.14.0" />
-        <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.14.0" />
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
-        <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.14.0" />
+        <PackageReference Include="Microsoft.CodeAnalysis" Version="5.0.0" />
+        <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="5.0.0" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />
+        <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.0.0" />
         <PackageReference Include="Spectre.Console" Version="0.54.0" />
         <PackageReference Include="Spectre.Console.Analyzer" Version="1.0.0">
           <PrivateAssets>all</PrivateAssets>
