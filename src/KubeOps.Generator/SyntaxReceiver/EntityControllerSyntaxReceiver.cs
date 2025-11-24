@@ -11,6 +11,10 @@ internal sealed class EntityControllerSyntaxReceiver : ISyntaxContextReceiver
 {
     private const string IEntityControllerMetadataName = "KubeOps.Abstractions.Reconciliation.Controller.IEntityController`1";
 
+#pragma warning disable RS1024
+    private readonly HashSet<INamedTypeSymbol> _visitedTypeSymbols = new(SymbolEqualityComparer.Default);
+#pragma warning restore RS1024
+
     public List<(ClassDeclarationSyntax Controller, string EntityName)> Controllers { get; } = [];
 
     public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
@@ -21,6 +25,11 @@ internal sealed class EntityControllerSyntaxReceiver : ISyntaxContextReceiver
         }
 
         if (context.SemanticModel.GetDeclaredSymbol(classDeclarationSyntax) is not INamedTypeSymbol classSymbol)
+        {
+            return;
+        }
+
+        if (!_visitedTypeSymbols.Add(classSymbol))
         {
             return;
         }
