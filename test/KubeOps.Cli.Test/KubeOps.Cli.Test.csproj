@@ -11,7 +11,7 @@
         <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="5.0.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />
-        <PackageReference Include="Microsoft.Build.Framework" Version="17.11.31" ExcludeAssets="runtime" />
+        <PackageReference Include="Microsoft.Build.Framework" Version="18.0.2" ExcludeAssets="runtime" />
         <PackageReference Include="Spectre.Console.Testing" Version="0.54.0" />
     </ItemGroup>
 </Project>
