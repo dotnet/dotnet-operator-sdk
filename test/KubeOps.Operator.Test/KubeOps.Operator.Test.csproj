@@ -1,12 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <ItemGroup>
         <PackageReference Include="KubernetesClient" Version="18.0.5" />
-        <PackageReference Include="Microsoft.Build.Locator" Version="1.10.12"/>
+        <PackageReference Include="Microsoft.Build.Locator" Version="1.11.1" />
         <PackageReference Include="Microsoft.CodeAnalysis" Version="5.0.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="5.0.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />
-        <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.0.0" />
+        <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.0.0" ExcludeAssets="runtime" />
         <PackageReference Include="Moq" Version="4.20.72" />
     </ItemGroup>
 
