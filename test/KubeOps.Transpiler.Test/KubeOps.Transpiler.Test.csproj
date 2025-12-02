@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <ItemGroup>
-        <PackageReference Include="KubernetesClient" Version="18.0.5" />
+        <PackageReference Include="KubernetesClient" Version="18.0.13" />
         <PackageReference Include="Microsoft.Build.Locator" Version="1.11.2" />
         <PackageReference Include="Microsoft.CodeAnalysis" Version="5.0.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="5.0.0" />
