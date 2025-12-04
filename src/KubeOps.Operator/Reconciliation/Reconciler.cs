@@ -137,14 +137,17 @@ internal sealed class Reconciler<TEntity>(
 
         if (operatorSettings.AutoAttachFinalizers)
         {
-            var finalizers = scope.ServiceProvider.GetKeyedServices<IEntityFinalizer<TEntity>>(KeyedService.AnyKey);
+            var finalizers = scope.ServiceProvider.GetKeyedServices<IEntityFinalizer<TEntity>>(KeyedService.AnyKey).ToArray();
 
             foreach (var finalizer in finalizers)
             {
                 entity.AddFinalizer(finalizer.GetIdentifierName(entity));
             }
 
-            entity = await client.UpdateAsync(entity, cancellationToken);
+            if (finalizers.Length > 0)
+            {
+                entity = await client.UpdateAsync(entity, cancellationToken);
+            }
         }
 
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();

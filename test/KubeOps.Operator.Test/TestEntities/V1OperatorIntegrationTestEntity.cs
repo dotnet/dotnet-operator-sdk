@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Text.Json.Serialization;
+
 using k8s.Models;
 
 using KubeOps.Abstractions.Entities;
@@ -18,10 +20,11 @@ public sealed class V1OperatorIntegrationTestEntity : CustomKubernetesEntity<V1O
         Kind = "OperatorIntegrationTest";
     }
 
-    public V1OperatorIntegrationTestEntity(string name, string username, string ns) : this()
+    public V1OperatorIntegrationTestEntity(string name, string username, string ns, bool couldChangeStatus = false) : this()
     {
         Metadata.Name = name;
         Spec.Username = username;
+        Spec.CouldChangeStatus = couldChangeStatus;
         Metadata.NamespaceProperty = ns;
     }
 
@@ -30,6 +33,8 @@ public sealed class V1OperatorIntegrationTestEntity : CustomKubernetesEntity<V1O
     public sealed class EntitySpec
     {
         public string Username { get; set; } = string.Empty;
+
+        public bool CouldChangeStatus { get; set; }
     }
 
     public sealed class EntityStatus
