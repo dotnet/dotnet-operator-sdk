@@ -16,7 +16,7 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace KubeOps.Generator.Generators;
 
 [Generator]
-internal class ControllerRegistrationGenerator : ISourceGenerator
+internal sealed class ControllerRegistrationGenerator : ISourceGenerator
 {
     private readonly EntityControllerSyntaxReceiver _ctrlReceiver = new();
     private readonly KubernetesEntitySyntaxReceiver _entityReceiver = new();
@@ -59,9 +59,9 @@ internal class ControllerRegistrationGenerator : ISourceGenerator
                     .WithBody(Block(
                         _ctrlReceiver.Controllers
                             .Where(c => _entityReceiver.Entities.Exists(e =>
-                                e.Class.Identifier.ToString() == c.EntityName))
+                                e.ClassDeclaration.ClassName == c.EntityName))
                             .Select(c => (c.Controller, Entity: _entityReceiver.Entities.First(e =>
-                                e.Class.Identifier.ToString() == c.EntityName).Class))
+                                e.ClassDeclaration.ClassName == c.EntityName)))
                             .Select(e => ExpressionStatement(
                                 InvocationExpression(
                                     MemberAccessExpression(
@@ -77,11 +77,7 @@ internal class ControllerRegistrationGenerator : ISourceGenerator
                                                             .GetDeclaredSymbol(e.Controller)!
                                                             .ToDisplayString(SymbolDisplayFormat
                                                                 .FullyQualifiedFormat)),
-                                                        IdentifierName(context.Compilation
-                                                            .GetSemanticModel(e.Entity.SyntaxTree)
-                                                            .GetDeclaredSymbol(e.Entity)!
-                                                            .ToDisplayString(SymbolDisplayFormat
-                                                                .FullyQualifiedFormat)),
+                                                        IdentifierName(e.Entity.ClassDeclaration.FullyQualifiedName),
                                                     })))))))
                             .Append<StatementSyntax>(ReturnStatement(IdentifierName("builder"))))))))
             .NormalizeWhitespace();

@@ -23,7 +23,7 @@ public class MlcProvider : IAsyncLifetime
 
     public MetadataLoadContext Mlc { get; private set; } = null!;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var assemblyConfigurationAttribute =
             typeof(MlcProvider).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>();
@@ -51,9 +51,9 @@ public class MlcProvider : IAsyncLifetime
         }
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         Mlc.Dispose();
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }

@@ -64,13 +64,13 @@ public sealed class EventPublisherIntegrationTest : IntegrationTestBase
         e.Metadata.Annotations.Should().Contain(a => a.Key == "originalName" && a.Value == eventName);
     }
 
-    public override async Task InitializeAsync()
+    public override async ValueTask InitializeAsync()
     {
         await base.InitializeAsync();
         await _ns.InitializeAsync();
     }
 
-    public override async Task DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
         await _ns.DisposeAsync();

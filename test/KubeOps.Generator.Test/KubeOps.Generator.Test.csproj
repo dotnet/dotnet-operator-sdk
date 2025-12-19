@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <ItemGroup>
         <ProjectReference Include="..\..\src\KubeOps.Generator\KubeOps.Generator.csproj"/>
+        <ProjectReference Include="..\KubeOps.Generator.Test.Entities\KubeOps.Generator.Test.Entities.csproj" />
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="Microsoft.CodeAnalysis" Version="5.0.0" />

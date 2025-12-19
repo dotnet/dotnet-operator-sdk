@@ -30,11 +30,15 @@ public sealed class NamespacedOperatorIntegrationTest : IntegrationTestBase
         var otherNsWatchCounter = new InvocationCounter<V1OperatorIntegrationTestEntity> { TargetInvocationCount = 1 };
         using var otherNsWatcher =
             _client.Watch<V1OperatorIntegrationTestEntity>((_, e) => otherNsWatchCounter.Invocation(e),
-                @namespace: _otherNamespace.Name());
+                @namespace: _otherNamespace.Name(),
+                cancellationToken: TestContext.Current.CancellationToken);
 
         await _client.CreateAsync(
-            new V1OperatorIntegrationTestEntity("test-entity", "username", _otherNamespace.Name()));
-        await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
+            new V1OperatorIntegrationTestEntity("test-entity", "username", _otherNamespace.Name()),
+            TestContext.Current.CancellationToken);
+        await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
         await otherNsWatchCounter.WaitForInvocations;
         _mock.Invocations.Count.Should().Be(1);
@@ -46,16 +50,18 @@ public sealed class NamespacedOperatorIntegrationTest : IntegrationTestBase
     {
         var watcherCounter = new InvocationCounter<V1OperatorIntegrationTestEntity> { TargetInvocationCount = 1 };
         using var watcher = _client.Watch<V1OperatorIntegrationTestEntity>((_, e) => watcherCounter.Invocation(e),
-            @namespace: _otherNamespace.Name());
+            @namespace: _otherNamespace.Name(),
+            cancellationToken: TestContext.Current.CancellationToken);
 
         await _client.CreateAsync(
-            new V1OperatorIntegrationTestEntity("test-entity2", "username", _otherNamespace.Name()));
+            new V1OperatorIntegrationTestEntity("test-entity2", "username", _otherNamespace.Name()),
+            TestContext.Current.CancellationToken);
         await watcherCounter.WaitForInvocations;
         _mock.Invocations.Count.Should().Be(0);
         watcherCounter.Invocations.Count.Should().Be(1);
     }
 
-    public override async Task InitializeAsync()
+    public override async ValueTask InitializeAsync()
     {
         await base.InitializeAsync();
         _otherNamespace =
@@ -68,7 +74,7 @@ public sealed class NamespacedOperatorIntegrationTest : IntegrationTestBase
         await _ns.InitializeAsync();
     }
 
-    public override async Task DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
         await _client.DeleteAsync(_otherNamespace);

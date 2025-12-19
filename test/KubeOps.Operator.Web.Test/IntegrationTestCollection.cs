@@ -38,7 +38,7 @@ public sealed class CrdInstaller : IAsyncLifetime
 {
     private List<V1CustomResourceDefinition> _crds = [];
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await using var p = new MlcProvider();
         await p.InitializeAsync();
@@ -61,7 +61,7 @@ public sealed class CrdInstaller : IAsyncLifetime
         }
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         using var client = new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig());
         foreach (var crd in _crds)
@@ -82,7 +82,7 @@ public sealed class MlcProvider : IAsyncLifetime
 
     public MetadataLoadContext Mlc { get; private set; } = null!;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var assemblyConfigurationAttribute =
             typeof(MlcProvider).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>();
@@ -110,10 +110,10 @@ public sealed class MlcProvider : IAsyncLifetime
         }
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         Mlc.Dispose();
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 }
 [RequiresPreviewFeatures]
@@ -121,7 +121,7 @@ public sealed class ApplicationProvider : IAsyncLifetime
 {
     private WebApplication? _app;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(c => c.ListenAnyIP(5000));
@@ -154,7 +154,7 @@ public sealed class ApplicationProvider : IAsyncLifetime
         await _app.StartAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _app!.DisposeAsync();
     }

@@ -16,7 +16,7 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace KubeOps.Generator.Generators;
 
 [Generator]
-internal class FinalizerRegistrationGenerator : ISourceGenerator
+internal sealed class FinalizerRegistrationGenerator : ISourceGenerator
 {
     private const byte MaxNameLength = 63;
 
@@ -37,9 +37,9 @@ internal class FinalizerRegistrationGenerator : ISourceGenerator
 
         var finalizers = _finalizerReceiver.Finalizer
             .Where(c => _entityReceiver.Entities.Exists(e =>
-                e.Class.Identifier.ToString() == c.EntityName))
+                e.ClassDeclaration.ClassName == c.EntityName))
             .Select(c => (c.Finalizer, Entity: _entityReceiver.Entities.First(e =>
-                e.Class.Identifier.ToString() == c.EntityName))).ToList();
+                e.ClassDeclaration.ClassName == c.EntityName))).ToList();
 
         var declaration = CompilationUnit()
             .WithUsings(
@@ -92,11 +92,7 @@ internal class FinalizerRegistrationGenerator : ISourceGenerator
                                                                 .GetDeclaredSymbol(f.Finalizer)!
                                                                 .ToDisplayString(SymbolDisplayFormat
                                                                     .FullyQualifiedFormat)),
-                                                            IdentifierName(context.Compilation
-                                                                .GetSemanticModel(f.Entity.Class.SyntaxTree)
-                                                                .GetDeclaredSymbol(f.Entity.Class)!
-                                                                .ToDisplayString(SymbolDisplayFormat
-                                                                    .FullyQualifiedFormat)),
+                                                            IdentifierName(f.Entity.ClassDeclaration.FullyQualifiedName),
                                                         })))))
                                     .WithArgumentList(
                                         ArgumentList(

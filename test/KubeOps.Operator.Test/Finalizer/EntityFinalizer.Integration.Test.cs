@@ -176,13 +176,13 @@ public sealed class EntityFinalizerIntegrationTest : IntegrationTestBase
         _mock.Invocations.Count(i => i.Method == "FinalizeAsync").Should().Be(2);
     }
 
-    public override async Task InitializeAsync()
+    public override async ValueTask InitializeAsync()
     {
         await base.InitializeAsync();
         await _ns.InitializeAsync();
     }
 
-    public override async Task DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
         var entities = await _client.ListAsync<V1OperatorIntegrationTestEntity>(_ns.Namespace);

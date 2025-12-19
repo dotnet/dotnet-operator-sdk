@@ -13,7 +13,7 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace KubeOps.Generator.Test;
 
-public class EntityDefinitionGeneratorTest
+public sealed class EntityDefinitionGeneratorTest
 {
     [Theory]
     [InlineData("", """
@@ -79,7 +79,11 @@ public class EntityDefinitionGeneratorTest
         expectedResult = expectedResult.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityDefinitionGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out ImmutableArray<Diagnostic> _);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
             .First(s => s.FilePath.Contains("EntityDefinitions.g.cs"))

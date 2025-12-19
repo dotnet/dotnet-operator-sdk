@@ -27,7 +27,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
     protected IServiceProvider Services => _host?.Services ?? throw new InvalidOperationException();
 
-    public virtual async Task InitializeAsync()
+    public virtual async ValueTask InitializeAsync()
     {
         var builder = Host.CreateApplicationBuilder();
 #if DEBUG
@@ -41,7 +41,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         await _host.StartAsync();
     }
 
-    public virtual async Task DisposeAsync()
+    public virtual async ValueTask DisposeAsync()
     {
         if (_host is null)
         {
@@ -61,7 +61,7 @@ public sealed class TestNamespaceProvider : IAsyncLifetime
 
     public string Namespace { get; } = Guid.NewGuid().ToString().ToLower();
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _namespace =
             await _client.CreateAsync(new V1Namespace()
@@ -70,7 +70,7 @@ public sealed class TestNamespaceProvider : IAsyncLifetime
             }.Initialize());
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _client.DeleteAsync(_namespace);
         _client.Dispose();
@@ -81,7 +81,7 @@ public sealed class CrdInstaller : IAsyncLifetime
 {
     private List<V1CustomResourceDefinition> _crds = [];
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await using var p = new MlcProvider();
         await p.InitializeAsync();
@@ -104,7 +104,7 @@ public sealed class CrdInstaller : IAsyncLifetime
         }
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         using var client = new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig());
         foreach (var crd in _crds)

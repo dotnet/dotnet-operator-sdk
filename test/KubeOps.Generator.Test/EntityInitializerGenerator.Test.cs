@@ -31,7 +31,11 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
             .First(s => s.FilePath.Contains("EntityInitializer.g.cs"))
@@ -78,7 +82,11 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         output.SyntaxTrees.Any(s => s.FilePath.Contains("V1TestEntity")).Should().BeFalse();
         output.SyntaxTrees.Any(s => s.FilePath.Contains("V2TestEntity")).Should().BeFalse();
@@ -115,7 +123,11 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         output.SyntaxTrees.Any(s => s.FilePath.Contains("V1ConfigMap")).Should().BeFalse();
         var result = output.SyntaxTrees
@@ -152,7 +164,11 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         output.SyntaxTrees.Any(s => s.FilePath.Contains("V1TestEntity")).Should().BeFalse();
         var result = output.SyntaxTrees
@@ -182,7 +198,11 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         output.SyntaxTrees.Any(s => s.FilePath.Contains("V1TestEntity")).Should().BeTrue();
         var result = output.SyntaxTrees
@@ -219,7 +239,11 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
             .First(s => s.FilePath.Contains("V1TestEntity.init.g.cs"))
@@ -260,7 +284,11 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
             .First(s => s.FilePath.Contains("V1TestEntity.init.g.cs"))
@@ -294,7 +322,11 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
             .First(s => s.FilePath.Contains("V1TestEntity.init.g.cs"))
@@ -329,7 +361,11 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out ImmutableArray<Diagnostic> _);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
             .First(s => s.FilePath.Contains("V1TestEntity.init.g.cs"))

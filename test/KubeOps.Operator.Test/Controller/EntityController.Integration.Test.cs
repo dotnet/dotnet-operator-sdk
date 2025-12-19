@@ -98,13 +98,13 @@ public class EntityControllerIntegrationTest : IntegrationTestBase
         _mock.Invocations[1].Method.Should().Be("DeletedAsync");
     }
 
-    public override async Task InitializeAsync()
+    public override async ValueTask InitializeAsync()
     {
         await base.InitializeAsync();
         await _ns.InitializeAsync();
     }
 
-    public override async Task DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
         await _ns.DisposeAsync();

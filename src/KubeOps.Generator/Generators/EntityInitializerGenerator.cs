@@ -16,8 +16,10 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace KubeOps.Generator.Generators;
 
 [Generator]
-internal class EntityInitializerGenerator : ISourceGenerator
+internal sealed class EntityInitializerGenerator : ISourceGenerator
 {
+    private const string EntityIdentifier = "entity";
+
     public void Initialize(GeneratorInitializationContext context)
     {
         context.RegisterForSyntaxNotifications(() => new KubernetesEntitySyntaxReceiver());
@@ -33,21 +35,12 @@ internal class EntityInitializerGenerator : ISourceGenerator
         // for each partial defined entity, create a partial class that
         // introduces a default constructor that initializes the ApiVersion and Kind.
         // But only, if there is no default constructor defined.
-        foreach (var entity in receiver.Entities
-                     .Where(e => e.Class.Modifiers.Any(SyntaxKind.PartialKeyword))
-                     .Where(e => !e.Class.Members.Any(m => m is ConstructorDeclarationSyntax
-                     {
-                         ParameterList.Parameters.Count: 0,
-                     })))
+        foreach (var entity in receiver.Entities.Where(e => e.ClassDeclaration is { IsFromReferencedAssembly: false, IsPartial: true, HasParameterlessConstructor: false }))
         {
-            var symbol = context.Compilation
-                .GetSemanticModel(entity.Class.SyntaxTree)
-                .GetDeclaredSymbol(entity.Class)!;
-
             var ns = new List<MemberDeclarationSyntax>();
-            if (!symbol.ContainingNamespace.IsGlobalNamespace)
+            if (!string.IsNullOrEmpty(entity.ClassDeclaration.Namespace))
             {
-                ns.Add(FileScopedNamespaceDeclaration(IdentifierName(symbol.ContainingNamespace.ToDisplayString())));
+                ns.Add(FileScopedNamespaceDeclaration(IdentifierName(entity.ClassDeclaration.Namespace!)));
             }
 
             var partialEntityInitializer = CompilationUnit();
@@ -60,9 +53,9 @@ internal class EntityInitializerGenerator : ISourceGenerator
             }
 
             partialEntityInitializer = partialEntityInitializer
-                .AddMembers(ClassDeclaration(entity.Class.Identifier)
-                    .WithModifiers(entity.Class.Modifiers)
-                    .AddMembers(ConstructorDeclaration(entity.Class.Identifier)
+                .AddMembers(ClassDeclaration(entity.ClassDeclaration.ClassName)
+                    .WithModifiers(entity.ClassDeclaration.Modifiers!.Value)
+                    .AddMembers(ConstructorDeclaration(entity.ClassDeclaration.ClassName)
                         .WithModifiers(
                             TokenList(
                                 Token(SyntaxKind.PublicKeyword)))
@@ -93,61 +86,54 @@ internal class EntityInitializerGenerator : ISourceGenerator
                 .NormalizeWhitespace();
 
             context.AddSource(
-                $"{entity.Class.Identifier}.init.g.cs",
+                $"{entity.ClassDeclaration.ClassName}.init.g.cs",
                 SourceText.From(partialEntityInitializer.ToFullString(), Encoding.UTF8, SourceHashAlgorithm.Sha256));
         }
 
-        // for each NON partial entity, generate a method extension that initializes the ApiVersion and Kind.
+        // for each NON partial entity or referenced by assembly,
+        // generate a method extension that initializes the ApiVersion and Kind.
         var staticInitializers = CompilationUnit()
             .WithMembers(SingletonList<MemberDeclarationSyntax>(ClassDeclaration("EntityInitializer")
                 .WithModifiers(TokenList(
                     Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)))
                 .WithMembers(List<MemberDeclarationSyntax>(receiver.Entities
-                    .Where(e => !e.Class.Modifiers.Any(SyntaxKind.PartialKeyword) || e.Class.Members.Any(m =>
-                        m is ConstructorDeclarationSyntax
-                        {
-                            ParameterList.Parameters.Count: 0,
-                        }))
-                    .Select(e => (Entity: e,
-                        ClassIdentifier: context.Compilation.GetSemanticModel(e.Class.SyntaxTree)
-                            .GetDeclaredSymbol(e.Class)!.ToDisplayString(SymbolDisplayFormat
-                                .FullyQualifiedFormat)))
-                    .Select(e =>
-                        MethodDeclaration(
-                                IdentifierName(e.ClassIdentifier),
-                                "Initialize")
-                            .WithModifiers(
-                                TokenList(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)))
-                            .WithParameterList(ParameterList(
-                                SingletonSeparatedList(
-                                    Parameter(
-                                            Identifier("entity"))
-                                        .WithModifiers(
-                                            TokenList(
-                                                Token(SyntaxKind.ThisKeyword)))
-                                        .WithType(IdentifierName(e.ClassIdentifier)))))
-                            .WithBody(Block(
-                                ExpressionStatement(
-                                    AssignmentExpression(
-                                        SyntaxKind.SimpleAssignmentExpression,
-                                        MemberAccessExpression(
-                                            SyntaxKind.SimpleMemberAccessExpression,
-                                            IdentifierName("entity"),
-                                            IdentifierName("ApiVersion")),
-                                        LiteralExpression(
-                                            SyntaxKind.StringLiteralExpression,
-                                            Literal($"{e.Entity.Group}/{e.Entity.Version}".TrimStart('/'))))),
-                                ExpressionStatement(
-                                    AssignmentExpression(
-                                        SyntaxKind.SimpleAssignmentExpression,
-                                        MemberAccessExpression(
-                                            SyntaxKind.SimpleMemberAccessExpression,
-                                            IdentifierName("entity"),
-                                            IdentifierName("Kind")),
-                                        LiteralExpression(
-                                            SyntaxKind.StringLiteralExpression,
-                                            Literal(e.Entity.Kind)))),
-                                ReturnStatement(IdentifierName("entity")))))))))
+                    .Where(e => e.ClassDeclaration.IsFromReferencedAssembly || !e.ClassDeclaration.IsPartial || e.ClassDeclaration.HasParameterlessConstructor)
+                    .Select(e => (Entity: e, ClassIdentifier: e.ClassDeclaration.FullyQualifiedName))
+                    .Select(e => MethodDeclaration(
+                            IdentifierName(e.ClassIdentifier),
+                            "Initialize")
+                        .WithModifiers(
+                            TokenList(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)))
+                        .WithParameterList(ParameterList(
+                            SingletonSeparatedList(
+                                Parameter(
+                                        Identifier(EntityIdentifier))
+                                    .WithModifiers(
+                                        TokenList(
+                                            Token(SyntaxKind.ThisKeyword)))
+                                    .WithType(IdentifierName(e.ClassIdentifier)))))
+                        .WithBody(Block(
+                            ExpressionStatement(
+                                AssignmentExpression(
+                                    SyntaxKind.SimpleAssignmentExpression,
+                                    MemberAccessExpression(
+                                        SyntaxKind.SimpleMemberAccessExpression,
+                                        IdentifierName(EntityIdentifier),
+                                        IdentifierName("ApiVersion")),
+                                    LiteralExpression(
+                                        SyntaxKind.StringLiteralExpression,
+                                        Literal($"{e.Entity.Group}/{e.Entity.Version}".TrimStart('/'))))),
+                            ExpressionStatement(
+                                AssignmentExpression(
+                                    SyntaxKind.SimpleAssignmentExpression,
+                                    MemberAccessExpression(
+                                        SyntaxKind.SimpleMemberAccessExpression,
+                                        IdentifierName(EntityIdentifier),
+                                        IdentifierName("Kind")),
+                                    LiteralExpression(
+                                        SyntaxKind.StringLiteralExpression,
+                                        Literal(e.Entity.Kind)))),
+                            ReturnStatement(IdentifierName(EntityIdentifier)))))))))
             .WithLeadingTrivia(AutoGeneratedSyntaxTrivia.Instance)
             .NormalizeWhitespace();
 
