@@ -63,9 +63,9 @@ internal static class Options
         DefaultValueFactory = _ => "latest",
     };
 
-    public static readonly Option<bool> NoColor = new("--no-color")
+    public static readonly Option<bool> NoAnsi = new("--no-ansi")
     {
-        Description = "Disable colored output.",
+        Description = "Disable ANSI output.",
         DefaultValueFactory = _ => false,
     };
 }

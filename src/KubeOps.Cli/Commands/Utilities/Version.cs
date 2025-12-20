@@ -6,6 +6,8 @@ using System.CommandLine;
 
 using k8s;
 
+using KubeOps.Cli.Extensions;
+
 using Spectre.Console;
 
 namespace KubeOps.Cli.Commands.Utilities;
@@ -20,7 +22,7 @@ internal static class Version
                 "api-version",
                 "Prints the actual server version of the connected kubernetes cluster.")
             {
-                Options.NoColor,
+                Options.NoAnsi,
             };
             cmd.Aliases.Add("av");
             cmd.SetAction(result =>
@@ -35,12 +37,7 @@ internal static class Version
 
     internal static async Task<int> Handler(IAnsiConsole console, IKubernetes client, ParseResult parseResult)
     {
-        var noColor = parseResult.GetValue(Options.NoColor);
-
-        if (noColor)
-        {
-            AnsiConsole.Console.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
-        }
+        console.ApplyOptions(parseResult);
 
         var version = await client.Version.GetCodeAsync();
         console.Write(new Table()

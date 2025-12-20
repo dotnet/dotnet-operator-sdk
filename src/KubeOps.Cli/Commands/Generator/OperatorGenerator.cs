@@ -9,6 +9,7 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Kustomize;
+using KubeOps.Cli.Extensions;
 using KubeOps.Cli.Generators;
 using KubeOps.Cli.Output;
 using KubeOps.Cli.Transpilation;
@@ -38,7 +39,7 @@ internal static class OperatorGenerator
                     Options.TargetFramework,
                     Options.AccessibleDockerImage,
                     Options.AccessibleDockerTag,
-                    Options.NoColor,
+                    Options.NoAnsi,
                     Arguments.OperatorName,
                     Arguments.SolutionOrProjectFile,
                 };
@@ -51,18 +52,14 @@ internal static class OperatorGenerator
 
     internal static async Task<int> Handler(IAnsiConsole console, ParseResult parseResult)
     {
+        console.ApplyOptions(parseResult);
+
         var name = parseResult.GetValue(Arguments.OperatorName) ?? OperatorName;
         var file = parseResult.GetValue(Arguments.SolutionOrProjectFile);
         var outPath = parseResult.GetValue(Options.OutputPath);
         var format = parseResult.GetValue(Options.OutputFormat);
-        var noColor = parseResult.GetValue(Options.NoColor);
         var dockerImage = parseResult.GetValue(Options.AccessibleDockerImage)!;
         var dockerImageTag = parseResult.GetValue(Options.AccessibleDockerTag)!;
-
-        if (noColor)
-        {
-            AnsiConsole.Console.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
-        }
 
         var result = new ResultOutput(console, format);
         console.WriteLine("Generate operator resources.");
