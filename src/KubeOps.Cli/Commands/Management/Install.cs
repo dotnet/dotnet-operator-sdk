@@ -28,6 +28,7 @@ internal static class Install
                     Options.Force,
                     Options.SolutionProjectRegex,
                     Options.TargetFramework,
+                    Options.NoColor,
                     Arguments.SolutionOrProjectFile,
                 };
             cmd.Aliases.Add("i");
@@ -44,6 +45,12 @@ internal static class Install
     {
         var file = parseResult.GetValue(Arguments.SolutionOrProjectFile);
         var force = parseResult.GetValue(Options.Force);
+        var noColor = parseResult.GetValue(Options.NoColor);
+
+        if (noColor)
+        {
+            AnsiConsole.Console.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
+        }
 
         var parser = file switch
         {

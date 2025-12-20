@@ -19,13 +19,16 @@ namespace KubeOps.Cli.Commands.Generator;
 
 internal static class OperatorGenerator
 {
+    private const string CommandName = "operator";
+    private const string OperatorName = "operator";
+
     public static Command Command
     {
         get
         {
             var cmd =
                 new Command(
-                    "operator",
+                    CommandName,
                     "Generates all required resources and configs for the operator to be built and run.")
                 {
                     Options.ClearOutputPath,
@@ -35,6 +38,7 @@ internal static class OperatorGenerator
                     Options.TargetFramework,
                     Options.AccessibleDockerImage,
                     Options.AccessibleDockerTag,
+                    Options.NoColor,
                     Arguments.OperatorName,
                     Arguments.SolutionOrProjectFile,
                 };
@@ -47,12 +51,18 @@ internal static class OperatorGenerator
 
     internal static async Task<int> Handler(IAnsiConsole console, ParseResult parseResult)
     {
-        var name = parseResult.GetValue(Arguments.OperatorName) ?? "operator";
+        var name = parseResult.GetValue(Arguments.OperatorName) ?? OperatorName;
         var file = parseResult.GetValue(Arguments.SolutionOrProjectFile);
         var outPath = parseResult.GetValue(Options.OutputPath);
         var format = parseResult.GetValue(Options.OutputFormat);
+        var noColor = parseResult.GetValue(Options.NoColor);
         var dockerImage = parseResult.GetValue(Options.AccessibleDockerImage)!;
         var dockerImageTag = parseResult.GetValue(Options.AccessibleDockerTag)!;
+
+        if (noColor)
+        {
+            AnsiConsole.Console.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
+        }
 
         var result = new ResultOutput(console, format);
         console.WriteLine("Generate operator resources.");
@@ -123,12 +133,12 @@ internal static class OperatorGenerator
             {
                 NamePrefix = $"{name}-",
                 Namespace = $"{name}-system",
-                Labels = [new(new Dictionary<string, string> { { "operator", name }, })],
+                Labels = [new(new Dictionary<string, string> { { OperatorName, name }, })],
                 Resources = result.DefaultFormatFiles.ToList(),
                 Images =
                     new List<KustomizationImage>
                     {
-                        new() { Name = "operator", NewName = dockerImage, NewTag = dockerImageTag, },
+                        new() { Name = OperatorName, NewName = dockerImage, NewTag = dockerImageTag, },
                     },
                 ConfigMapGenerator = hasWebhooks
                     ? new List<KustomizationConfigMapGenerator>

@@ -28,6 +28,7 @@ internal static class Uninstall
                     Options.Force,
                     Options.SolutionProjectRegex,
                     Options.TargetFramework,
+                    Options.NoColor,
                     Arguments.SolutionOrProjectFile,
                 };
             cmd.Aliases.Add("u");
@@ -44,6 +45,12 @@ internal static class Uninstall
     {
         var file = parseResult.GetValue(Arguments.SolutionOrProjectFile);
         var force = parseResult.GetValue(Options.Force);
+        var noColor = parseResult.GetValue(Options.NoColor);
+
+        if (noColor)
+        {
+            AnsiConsole.Console.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
+        }
 
         var parser = file switch
         {

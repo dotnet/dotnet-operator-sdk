@@ -18,17 +18,30 @@ internal static class Version
         {
             var cmd = new Command(
                 "api-version",
-                "Prints the actual server version of the connected kubernetes cluster.");
+                "Prints the actual server version of the connected kubernetes cluster.")
+            {
+                Options.NoColor,
+            };
             cmd.Aliases.Add("av");
-            cmd.SetAction(_ =>
-                Handler(AnsiConsole.Console, new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig())));
+            cmd.SetAction(result =>
+                Handler(
+                    AnsiConsole.Console,
+                    new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig()),
+                    result));
 
             return cmd;
         }
     }
 
-    internal static async Task<int> Handler(IAnsiConsole console, IKubernetes client)
+    internal static async Task<int> Handler(IAnsiConsole console, IKubernetes client, ParseResult parseResult)
     {
+        var noColor = parseResult.GetValue(Options.NoColor);
+
+        if (noColor)
+        {
+            AnsiConsole.Console.Profile.Capabilities.ColorSystem = ColorSystem.NoColors;
+        }
+
         var version = await client.Version.GetCodeAsync();
         console.Write(new Table()
             .Title("Kubernetes API Version")

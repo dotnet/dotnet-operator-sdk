@@ -62,4 +62,10 @@ internal static class Options
         Description = "Tag for an accessible docker image to deploy.",
         DefaultValueFactory = _ => "latest",
     };
+
+    public static readonly Option<bool> NoColor = new("--no-color")
+    {
+        Description = "Disable colored output.",
+        DefaultValueFactory = _ => false,
+    };
 }
