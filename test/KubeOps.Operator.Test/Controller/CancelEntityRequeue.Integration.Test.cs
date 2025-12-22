@@ -92,15 +92,13 @@ public sealed class CancelEntityRequeueIntegrationTest : IntegrationTestBase
             svc.Invocation(entity);
             if (svc.Invocations.Count < 2)
             {
-                requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(1000), CancellationToken.None);
+                requeue(entity, RequeueType.Modified, TimeSpan.FromSeconds(5), CancellationToken.None);
             }
 
             return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
 
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
-        }
+            => Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
     }
 }

@@ -12,7 +12,7 @@ using Microsoft.CodeAnalysis.MSBuild;
 
 namespace KubeOps.Operator.Test;
 
-public class MlcProvider : IAsyncLifetime
+public sealed class MlcProvider : IAsyncLifetime
 {
     private static readonly SemaphoreSlim Semaphore = new(1, 1);
 

@@ -59,12 +59,12 @@ public sealed class TestNamespaceProvider : IAsyncLifetime
     private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
     private V1Namespace _namespace = null!;
 
-    public string Namespace { get; } = Guid.NewGuid().ToString().ToLower();
+    public string Namespace { get; } = $"kubeops-{Guid.NewGuid().ToString().ToLower()}";
 
     public async ValueTask InitializeAsync()
     {
         _namespace =
-            await _client.CreateAsync(new V1Namespace()
+            await _client.CreateAsync(new V1Namespace
             {
                 Metadata = new() { Name = Namespace },
             }.Initialize());
