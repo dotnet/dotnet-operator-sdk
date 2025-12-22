@@ -216,14 +216,13 @@ public sealed class JsonPatchExtensionsTest
     public void GetJsonDiff_Filters_Metadata_Fields()
     {
         var from = new V1ConfigMap
+        {
+            Metadata = new()
             {
-                Metadata = new()
-                {
-                    Name = "test",
-                    ResourceVersion = "1",
-                },
-            }
-            .Initialize();
+                Name = "test",
+                ResourceVersion = "1",
+            },
+        }.Initialize();
         var to = new V1ConfigMap
         {
             Metadata = new()
@@ -231,7 +230,7 @@ public sealed class JsonPatchExtensionsTest
                 Name = "test",
                 ResourceVersion = "2",
             },
-        };
+        }.Initialize();
         var diff = from.CreateJsonPatch(to);
 
         diff.Operations.Should().HaveCount(0);
