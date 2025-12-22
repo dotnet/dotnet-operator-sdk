@@ -9,6 +9,7 @@ using k8s;
 using k8s.Autorest;
 using k8s.Models;
 
+using KubeOps.Cli.Extensions;
 using KubeOps.Cli.Transpilation;
 using KubeOps.Transpiler;
 
@@ -28,6 +29,7 @@ internal static class Uninstall
                     Options.Force,
                     Options.SolutionProjectRegex,
                     Options.TargetFramework,
+                    Options.NoAnsi,
                     Arguments.SolutionOrProjectFile,
                 };
             cmd.Aliases.Add("u");
@@ -42,6 +44,8 @@ internal static class Uninstall
 
     internal static async Task<int> Handler(IAnsiConsole console, IKubernetes client, ParseResult parseResult)
     {
+        console.ApplyOptions(parseResult);
+
         var file = parseResult.GetValue(Arguments.SolutionOrProjectFile);
         var force = parseResult.GetValue(Options.Force);
 

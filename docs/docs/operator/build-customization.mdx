@@ -41,6 +41,30 @@ You can customize the build process by setting the following MSBuild properties 
 </PropertyGroup>
 ```
 
+### CI/CD Configuration
+
+```xml
+<PropertyGroup>
+    <!-- Disable ANSI colored output (automatically detected in CI environments) -->
+    <KubeOpsNoAnsi>true</KubeOpsNoAnsi>
+</PropertyGroup>
+```
+
+KubeOps tries to automatically detect common CI/CD environments and then disables ANSI colored output:
+
+- Azure DevOps/Pipelines
+- GitHub Actions
+- Jenkins
+- GitLab CI
+- CircleCI
+- Travis CI
+- AppVeyor
+- TeamCity
+- Bitbucket Pipelines
+- Generic CI environments (CI=true)
+
+You can manually override this behavior by setting `<KubeOpsNoAnsi>true</KubeOpsNoAnsi>` or `<KubeOpsNoAnsi>false</KubeOpsNoAnsi>`.
+
 ### Disabling or Forcing Automatic Generation
 
 The `GenerateOperatorResources` property controls when Kubernetes resources are generated during the build:
@@ -176,6 +200,11 @@ dotnet tool install KubeOps.Cli
    - Use consistent naming conventions
    - Include version information in tags
    - Consider using multi-stage builds
+
+4. **CI/CD Integration**:
+   - ANSI colors are automatically disabled in CI environments
+   - Override with `KubeOpsNoAnsi` if needed
+   - Test your build process locally before pushing
 
 ## Common Issues
 

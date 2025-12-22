@@ -77,6 +77,15 @@ Displays the current version of the KubeOps CLI.
 kubeops version
 ```
 
+## Global Options
+
+All commands support the following global options:
+
+- `--no-ansi`: Disable ANSI colored output. This is automatically enabled when running in CI/CD environments (GitHub Actions, Azure Pipelines, Jenkins, GitLab CI, etc.)
+- `--force` or `-f`: Skip confirmation prompts
+- `--project`: Regex pattern to filter projects in a solution
+- `--target-framework`: Specify target framework for solution projects
+
 ## Usage
 
 The KubeOps CLI is designed to be used within .NET projects that implement Kubernetes operators. It helps streamline the development process by automating common tasks such as CRD generation and operator deployment.

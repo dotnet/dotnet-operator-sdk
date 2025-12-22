@@ -27,13 +27,19 @@
         <Message Text="Configuration path: $(KubeOpsConfigOut)" Importance="normal" />
         <Message Condition="'$(DockerImage)' != ''" Text="Using docker image: $(DockerImage)" Importance="normal" />
         <Message Condition="'$(DockerImageTag)' != ''" Text="Using docker image tag: $(DockerImageTag)" Importance="normal" />
-        
+
         <PropertyGroup>
             <DockerImage Condition="'$(DockerImage)' != ''">--docker-image $(DockerImage)</DockerImage>
             <DockerImageTag Condition="'$(DockerImageTag)' != ''">--docker-image-tag $(DockerImageTag)</DockerImageTag>
+
+            <!-- Detect CI/Build Server environments -->
+            <KubeOpsIsCI Condition="'$(KubeOpsIsCI)' == '' And ('$(TF_BUILD)' != '' Or '$(GITHUB_ACTIONS)' != '' Or '$(JENKINS_URL)' != '' Or '$(GITLAB_CI)' != '' Or '$(CIRCLECI)' != '' Or '$(TRAVIS)' != '' Or '$(APPVEYOR)' != '' Or '$(TEAMCITY_VERSION)' != '' Or '$(BITBUCKET_BUILD_NUMBER)' != '' Or '$(CI)' == 'true')">true</KubeOpsIsCI>
+
+            <!-- Set NoAnsi flag when on CI or explicitly requested -->
+            <NoAnsi Condition="'$(KubeOpsNoAnsi)' == 'true' Or '$(KubeOpsIsCI)' == 'true'">--no-ansi</NoAnsi>
         </PropertyGroup>
-        
-        <Exec Command="$(KubeOpsCli) generate operator --out $(KubeOpsConfigOut) $(DockerImage) $(DockerImageTag) $(OperatorName) $(MSBuildProjectFullPath)" />
+
+        <Exec Command="$(KubeOpsCli) generate operator  $(NoAnsi) --out $(KubeOpsConfigOut) $(DockerImage) $(DockerImageTag) $(OperatorName) $(MSBuildProjectFullPath)" />
     </Target>
 
     <Target Name="GenerateOperatorResources"
