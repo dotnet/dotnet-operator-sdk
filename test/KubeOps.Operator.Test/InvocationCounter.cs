@@ -10,7 +10,7 @@ using k8s.Models;
 
 namespace KubeOps.Operator.Test;
 
-public class InvocationCounter<TEntity>
+public sealed class InvocationCounter<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private TaskCompletionSource _task = new();

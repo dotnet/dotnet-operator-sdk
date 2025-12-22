@@ -3,18 +3,23 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Immutable;
+using System.Reflection;
 
 using FluentAssertions;
 
 using KubeOps.Generator.Generators;
+using KubeOps.Generator.Test.Entities;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace KubeOps.Generator.Test;
 
-public class EntityInitializerGeneratorTest
+public sealed class EntityInitializerGeneratorTest
 {
+    private const string EntityInitializerGeneratorFileName = "EntityInitializer.g.cs";
+    private const string EntityInitGeneratorFileName = "V1TestEntity.init.g.cs";
+
     [Fact]
     public void Should_Generate_Empty_Initializer_Without_Input()
     {
@@ -31,10 +36,14 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("EntityInitializer.g.cs"))
+            .First(s => s.FilePath.Contains(EntityInitializerGeneratorFileName))
             .ToString().ReplaceLineEndings();
         result.Should().Be(expectedResult);
     }
@@ -78,12 +87,16 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         output.SyntaxTrees.Any(s => s.FilePath.Contains("V1TestEntity")).Should().BeFalse();
         output.SyntaxTrees.Any(s => s.FilePath.Contains("V2TestEntity")).Should().BeFalse();
         var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("EntityInitializer.g.cs"))
+            .First(s => s.FilePath.Contains(EntityInitializerGeneratorFileName))
             .ToString().ReplaceLineEndings();
         result.Should().Be(expectedResult);
     }
@@ -115,16 +128,21 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         output.SyntaxTrees.Any(s => s.FilePath.Contains("V1ConfigMap")).Should().BeFalse();
         var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("EntityInitializer.g.cs"))
+            .First(s => s.FilePath.Contains(EntityInitializerGeneratorFileName))
             .ToString().ReplaceLineEndings();
         result.Should().Be(expectedResult);
     }
 
     [Fact]
+    [Trait("Category", "Partial")]
     public void Should_Generate_Static_Initializer_For_Partial_Entity_With_Default_Ctor()
     {
         var inputCompilation = """
@@ -152,16 +170,21 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         output.SyntaxTrees.Any(s => s.FilePath.Contains("V1TestEntity")).Should().BeFalse();
         var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("EntityInitializer.g.cs"))
+            .First(s => s.FilePath.Contains(EntityInitializerGeneratorFileName))
             .ToString().ReplaceLineEndings();
         result.Should().Be(expectedResult);
     }
 
     [Fact]
+    [Trait("Category", "Partial")]
     public void Should_Not_Generate_Static_Initializer_For_Partial_Entity()
     {
         var inputCompilation = """
@@ -182,16 +205,21 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         output.SyntaxTrees.Any(s => s.FilePath.Contains("V1TestEntity")).Should().BeTrue();
         var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("EntityInitializer.g.cs"))
+            .First(s => s.FilePath.Contains(EntityInitializerGeneratorFileName))
             .ToString().ReplaceLineEndings();
         result.Should().Be(expectedResult);
     }
 
     [Fact]
+    [Trait("Category", "Partial")]
     public void Should_Generate_Default_Ctor_For_FileNamespaced_Partial_Entity()
     {
         var inputCompilation = """
@@ -219,15 +247,20 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("V1TestEntity.init.g.cs"))
+            .First(s => s.FilePath.Contains(EntityInitGeneratorFileName))
             .ToString().ReplaceLineEndings();
         result.Should().Be(expectedResult);
     }
 
     [Fact]
+    [Trait("Category", "Partial")]
     public void Should_Generate_Default_Ctor_For_ScopeNamespaced_Partial_Entity()
     {
         var inputCompilation = """
@@ -260,15 +293,20 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("V1TestEntity.init.g.cs"))
+            .First(s => s.FilePath.Contains(EntityInitGeneratorFileName))
             .ToString().ReplaceLineEndings();
         result.Should().Be(expectedResult);
     }
 
     [Fact]
+    [Trait("Category", "Partial")]
     public void Should_Generate_Default_Ctor_For_Global_Partial_Entity()
     {
         var inputCompilation = """
@@ -294,15 +332,20 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out var diag);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("V1TestEntity.init.g.cs"))
+            .First(s => s.FilePath.Contains(EntityInitGeneratorFileName))
             .ToString().ReplaceLineEndings();
         result.Should().Be(expectedResult);
     }
 
     [Fact]
+    [Trait("Category", "Partial")]
     public void Should_Generate_Default_Ctor_For_Partial_Entity_With_Ctor()
     {
         var inputCompilation = """
@@ -329,10 +372,62 @@ public class EntityInitializerGeneratorTest
                              """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out ImmutableArray<Diagnostic> _);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("V1TestEntity.init.g.cs"))
+            .First(s => s.FilePath.Contains(EntityInitGeneratorFileName))
+            .ToString().ReplaceLineEndings();
+        result.Should().Be(expectedResult);
+    }
+
+    [Fact]
+    [Trait("Category", "FromReferencedAssembly")]
+    public void Should_Generate_Static_Initializer_For_Referenced_Entity()
+    {
+        var inputCompilation = """
+            using k8s;
+            using k8s.Models;
+            using KubeOps.Generator.Test.Entities;
+            using KubeOps.Abstractions.Reconciliation.Controller;
+
+            public sealed class V1TestEntityController : IEntityController<V1TestEntity>
+            {
+            }
+            """
+            .CreateCompilation(
+                additionalReferences: MetadataReference
+                    .CreateFromFile(typeof(V1TestEntityFromReferencedAssembly)
+                        .GetTypeInfo().Assembly.Location));
+        var expectedResult = """
+                             // <auto-generated>
+                             // This code was generated by a tool.
+                             // Changes to this file may cause incorrect behavior and will be lost if the code is regenerated.
+                             // </auto-generated>
+                             #pragma warning disable CS1591
+                             public static class EntityInitializer
+                             {
+                                 public static global::KubeOps.Generator.Test.Entities.V1TestEntity Initialize(this global::KubeOps.Generator.Test.Entities.V1TestEntity entity)
+                                 {
+                                     entity.ApiVersion = "testing.dev/v1";
+                                     entity.Kind = "TestEntity";
+                                     return entity;
+                                 }
+                             }
+                             """.ReplaceLineEndings();
+
+        var driver = CSharpGeneratorDriver.Create(new EntityInitializerGenerator());
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
+
+        var result = output.SyntaxTrees
+            .First(s => s.FilePath.Contains(EntityInitializerGeneratorFileName))
             .ToString().ReplaceLineEndings();
         result.Should().Be(expectedResult);
     }

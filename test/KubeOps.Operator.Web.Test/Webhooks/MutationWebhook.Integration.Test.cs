@@ -9,23 +9,27 @@ using KubeOps.Operator.Web.Test.TestApp;
 
 namespace KubeOps.Operator.Web.Test.Webhooks;
 
-public class MutationWebhookIntegrationTest : IntegrationTestBase
+public sealed class MutationWebhookIntegrationTest : IntegrationTestBase
 {
     [Fact(Skip = "This test is flakey since localtunnel is not always available. Need an alternative.")]
     public async Task Should_Allow_Creation_Of_Entity()
     {
         using var client = new KubernetesClient.KubernetesClient() as IKubernetesClient;
-        var e = await client.CreateAsync(new V1OperatorWebIntegrationTestEntity("test-entity", "foobar"));
+        var e = await client.CreateAsync(
+            new V1OperatorWebIntegrationTestEntity("test-entity", "foobar"),
+            TestContext.Current.CancellationToken);
         e.Spec.Username.Should().Be("foobar");
-        await client.DeleteAsync(e);
+        await client.DeleteAsync(e, TestContext.Current.CancellationToken);
     }
 
     [Fact(Skip = "This test is flakey since localtunnel is not always available. Need an alternative.")]
     public async Task Should_Mutate_Entity_According_To_Code()
     {
         using var client = new KubernetesClient.KubernetesClient() as IKubernetesClient;
-        var e = await client.CreateAsync(new V1OperatorWebIntegrationTestEntity("test-entity", "overwrite"));
+        var e = await client.CreateAsync(
+            new V1OperatorWebIntegrationTestEntity("test-entity", "overwrite"),
+            TestContext.Current.CancellationToken);
         e.Spec.Username.Should().Be("overwritten");
-        await client.DeleteAsync(e);
+        await client.DeleteAsync(e, TestContext.Current.CancellationToken);
     }
 }

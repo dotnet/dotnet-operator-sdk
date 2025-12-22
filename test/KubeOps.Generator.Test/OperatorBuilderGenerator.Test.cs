@@ -13,7 +13,7 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace KubeOps.Generator.Test;
 
-public class OperatorBuilderGeneratorTest
+public sealed class OperatorBuilderGeneratorTest
 {
     [Fact]
     public void Should_Generate_Correct_Code()
@@ -40,7 +40,11 @@ public class OperatorBuilderGeneratorTest
                 """.ReplaceLineEndings();
 
         var driver = CSharpGeneratorDriver.Create(new OperatorBuilderGenerator());
-        driver.RunGeneratorsAndUpdateCompilation(inputCompilation, out var output, out ImmutableArray<Diagnostic> _);
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> _,
+            TestContext.Current.CancellationToken);
 
         var result = output.SyntaxTrees
             .First(s => s.FilePath.Contains("OperatorBuilder.g.cs"))
