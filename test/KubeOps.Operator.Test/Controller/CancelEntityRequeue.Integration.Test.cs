@@ -89,11 +89,12 @@ public sealed class CancelEntityRequeueIntegrationTest : IntegrationTestBase
     {
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
-            svc.Invocation(entity);
-            if (svc.Invocations.Count < 2)
+            // schedule on first invocation
+            if (svc.Invocations.Count == 0)
             {
                 requeue(entity, RequeueType.Modified, TimeSpan.FromSeconds(5), CancellationToken.None);
             }
+            svc.Invocation(entity);
 
             return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
