@@ -17,7 +17,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.LeaderElector;
 
-public class LeaderAwarenessIntegrationTest : IntegrationTestBase
+public sealed class LeaderAwarenessIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
     private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
@@ -26,10 +26,15 @@ public class LeaderAwarenessIntegrationTest : IntegrationTestBase
     [Fact]
     public async Task Should_Create_V1Lease_And_Start_Watcher()
     {
-        await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
+        await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
-        var lease = await _client.GetAsync<V1Lease>("kubernetesoperator-leader", "default");
+        var lease = await _client.GetAsync<V1Lease>(
+            "kubernetesoperator-leader",
+            "default",
+            TestContext.Current.CancellationToken);
         lease!.Spec.HolderIdentity.Should().Be(Environment.MachineName);
     }
 

@@ -24,7 +24,9 @@ public sealed class EntityRequeueIntegrationTest : IntegrationTestBase
     [Fact]
     public async Task Should_Not_Queue_If_Not_Requested()
     {
-        await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
+        await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(1);
@@ -34,7 +36,9 @@ public sealed class EntityRequeueIntegrationTest : IntegrationTestBase
     public async Task Should_Requeue_Entity_And_Reconcile()
     {
         _mock.TargetInvocationCount = 5;
-        await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
+        await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(5);
@@ -44,10 +48,18 @@ public sealed class EntityRequeueIntegrationTest : IntegrationTestBase
     public async Task Should_Separately_And_Reliably_Requeue_And_Reconcile_Multiple_Entities_In_Parallel()
     {
         _mock.TargetInvocationCount = 100;
-        await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity1", "username", _ns.Namespace));
-        await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity2", "username", _ns.Namespace));
-        await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity3", "username", _ns.Namespace));
-        await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity4", "username", _ns.Namespace));
+        await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("test-entity1", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
+        await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("test-entity2", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
+        await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("test-entity3", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
+        await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("test-entity4", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         // Expecting invocations, but since in parallel, there is a possibility to for target hit while other are in flight.

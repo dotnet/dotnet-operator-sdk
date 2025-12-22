@@ -15,7 +15,7 @@ internal sealed class EntityControllerSyntaxReceiver : ISyntaxContextReceiver
     private readonly HashSet<INamedTypeSymbol> _visitedTypeSymbols = new(SymbolEqualityComparer.Default);
 #pragma warning restore RS1024
 
-    public List<(ClassDeclarationSyntax Controller, string EntityName)> Controllers { get; } = [];
+    public List<(ClassDeclarationSyntax Controller, string FullyQualifiedEntityName)> Controllers { get; } = [];
 
     public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
     {
@@ -55,6 +55,6 @@ internal sealed class EntityControllerSyntaxReceiver : ISyntaxContextReceiver
             return;
         }
 
-        Controllers.Add((classDeclarationSyntax, entityTypeSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+        Controllers.Add((classDeclarationSyntax, entityTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
     }
 }

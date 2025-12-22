@@ -27,7 +27,7 @@ public sealed class LeaderElectionBackgroundServiceTest
         var electionLockSubsequentCallEvent = new AutoResetEvent(false);
         bool hasElectionLockThrown = false;
         Mock.Get(electionLock)
-            .Setup(electionLock => electionLock.GetAsync(It.IsAny<CancellationToken>()))
+            .Setup(el => el.GetAsync(It.IsAny<CancellationToken>()))
             .Returns<CancellationToken>(
                 async cancellationToken =>
                 {

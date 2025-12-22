@@ -31,7 +31,9 @@ public sealed class EventPublisherIntegrationTest : IntegrationTestBase
     public async Task Should_Create_New_Event()
     {
         var entity =
-            await _client.CreateAsync(new V1OperatorIntegrationTestEntity("single-entity", "username", _ns.Namespace));
+            await _client.CreateAsync(
+                new V1OperatorIntegrationTestEntity("single-entity", "username", _ns.Namespace),
+                TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         var eventName = $"{entity.Uid()}.single-entity.{_ns.Namespace}.REASON.message.Normal";
@@ -40,7 +42,7 @@ public sealed class EventPublisherIntegrationTest : IntegrationTestBase
                 SHA512.HashData(
                     Encoding.UTF8.GetBytes(eventName)));
 
-        var e = await _client.GetAsync<Corev1Event>(encodedEventName, _ns.Namespace);
+        var e = await _client.GetAsync<Corev1Event>(encodedEventName, _ns.Namespace, TestContext.Current.CancellationToken);
         e!.Count.Should().Be(1);
         e.Metadata.Annotations.Should().Contain(a => a.Key == "originalName" && a.Value == eventName);
     }
@@ -50,7 +52,9 @@ public sealed class EventPublisherIntegrationTest : IntegrationTestBase
     {
         _mock.TargetInvocationCount = 5;
         var entity =
-            await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
+            await _client.CreateAsync(
+                new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+                TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         var eventName = $"{entity.Uid()}.test-entity.{_ns.Namespace}.REASON.message.Normal";
@@ -59,7 +63,10 @@ public sealed class EventPublisherIntegrationTest : IntegrationTestBase
                 SHA512.HashData(
                     Encoding.UTF8.GetBytes(eventName)));
 
-        var e = await _client.GetAsync<Corev1Event>(encodedEventName, _ns.Namespace);
+        var e = await _client.GetAsync<Corev1Event>(
+            encodedEventName,
+            _ns.Namespace,
+            TestContext.Current.CancellationToken);
         e!.Count.Should().Be(5);
         e.Metadata.Annotations.Should().Contain(a => a.Key == "originalName" && a.Value == eventName);
     }

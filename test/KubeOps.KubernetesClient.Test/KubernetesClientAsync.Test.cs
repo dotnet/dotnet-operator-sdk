@@ -20,7 +20,7 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
     [Fact]
     public async Task Should_Return_Namespace()
     {
-        var ns = await _client.GetCurrentNamespaceAsync();
+        var ns = await _client.GetCurrentNamespaceAsync(cancellationToken: TestContext.Current.CancellationToken);
         ns.Should().Be("default");
     }
 
@@ -38,7 +38,8 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
-            });
+            },
+            TestContext.Current.CancellationToken);
 
         _objects.Add(config);
 
@@ -60,7 +61,7 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
-            });
+            }, TestContext.Current.CancellationToken);
 
         _objects.Add(config);
         _objects.Add(await _client.CreateAsync(
@@ -74,7 +75,7 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
-            }));
+            }, TestContext.Current.CancellationToken));
         _objects.Add(await _client.CreateAsync(
             new V1ConfigMap
             {
@@ -86,9 +87,9 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
-            }));
+            }, TestContext.Current.CancellationToken));
 
-        var fetched = await _client.GetAsync<V1ConfigMap>(config.Name(), config.Namespace());
+        var fetched = await _client.GetAsync<V1ConfigMap>(config.Name(), config.Namespace(), TestContext.Current.CancellationToken);
         fetched!.Name().Should().Be(config.Name());
     }
 
@@ -106,12 +107,12 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
-            });
+            }, TestContext.Current.CancellationToken);
         var r1 = config.Metadata.ResourceVersion;
         _objects.Add(config);
 
         config.Data.Add("test", "value");
-        config = await _client.UpdateAsync(config);
+        config = await _client.UpdateAsync(config, TestContext.Current.CancellationToken);
         var r2 = config.Metadata.ResourceVersion;
 
         r1.Should().NotBe(r2);
@@ -131,7 +132,7 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
-            });
+            }, TestContext.Current.CancellationToken);
         var config2 = await _client.CreateAsync(
             new V1ConfigMap
             {
@@ -143,12 +144,12 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
-            });
+            }, TestContext.Current.CancellationToken);
 
         _objects.Add(config1);
         _objects.Add(config2);
 
-        var configs = await _client.ListAsync<V1ConfigMap>("default");
+        var configs = await _client.ListAsync<V1ConfigMap>("default", cancellationToken: TestContext.Current.CancellationToken);
 
         // there are _at least_ 2 config maps (the two that were created)
         configs.Count.Should().BeGreaterThanOrEqualTo(2);
@@ -168,7 +169,7 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
-            });
+            }, TestContext.Current.CancellationToken);
         var config2 = await _client.CreateAsync(
             new V1ConfigMap
             {
@@ -180,15 +181,15 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "Hello", "World" } },
-            });
+            }, TestContext.Current.CancellationToken);
         _objects.Add(config1);
 
-        var configs = await _client.ListAsync<V1ConfigMap>("default");
+        var configs = await _client.ListAsync<V1ConfigMap>("default", cancellationToken: TestContext.Current.CancellationToken);
         configs.Count.Should().BeGreaterThanOrEqualTo(2);
 
-        await _client.DeleteAsync(config2);
+        await _client.DeleteAsync(config2, TestContext.Current.CancellationToken);
 
-        configs = await _client.ListAsync<V1ConfigMap>("default");
+        configs = await _client.ListAsync<V1ConfigMap>("default", cancellationToken: TestContext.Current.CancellationToken);
         configs.Count.Should().BeGreaterThanOrEqualTo(1);
     }
 
@@ -206,7 +207,7 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             },
             Data = new Dictionary<string, string> { { "Hello", "World" } },
         };
-        await _client.DeleteAsync(config);
+        await _client.DeleteAsync(config, TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -224,12 +225,12 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "foo", "bar" } },
-            });
+            }, TestContext.Current.CancellationToken);
         _objects.Add(config);
 
         // Add a new key using PatchAsync(config)
         config.Data["hello"] = "world";
-        config = await _client.PatchAsync(config);
+        config = await _client.PatchAsync(config, cancellationToken: TestContext.Current.CancellationToken);
         config.Data.Should().ContainKey("hello").And.ContainValue("world");
 
         // Replace a value using PatchAsync(from, to)
@@ -242,15 +243,15 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
             Data = new Dictionary<string, string>
             {
                 { "foo", "baz" },
-                { "hello", "world" }
+                { "hello", "world" },
             },
         };
-        config = await _client.PatchAsync(from, to);
+        config = await _client.PatchAsync(from, to, cancellationToken: TestContext.Current.CancellationToken);
         config.Data["foo"].Should().Be("baz");
 
         // Remove a key using PatchAsync(config)
         config.Data.Remove("hello");
-        config = await _client.PatchAsync(config);
+        config = await _client.PatchAsync(config, cancellationToken: TestContext.Current.CancellationToken);
         config.Data.Should().NotContainKey("hello");
     }
 
@@ -269,16 +270,16 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
                     NamespaceProperty = "default",
                 },
                 Data = new Dictionary<string, string> { { "foo", "bar" } },
-            });
+            }, TestContext.Current.CancellationToken);
         _objects.Add(original);
 
         // Step 2: Update the ConfigMap via client (simulate external change)
         original.Data["hello"] = "world";
-        var updated = await _client.UpdateAsync(original);
+        await _client.UpdateAsync(original, TestContext.Current.CancellationToken);
 
         // Step 3: Patch using the original object as the base, adding another key
         original.Data["newkey"] = "newvalue";
-        var patched = await _client.PatchAsync(original);
+        var patched = await _client.PatchAsync(original, cancellationToken: TestContext.Current.CancellationToken);
 
         patched.Data.Should().ContainKey("hello").And.ContainKey("newkey");
         patched.Data["newkey"].Should().Be("newvalue");

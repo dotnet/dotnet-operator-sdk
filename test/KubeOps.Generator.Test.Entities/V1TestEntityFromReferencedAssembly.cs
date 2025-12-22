@@ -9,4 +9,4 @@ using KubeOps.Abstractions.Entities;
 namespace KubeOps.Generator.Test.Entities;
 
 [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
-public class V1TestEntityFromReferencedAssembly : CustomKubernetesEntity;
+public sealed class V1TestEntityFromReferencedAssembly : CustomKubernetesEntity;

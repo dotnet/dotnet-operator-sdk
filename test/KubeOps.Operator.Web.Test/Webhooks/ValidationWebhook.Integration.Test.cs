@@ -11,14 +11,16 @@ using KubeOps.Operator.Web.Test.TestApp;
 
 namespace KubeOps.Operator.Web.Test.Webhooks;
 
-public class ValidationWebhookIntegrationTest : IntegrationTestBase
+public sealed class ValidationWebhookIntegrationTest : IntegrationTestBase
 {
     [Fact(Skip = "This test is flakey since localtunnel is not always available. Need an alternative.")]
     public async Task Should_Allow_Creation_Of_Entity()
     {
         using var client = new KubernetesClient.KubernetesClient() as IKubernetesClient;
-        var e = await client.CreateAsync(new V1OperatorWebIntegrationTestEntity("test-entity", "foobar"));
-        await client.DeleteAsync(e);
+        var e = await client.CreateAsync(
+            new V1OperatorWebIntegrationTestEntity("test-entity", "foobar"),
+            TestContext.Current.CancellationToken);
+        await client.DeleteAsync(e, TestContext.Current.CancellationToken);
     }
 
     [Fact(Skip = "This test is flakey since localtunnel is not always available. Need an alternative.")]
@@ -26,7 +28,9 @@ public class ValidationWebhookIntegrationTest : IntegrationTestBase
     {
         using var client = new KubernetesClient.KubernetesClient() as IKubernetesClient;
         var ex = await Assert.ThrowsAsync<HttpOperationException>(async () =>
-            await client.CreateAsync(new V1OperatorWebIntegrationTestEntity("test-entity", "forbidden")));
+            await client.CreateAsync(
+                new V1OperatorWebIntegrationTestEntity("test-entity", "forbidden"),
+                TestContext.Current.CancellationToken));
         ex.Message.Should().Contain("name may not be 'forbidden'");
     }
 }

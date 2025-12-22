@@ -7,4 +7,4 @@ using k8s.Models;
 using KubeOps.Abstractions.Entities;
 
 [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
-public class V1TestEntityFromReferencedAssemblyInGlobalNamespace : CustomKubernetesEntity;
+public sealed class V1TestEntityFromReferencedAssemblyInGlobalNamespace : CustomKubernetesEntity;

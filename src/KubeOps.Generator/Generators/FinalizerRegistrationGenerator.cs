@@ -37,9 +37,9 @@ internal sealed class FinalizerRegistrationGenerator : ISourceGenerator
 
         var finalizers = _finalizerReceiver.Finalizer
             .Where(c => _entityReceiver.Entities.Exists(e =>
-                e.ClassDeclaration.ClassName == c.EntityName))
+                e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))
             .Select(c => (c.Finalizer, Entity: _entityReceiver.Entities.First(e =>
-                e.ClassDeclaration.ClassName == c.EntityName))).ToList();
+                e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))).ToList();
 
         var declaration = CompilationUnit()
             .WithUsings(

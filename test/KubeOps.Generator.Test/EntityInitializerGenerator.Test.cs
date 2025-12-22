@@ -13,7 +13,7 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace KubeOps.Generator.Test;
 
-public class EntityInitializerGeneratorTest
+public sealed class EntityInitializerGeneratorTest
 {
     [Fact]
     public void Should_Generate_Empty_Initializer_Without_Input()

@@ -59,9 +59,9 @@ internal sealed class ControllerRegistrationGenerator : ISourceGenerator
                     .WithBody(Block(
                         _ctrlReceiver.Controllers
                             .Where(c => _entityReceiver.Entities.Exists(e =>
-                                e.ClassDeclaration.ClassName == c.EntityName))
+                                e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))
                             .Select(c => (c.Controller, Entity: _entityReceiver.Entities.First(e =>
-                                e.ClassDeclaration.ClassName == c.EntityName)))
+                                e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName)))
                             .Select(e => ExpressionStatement(
                                 InvocationExpression(
                                     MemberAccessExpression(
