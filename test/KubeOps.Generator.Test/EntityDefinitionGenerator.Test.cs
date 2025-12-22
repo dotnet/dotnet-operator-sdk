@@ -13,7 +13,7 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace KubeOps.Generator.Test;
 
-public sealed class EntityDefinitionGeneratorTest
+public sealed partial class EntityDefinitionGeneratorTest
 {
     [Theory]
     [InlineData(
