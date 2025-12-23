@@ -23,6 +23,10 @@ dotnet new tool-manifest
 dotnet tool install --local KubeOps.Cli
 ```
 
+:::note Command syntax
+Examples below use the global `kubeops` command. If you installed the tool locally, replace `kubeops ...` with `dotnet tool run kubeops ...`.
+:::
+
 ## Development Workflow
 
 During local development, you'll primarily use the `install` and `uninstall` commands to manage your operator's CRDs in your development cluster.
