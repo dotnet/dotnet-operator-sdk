@@ -6,6 +6,11 @@
       "workingDirectory": "$(ProjectDir)",
       "commandLineArgs": "g op kub-op ../../examples/Operator/Operator.csproj"
     },
+    "CLI Generate Operator NoAnsi": {
+      "commandName": "Project",
+      "workingDirectory": "$(ProjectDir)",
+      "commandLineArgs": "g op kub-op --no-ansi ../../examples/Operator/Operator.csproj"
+    },
     "CLI Generate Webhook Operator": {
       "commandName": "Project",
       "workingDirectory": "$(ProjectDir)",

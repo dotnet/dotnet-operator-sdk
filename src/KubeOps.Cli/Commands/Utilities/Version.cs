@@ -6,6 +6,8 @@ using System.CommandLine;
 
 using k8s;
 
+using KubeOps.Cli.Extensions;
+
 using Spectre.Console;
 
 namespace KubeOps.Cli.Commands.Utilities;
@@ -18,17 +20,25 @@ internal static class Version
         {
             var cmd = new Command(
                 "api-version",
-                "Prints the actual server version of the connected kubernetes cluster.");
+                "Prints the actual server version of the connected kubernetes cluster.")
+            {
+                Options.NoAnsi,
+            };
             cmd.Aliases.Add("av");
-            cmd.SetAction(_ =>
-                Handler(AnsiConsole.Console, new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig())));
+            cmd.SetAction(result =>
+                Handler(
+                    AnsiConsole.Console,
+                    new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig()),
+                    result));
 
             return cmd;
         }
     }
 
-    internal static async Task<int> Handler(IAnsiConsole console, IKubernetes client)
+    internal static async Task<int> Handler(IAnsiConsole console, IKubernetes client, ParseResult parseResult)
     {
+        console.ApplyOptions(parseResult);
+
         var version = await client.Version.GetCodeAsync();
         console.Write(new Table()
             .Title("Kubernetes API Version")

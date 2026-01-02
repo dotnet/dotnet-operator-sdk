@@ -2,6 +2,7 @@
     <Target Name="BaseConfig">
         <PropertyGroup>
             <OperatorName Condition="'$(OperatorName)' == ''">$(AssemblyName.ToLowerInvariant())</OperatorName>
+            <KubeOpsCliSource Condition="'$(KubeOpsCli)' == ''">Default</KubeOpsCliSource>
             <KubeOpsCli Condition="'$(KubeOpsCli)' == ''">kubeops</KubeOpsCli>
             <KubeOpsConfigOut Condition="'$(KubeOpsConfigOut)' == ''">$(MSBuildProjectDirectory)\config</KubeOpsConfigOut>
             <GenerateOperatorResources Condition="'$(GenerateOperatorResources)' == '' And '$(Configuration)' == 'Release'">true</GenerateOperatorResources>
@@ -27,13 +28,19 @@
         <Message Text="Configuration path: $(KubeOpsConfigOut)" Importance="normal" />
         <Message Condition="'$(DockerImage)' != ''" Text="Using docker image: $(DockerImage)" Importance="normal" />
         <Message Condition="'$(DockerImageTag)' != ''" Text="Using docker image tag: $(DockerImageTag)" Importance="normal" />
-        
+
         <PropertyGroup>
             <DockerImage Condition="'$(DockerImage)' != ''">--docker-image $(DockerImage)</DockerImage>
             <DockerImageTag Condition="'$(DockerImageTag)' != ''">--docker-image-tag $(DockerImageTag)</DockerImageTag>
+
+            <!-- Detect CI/Build Server environments -->
+            <KubeOpsIsCI Condition="'$(KubeOpsIsCI)' == '' And ('$(TF_BUILD)' != '' Or '$(GITHUB_ACTIONS)' != '' Or '$(JENKINS_URL)' != '' Or '$(GITLAB_CI)' != '' Or '$(CIRCLECI)' != '' Or '$(TRAVIS)' != '' Or '$(APPVEYOR)' != '' Or '$(TEAMCITY_VERSION)' != '' Or '$(BITBUCKET_BUILD_NUMBER)' != '' Or '$(CI)' == 'true')">true</KubeOpsIsCI>
+
+            <!-- Set NoAnsi flag when on CI or explicitly requested -->
+            <NoAnsi Condition="'$(KubeOpsNoAnsi)' == 'true' Or '$(KubeOpsIsCI)' == 'true'">--no-ansi</NoAnsi>
         </PropertyGroup>
-        
-        <Exec Command="$(KubeOpsCli) generate operator --out $(KubeOpsConfigOut) $(DockerImage) $(DockerImageTag) $(OperatorName) $(MSBuildProjectFullPath)" />
+
+        <Exec WorkingDirectory="$(MSBuildProjectDirectory)" Command="$(KubeOpsCli) generate operator $(NoAnsi) --out $(KubeOpsConfigOut) $(DockerImage) $(DockerImageTag) $(OperatorName) $(MSBuildProjectFullPath)" />
     </Target>
 
     <Target Name="GenerateOperatorResources"
@@ -41,15 +48,29 @@
             DependsOnTargets="BaseConfig"
             Condition="'$(OutputType.ToLowerInvariant())' == 'exe' And ('$(KubeOpsAssemblyTimestampBeforeCompile)' != '$(KubeOpsAssemblyTimestampAfterCompile)' Or '$(Configuration)' == 'Release')">
         <Exec IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low"
+              WorkingDirectory="$(MSBuildProjectDirectory)"
               Command="$(KubeOpsCli) -h">
             <Output TaskParameter="ExitCode" PropertyName="CliInstalled" />
         </Exec>
-        <Message Importance="high" Condition="$(CliInstalled) == 1"
-                 Text="KubeOps CLI is not installed as tool, cannot generate stuff for projects. Please install it with 'dotnet tool install KubeOps.Cli' to use automatic build generation." />
+
+        <Exec Condition="'$(KubeOpsCliSource)' == 'Default' And '$(CliInstalled)' != '0'"
+              IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low"
+              WorkingDirectory="$(MSBuildProjectDirectory)"
+              Command="dotnet tool run kubeops -h">
+            <Output TaskParameter="ExitCode" PropertyName="LocalCliInstalled" />
+        </Exec>
+
+        <PropertyGroup Condition="'$(KubeOpsCliSource)' == 'Default' And '$(LocalCliInstalled)' == '0'">
+            <KubeOpsCli>dotnet tool run kubeops</KubeOpsCli>
+            <CliInstalled>0</CliInstalled>
+        </PropertyGroup>
+
+        <Message Importance="high" Condition="'$(CliInstalled)' != '0'"
+                 Text="KubeOps CLI is not installed or not available. Install it as a .NET tool (e.g. 'dotnet tool install KubeOps.Cli' or 'dotnet tool install --global KubeOps.Cli'), or override &lt;KubeOpsCli&gt; in your project." />
         <Message Importance="high" Condition="'$(GenerateOperatorResources)' != 'true'"
                  Text="Property 'GenerateOperatorResources' property did not evaluate to 'true'. Do not generate operator configs." />
         <CallTarget ContinueOnError="true"
                     Targets="GenerateKustomizationConfig"
-                    Condition="$(CliInstalled) == 0 And '$(GenerateOperatorResources)' == 'true'" />
+                    Condition="'$(CliInstalled)' == '0' And '$(GenerateOperatorResources)' == 'true'" />
     </Target>
 </Project>

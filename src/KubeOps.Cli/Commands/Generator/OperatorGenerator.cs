@@ -9,6 +9,7 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Kustomize;
+using KubeOps.Cli.Extensions;
 using KubeOps.Cli.Generators;
 using KubeOps.Cli.Output;
 using KubeOps.Cli.Transpilation;
@@ -19,13 +20,16 @@ namespace KubeOps.Cli.Commands.Generator;
 
 internal static class OperatorGenerator
 {
+    private const string CommandName = "operator";
+    private const string OperatorName = "operator";
+
     public static Command Command
     {
         get
         {
             var cmd =
                 new Command(
-                    "operator",
+                    CommandName,
                     "Generates all required resources and configs for the operator to be built and run.")
                 {
                     Options.ClearOutputPath,
@@ -35,6 +39,7 @@ internal static class OperatorGenerator
                     Options.TargetFramework,
                     Options.AccessibleDockerImage,
                     Options.AccessibleDockerTag,
+                    Options.NoAnsi,
                     Arguments.OperatorName,
                     Arguments.SolutionOrProjectFile,
                 };
@@ -47,7 +52,9 @@ internal static class OperatorGenerator
 
     internal static async Task<int> Handler(IAnsiConsole console, ParseResult parseResult)
     {
-        var name = parseResult.GetValue(Arguments.OperatorName) ?? "operator";
+        console.ApplyOptions(parseResult);
+
+        var name = parseResult.GetValue(Arguments.OperatorName) ?? OperatorName;
         var file = parseResult.GetValue(Arguments.SolutionOrProjectFile);
         var outPath = parseResult.GetValue(Options.OutputPath);
         var format = parseResult.GetValue(Options.OutputFormat);
@@ -123,12 +130,12 @@ internal static class OperatorGenerator
             {
                 NamePrefix = $"{name}-",
                 Namespace = $"{name}-system",
-                Labels = [new(new Dictionary<string, string> { { "operator", name }, })],
+                Labels = [new(new Dictionary<string, string> { { OperatorName, name }, })],
                 Resources = result.DefaultFormatFiles.ToList(),
                 Images =
                     new List<KustomizationImage>
                     {
-                        new() { Name = "operator", NewName = dockerImage, NewTag = dockerImageTag, },
+                        new() { Name = OperatorName, NewName = dockerImage, NewTag = dockerImageTag, },
                     },
                 ConfigMapGenerator = hasWebhooks
                     ? new List<KustomizationConfigMapGenerator>

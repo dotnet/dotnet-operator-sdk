@@ -41,6 +41,30 @@ You can customize the build process by setting the following MSBuild properties 
 </PropertyGroup>
 ```
 
+### CI/CD Configuration
+
+```xml
+<PropertyGroup>
+    <!-- Disable ANSI colored output (automatically detected in CI environments) -->
+    <KubeOpsNoAnsi>true</KubeOpsNoAnsi>
+</PropertyGroup>
+```
+
+KubeOps tries to automatically detect common CI/CD environments and then disables ANSI colored output:
+
+- Azure DevOps/Pipelines
+- GitHub Actions
+- Jenkins
+- GitLab CI
+- CircleCI
+- Travis CI
+- AppVeyor
+- TeamCity
+- Bitbucket Pipelines
+- Generic CI environments (CI=true)
+
+You can manually override this behavior by setting `<KubeOpsNoAnsi>true</KubeOpsNoAnsi>` or `<KubeOpsNoAnsi>false</KubeOpsNoAnsi>`.
+
 ### Disabling or Forcing Automatic Generation
 
 The `GenerateOperatorResources` property controls when Kubernetes resources are generated during the build:
@@ -119,14 +143,30 @@ The build process consists of several MSBuild targets:
 The build process requires the KubeOps CLI tool to be installed. If it's not installed, you'll see a message:
 
 ```
-KubeOps CLI is not installed as tool, cannot generate stuff for projects.
-Please install it with 'dotnet tool install KubeOps.Cli' to use automatic build generation.
+KubeOps CLI is not installed or not available. Install it as a .NET tool (e.g. 'dotnet tool install KubeOps.Cli' or 'dotnet tool install --global KubeOps.Cli'), or override <KubeOpsCli> in your project.
 ```
 
-To install the CLI tool:
+To install the CLI tool (local tool is recommended):
 
 ```bash
-dotnet tool install KubeOps.Cli
+# Local tool (recommended)
+dotnet new tool-manifest
+dotnet tool install --local KubeOps.Cli
+
+# Global tool
+dotnet tool install --global KubeOps.Cli
+```
+
+:::note Local vs global tools
+Local tools are not added to your `PATH`. When KubeOps runs as part of the build, it can invoke a locally installed CLI via `dotnet tool run kubeops`.
+:::
+
+If you need to override how the CLI is invoked (for example, when installing to a custom tool path), you can set the `KubeOpsCli` MSBuild property:
+
+```xml
+<PropertyGroup>
+    <KubeOpsCli>dotnet tool run kubeops</KubeOpsCli>
+</PropertyGroup>
 ```
 
 ## Example Configurations
@@ -176,6 +216,11 @@ dotnet tool install KubeOps.Cli
    - Use consistent naming conventions
    - Include version information in tags
    - Consider using multi-stage builds
+
+4. **CI/CD Integration**:
+   - ANSI colors are automatically disabled in CI environments
+   - Override with `KubeOpsNoAnsi` if needed
+   - Test your build process locally before pushing
 
 ## Common Issues
 
