@@ -16,7 +16,7 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace KubeOps.Generator.Generators;
 
 [Generator]
-internal class EntityDefinitionGenerator : ISourceGenerator
+internal sealed class EntityDefinitionGenerator : ISourceGenerator
 {
     public void Initialize(GeneratorInitializationContext context)
     {
@@ -48,7 +48,7 @@ internal class EntityDefinitionGenerator : ISourceGenerator
                                     IdentifierName("EntityMetadata"))
                                 .WithVariables(
                                     SingletonSeparatedList(
-                                        VariableDeclarator(e.Class.Identifier)
+                                        VariableDeclarator(e.ClassDeclaration.ClassName)
                                             .WithInitializer(
                                                 EqualsValueClause(
                                                     ImplicitObjectCreationExpression()

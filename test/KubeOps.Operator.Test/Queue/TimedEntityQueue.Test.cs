@@ -25,7 +25,7 @@ public sealed class TimedEntityQueueTest
 
         var items = new List<V1Secret>();
 
-        var tokenSource = new CancellationTokenSource();
+        using var tokenSource = new CancellationTokenSource();
         tokenSource.CancelAfter(TimeSpan.FromSeconds(2));
 
         var enumerator = queue.GetAsyncEnumerator(tokenSource.Token);

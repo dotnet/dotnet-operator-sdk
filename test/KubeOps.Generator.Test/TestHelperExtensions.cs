@@ -11,7 +11,7 @@ namespace KubeOps.Generator.Test;
 
 internal static class TestHelperExtensions
 {
-    public static Compilation CreateCompilation(this string source)
+    public static Compilation CreateCompilation(this string source, params MetadataReference[] additionalReferences)
         => CSharpCompilation.Create(
             "compilation",
             [
@@ -21,6 +21,7 @@ internal static class TestHelperExtensions
                 MetadataReference.CreateFromFile(typeof(Binder).GetTypeInfo().Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(Abstractions.Reconciliation.Controller.IEntityController<>).GetTypeInfo().Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(k8s.IKubernetesObject<>).GetTypeInfo().Assembly.Location),
+                ..additionalReferences,
             ],
             new(OutputKind.DynamicallyLinkedLibrary));
 }

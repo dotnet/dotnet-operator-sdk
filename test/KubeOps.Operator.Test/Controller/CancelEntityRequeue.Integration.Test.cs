@@ -30,9 +30,10 @@ public sealed class CancelEntityRequeueIntegrationTest : IntegrationTestBase
 
         _mock.TargetInvocationCount = 2;
         var e = await _client.CreateAsync(
-            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
+            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
         e.Spec.Username = "changed";
-        await _client.UpdateAsync(e);
+        await _client.UpdateAsync(e, TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(2);
@@ -46,9 +47,11 @@ public sealed class CancelEntityRequeueIntegrationTest : IntegrationTestBase
     public async Task Should_Not_Affect_Queues_If_Only_Status_Updated()
     {
         _mock.TargetInvocationCount = 1;
-        var result = await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
+        var result = await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
         result.Status.Status = "changed";
-        await _client.UpdateStatusAsync(result);
+        await _client.UpdateStatusAsync(result, TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(1);
@@ -59,13 +62,13 @@ public sealed class CancelEntityRequeueIntegrationTest : IntegrationTestBase
         timedEntityQueue.As<TimedEntityQueue<V1OperatorIntegrationTestEntity>>().Count.Should().Be(1);
     }
 
-    public override async Task InitializeAsync()
+    public override async ValueTask InitializeAsync()
     {
         await base.InitializeAsync();
         await _ns.InitializeAsync();
     }
 
-    public override async Task DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
         await _ns.DisposeAsync();
@@ -86,18 +89,17 @@ public sealed class CancelEntityRequeueIntegrationTest : IntegrationTestBase
     {
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
-            svc.Invocation(entity);
-            if (svc.Invocations.Count < 2)
+            // schedule on first invocation
+            if (svc.Invocations.Count == 0)
             {
-                requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(1000), CancellationToken.None);
+                requeue(entity, RequeueType.Modified, TimeSpan.FromSeconds(5), CancellationToken.None);
             }
+            svc.Invocation(entity);
 
             return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
 
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
-        {
-            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
-        }
+            => Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
     }
 }

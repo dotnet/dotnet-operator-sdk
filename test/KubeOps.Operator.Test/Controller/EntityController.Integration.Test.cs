@@ -16,7 +16,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.Controller;
 
-public class EntityControllerIntegrationTest : IntegrationTestBase
+public sealed class EntityControllerIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
     private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
@@ -25,7 +25,9 @@ public class EntityControllerIntegrationTest : IntegrationTestBase
     [Fact]
     public async Task Should_Call_Reconcile_On_New_Entity()
     {
-        await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
+        await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(1);
@@ -42,9 +44,13 @@ public class EntityControllerIntegrationTest : IntegrationTestBase
         _mock.TargetInvocationCount = 2;
 
         var result =
-            await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
+            await _client.CreateAsync(
+                new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+                TestContext.Current.CancellationToken);
         result.Spec.Username = "changed";
-        await _client.UpdateAsync(result);
+        await _client.UpdateAsync(
+            result,
+            TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(2);
@@ -68,11 +74,13 @@ public class EntityControllerIntegrationTest : IntegrationTestBase
         _mock.TargetInvocationCount = 1;
 
         var result =
-            await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
+            await _client.CreateAsync(
+                new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+                TestContext.Current.CancellationToken);
         result.Status.Status = "changed";
         // Update or UpdateStatus do not call Reconcile
-        await _client.UpdateAsync(result);
-        await _client.UpdateStatusAsync(result);
+        await _client.UpdateAsync(result, TestContext.Current.CancellationToken);
+        await _client.UpdateStatusAsync(result, TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(1);
@@ -89,8 +97,10 @@ public class EntityControllerIntegrationTest : IntegrationTestBase
         _mock.TargetInvocationCount = 2;
 
         var result =
-            await _client.CreateAsync(new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
-        await _client.DeleteAsync(result);
+            await _client.CreateAsync(
+                new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+                TestContext.Current.CancellationToken);
+        await _client.DeleteAsync(result, TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(2);
@@ -98,13 +108,13 @@ public class EntityControllerIntegrationTest : IntegrationTestBase
         _mock.Invocations[1].Method.Should().Be("DeletedAsync");
     }
 
-    public override async Task InitializeAsync()
+    public override async ValueTask InitializeAsync()
     {
         await base.InitializeAsync();
         await _ns.InitializeAsync();
     }
 
-    public override async Task DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
         await _ns.DisposeAsync();

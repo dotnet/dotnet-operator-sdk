@@ -27,8 +27,9 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
     {
         _mock.TargetInvocationCount = 2;
         var e = await _client.CreateAsync(
-            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace));
-        await _client.DeleteAsync(e);
+            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+            TestContext.Current.CancellationToken);
+        await _client.DeleteAsync(e, TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(2);
@@ -38,13 +39,13 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
         timedEntityQueue.As<TimedEntityQueue<V1OperatorIntegrationTestEntity>>().Count.Should().Be(0);
     }
 
-    public override async Task InitializeAsync()
+    public override async ValueTask InitializeAsync()
     {
         await base.InitializeAsync();
         await _ns.InitializeAsync();
     }
 
-    public override async Task DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
         await _ns.DisposeAsync();

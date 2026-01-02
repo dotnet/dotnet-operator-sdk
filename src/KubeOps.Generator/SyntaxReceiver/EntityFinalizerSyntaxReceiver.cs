@@ -15,7 +15,7 @@ internal sealed class EntityFinalizerSyntaxReceiver : ISyntaxContextReceiver
     private readonly HashSet<INamedTypeSymbol> _visitedTypeSymbols = new(SymbolEqualityComparer.Default);
 #pragma warning restore RS1024
 
-    public List<(ClassDeclarationSyntax Finalizer, string EntityName)> Finalizer { get; } = [];
+    public List<(ClassDeclarationSyntax Finalizer, string FullyQualifiedEntityName)> Finalizer { get; } = [];
 
     public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
     {
@@ -55,6 +55,6 @@ internal sealed class EntityFinalizerSyntaxReceiver : ISyntaxContextReceiver
             return;
         }
 
-        Finalizer.Add((classDeclarationSyntax, entityTypeSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+        Finalizer.Add((classDeclarationSyntax, entityTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
     }
 }
