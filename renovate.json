@@ -46,6 +46,10 @@
     {
       "matchFileNames": ["docs/**/*"],
       "semanticCommitScope": "docs"
+    },
+    {
+      "matchPackageNames": ["JsonPatch.Net"],
+      "allowedVersions": "<=4.0.1"
     }
   ]
 }
