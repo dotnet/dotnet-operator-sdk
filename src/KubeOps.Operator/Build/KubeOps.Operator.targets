@@ -40,7 +40,9 @@
             <NoAnsi Condition="'$(KubeOpsNoAnsi)' == 'true' Or '$(KubeOpsIsCI)' == 'true'">--no-ansi</NoAnsi>
         </PropertyGroup>
 
-        <Exec WorkingDirectory="$(MSBuildProjectDirectory)" Command="$(KubeOpsCli) generate operator $(NoAnsi) --out $(KubeOpsConfigOut) $(DockerImage) $(DockerImageTag) $(OperatorName) $(MSBuildProjectFullPath)" />
+        <Exec ContinueOnError="true"
+              WorkingDirectory="$(MSBuildProjectDirectory)"
+              Command="$(KubeOpsCli) generate operator $(NoAnsi) --out $(KubeOpsConfigOut) $(DockerImage) $(DockerImageTag) $(OperatorName) $(MSBuildProjectFullPath)" />
     </Target>
 
     <Target Name="GenerateOperatorResources"
