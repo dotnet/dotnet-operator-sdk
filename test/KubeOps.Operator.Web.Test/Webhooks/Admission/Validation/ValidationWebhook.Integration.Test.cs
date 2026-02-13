@@ -9,7 +9,7 @@ using k8s.Autorest;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Web.Test.TestApp;
 
-namespace KubeOps.Operator.Web.Test.Webhooks;
+namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Validation;
 
 public sealed class ValidationWebhookIntegrationTest : IntegrationTestBase
 {

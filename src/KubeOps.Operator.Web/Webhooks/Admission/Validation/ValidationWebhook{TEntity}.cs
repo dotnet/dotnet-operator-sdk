@@ -102,7 +102,7 @@ public abstract class ValidationWebhook<TEntity> : ControllerBase
     /// <returns>The <see cref="ValidationResult"/>.</returns>
     [HttpPost]
     public async Task<IActionResult> Validate(
-        [FromBody] AdmissionRequest<TEntity> request,
+        [ModelBinder<AdmissionRequestModelBinder>][FromBody] AdmissionRequest<TEntity> request,
         CancellationToken cancellationToken)
     {
         var result = request.Request.Operation switch

@@ -7,7 +7,7 @@ using FluentAssertions;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Web.Test.TestApp;
 
-namespace KubeOps.Operator.Web.Test.Webhooks;
+namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Mutation;
 
 public sealed class MutationWebhookIntegrationTest : IntegrationTestBase
 {
