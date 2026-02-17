@@ -169,3 +169,75 @@ if (crdToDelete != null)
     await client.DeleteAsync(crdToDelete);
 }
 ```
+### Server-Side Apply
+
+Server-Side Apply (SSA) is the recommended approach for managing Kubernetes resources in operators and controllers. It provides declarative configuration with automatic three-way merging and field ownership tracking.
+
+```csharp
+// Apply a resource using Server-Side Apply
+var myResource = new V1MyResource
+{
+    Metadata = new V1ObjectMeta 
+    { 
+        Name = "my-resource", 
+        NamespaceProperty = "default" 
+    },
+    Spec = new V1MyResourceSpec 
+    { 
+        Replicas = 3,
+        Image = "my-app:v1.0.0"
+    }
+};
+
+// Apply with field manager tracking
+// The fieldManager parameter identifies which controller owns which fields
+var appliedResource = await client.ApplyAsync(
+    myResource,
+    fieldManager: "my-operator-controller");
+
+// Apply with force to take ownership of conflicting fields
+// Use with caution - this overrides other controllers' changes
+var forcedApply = await client.ApplyAsync(
+    myResource,
+    fieldManager: "my-operator-controller",
+    force: true);
+
+// Dry-run to validate without making changes
+var dryRunResult = await client.ApplyAsync(
+    myResource,
+    fieldManager: "my-operator-controller",
+    dryRun: "All");
+```
+
+**Benefits of Server-Side Apply:**
+- **Field Ownership Tracking:** Kubernetes tracks which field manager owns each field
+- **Conflict Detection:** Automatically detects when multiple controllers try to manage the same fields
+- **Three-Way Merge:** Intelligently merges your desired state with the current state
+- **Declarative:** You specify the complete desired state; Kubernetes figures out what changed
+
+**When to use ApplyAsync vs PatchAsync:**
+- Use `ApplyAsync` for declarative resource management where you want to specify the complete desired state
+- Use `PatchAsync` for tactical updates where you only want to modify specific fields
+- `ApplyAsync` is recommended for operators and controllers managing resources long-term
+
+For more details on Server-Side Apply, see the [Kubernetes documentation](https://kubernetes.io/docs/reference/using-api/server-side-apply/).
+
+### Patch Resources
+
+You can also patch resources using various patch strategies:
+
+```csharp
+// JSON Patch (RFC 6902) - tactical updates
+var existingConfig = await client.GetAsync<V1ConfigMap>("my-config", "default");
+if (existingConfig != null)
+{
+    existingConfig.Data["new-key"] = "new-value";
+    var patchedConfig = await client.PatchAsync(existingConfig);
+}
+
+// Patch with field manager for Server-Side Apply compatibility
+var patchedWithSSA = await client.PatchAsync(
+    existingConfig,
+    fieldManager: "my-operator",
+    force: false);
+```
