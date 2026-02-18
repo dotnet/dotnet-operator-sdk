@@ -356,56 +356,6 @@ public class KubernetesClient : IKubernetesClient
     }
 
     /// <inheritdoc />
-    public async Task<TEntity> ApplyAsync<TEntity>(
-        TEntity entity,
-        string fieldManager,
-        bool? force = null,
-        string? dryRun = null,
-        CancellationToken cancellationToken = default)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-    {
-        ThrowIfDisposed();
-
-        // Clear server-managed metadata fields before serializing - Kubernetes requires this for Server-Side Apply
-        var originalManagedFields = entity.Metadata.ManagedFields;
-        var originalResourceVersion = entity.Metadata.ResourceVersion;
-        var originalUid = entity.Metadata.Uid;
-        var originalGeneration = entity.Metadata.Generation;
-        var originalCreationTimestamp = entity.Metadata.CreationTimestamp;
-        var originalDeletionTimestamp = entity.Metadata.DeletionTimestamp;
-        var originalDeletionGracePeriodSeconds = entity.Metadata.DeletionGracePeriodSeconds;
-        var originalSelfLink = entity.Metadata.SelfLink;
-
-        try
-        {
-            entity.Metadata.ManagedFields = null;
-            entity.Metadata.ResourceVersion = null;
-            entity.Metadata.Uid = null;
-            entity.Metadata.Generation = null;
-            entity.Metadata.CreationTimestamp = null;
-            entity.Metadata.DeletionTimestamp = null;
-            entity.Metadata.DeletionGracePeriodSeconds = null;
-            entity.Metadata.SelfLink = null;
-
-            var serializedEntity = KubernetesJson.Serialize(entity);
-            var patch = new V1Patch(serializedEntity, V1Patch.PatchType.ApplyPatch);
-            return await PatchAsync<TEntity>(patch, entity.Name(), entity.Namespace(), fieldManager, force, dryRun, cancellationToken);
-        }
-        finally
-        {
-            // Always restore original values - don't mutate caller's entity
-            entity.Metadata.ManagedFields = originalManagedFields;
-            entity.Metadata.ResourceVersion = originalResourceVersion;
-            entity.Metadata.Uid = originalUid;
-            entity.Metadata.Generation = originalGeneration;
-            entity.Metadata.CreationTimestamp = originalCreationTimestamp;
-            entity.Metadata.DeletionTimestamp = originalDeletionTimestamp;
-            entity.Metadata.DeletionGracePeriodSeconds = originalDeletionGracePeriodSeconds;
-            entity.Metadata.SelfLink = originalSelfLink;
-        }
-    }
-
-    /// <inheritdoc />
     public async Task DeleteAsync<TEntity>(
         string name,
         string? @namespace = null,

@@ -569,51 +569,6 @@ public interface IKubernetesClient : IDisposable
         where TEntity : IKubernetesObject<V1ObjectMeta> =>
         PatchAsync<TEntity>(patch, name, @namespace, fieldManager, force, dryRun).GetAwaiter().GetResult();
 
-    /// <summary>
-    /// Apply a Kubernetes entity using Server-Side Apply (SSA).
-    /// Server-Side Apply performs a declarative configuration merge at the server level,
-    /// tracking field ownership via the fieldManager parameter. This is the recommended
-    /// approach for managing Kubernetes resources in operators and controllers.
-    /// </summary>
-    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <param name="entity">The entity to apply. The entire object will be serialized and sent as the desired state.</param>
-    /// <param name="fieldManager">The name of the field manager. Required for Server-Side Apply. This tracks which controller/operator owns which fields.</param>
-    /// <param name="force">If true, takes ownership of fields managed by other field managers. Use with caution as this can override other controllers' changes.</param>
-    /// <param name="dryRun">When set (e.g., "All"), validates the request without persisting changes to storage.</param>
-    /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
-    /// <returns>The applied entity as returned by the Kubernetes API.</returns>
-    /// <remarks>
-    /// Server-Side Apply uses the "application/apply-patch+yaml" content type and automatically
-    /// handles three-way merges. The fieldManager parameter is used to track field ownership,
-    /// allowing multiple controllers to manage different fields of the same resource.
-    /// See https://kubernetes.io/docs/reference/using-api/server-side-apply/ for more details.
-    /// </remarks>
-    Task<TEntity> ApplyAsync<TEntity>(
-        TEntity entity,
-        string fieldManager,
-        bool? force = null,
-        string? dryRun = null,
-        CancellationToken cancellationToken = default)
-        where TEntity : IKubernetesObject<V1ObjectMeta>;
-
-    /// <summary>
-    /// Apply a Kubernetes entity using Server-Side Apply (SSA).
-    /// Synchronous version of <see cref="ApplyAsync{TEntity}"/>.
-    /// </summary>
-    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <param name="entity">The entity to apply.</param>
-    /// <param name="fieldManager">The name of the field manager. Required for Server-Side Apply.</param>
-    /// <param name="force">If true, takes ownership of fields managed by other field managers.</param>
-    /// <param name="dryRun">When set (e.g., "All"), validates the request without persisting changes.</param>
-    /// <returns>The applied entity as returned by the Kubernetes API.</returns>
-    TEntity Apply<TEntity>(
-        TEntity entity,
-        string fieldManager,
-        bool? force = null,
-        string? dryRun = null)
-        where TEntity : IKubernetesObject<V1ObjectMeta> =>
-        ApplyAsync(entity, fieldManager, force, dryRun).GetAwaiter().GetResult();
-
     /// <inheritdoc cref="Delete{TEntity}(TEntity)"/>
     /// <returns>A task that completes when the call was made.</returns>
     Task DeleteAsync<TEntity>(TEntity entity, CancellationToken cancellationToken = default)
