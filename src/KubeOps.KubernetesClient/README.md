@@ -171,8 +171,6 @@ if (crdToDelete != null)
 ```
 ### Patch Resources
 
-You can patch resources using various patch strategies. PatchAsync also supports Server-Side Apply parameters (fieldManager, force, dryRun) for field-level ownership tracking:
-
 ```csharp
 // JSON Patch (RFC 6902) - tactical updates
 var existingConfig = await client.GetAsync<V1ConfigMap>("my-config", "default");
@@ -181,10 +179,24 @@ if (existingConfig != null)
     existingConfig.Data["new-key"] = "new-value";
     var patchedConfig = await client.PatchAsync(existingConfig);
 }
+```
+
+PatchAsync also supports Server-Side Apply parameters (fieldManager, force, dryRun) for field-level ownership tracking:
+
+```csharp
+
+var configMap = new V1ConfigMap
+{
+    Metadata = new V1ObjectMeta { Name = "new-map", NamespaceProperty = "default" },
+    Data = new Dictionary<string, string> { { "key", "value" } }
+}.Initialize();
 
 // Patch with field manager for Server-Side Apply compatibility
+var patch = new V1Patch(configMap, V1Patch.PatchType.ApplyPatch);
 var patchedWithSSA = await client.PatchAsync(
-    existingConfig,
+    patch,
+    configMap.Metadata.NamespaceProperty,
+    configMap.Metadata.Name
     fieldManager: "my-operator",
     force: false);
 ```
