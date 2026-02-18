@@ -107,7 +107,7 @@ public abstract class MutationWebhook<TEntity> : ControllerBase
     /// <returns>The <see cref="MutationResult{TEntity}"/>.</returns>
     [HttpPost]
     public async Task<IActionResult> Mutate(
-        [FromBody] AdmissionRequest<TEntity> request,
+        [ModelBinder<AdmissionRequestModelBinder>][FromBody] AdmissionRequest<TEntity> request,
         CancellationToken cancellationToken)
     {
 #pragma warning disable CA2252 // TODO: remove this once the patch is stable.

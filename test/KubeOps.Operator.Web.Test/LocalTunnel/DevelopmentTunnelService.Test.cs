@@ -20,7 +20,7 @@ public sealed class DevelopmentTunnelServiceTest : IntegrationTestBase
             "dev-validators",
             cancellationToken: TestContext.Current.CancellationToken);
         validators.Should().NotBeNull();
-        validators!.Webhooks.Should().HaveCount(1);
+        validators.Webhooks.Should().HaveCount(1);
         validators.Webhooks[0].Name.Should().Be("validate.weboperatorintegrationtest.weboperator.test.v1");
         validators.Webhooks[0].ClientConfig.Url.Should().Contain("/validate/v1operatorwebintegrationtestentity");
     }
@@ -33,7 +33,7 @@ public sealed class DevelopmentTunnelServiceTest : IntegrationTestBase
             "dev-mutators",
             cancellationToken: TestContext.Current.CancellationToken);
         mutators.Should().NotBeNull();
-        mutators!.Webhooks.Should().HaveCount(1);
+        mutators.Webhooks.Should().HaveCount(1);
         mutators.Webhooks[0].Name.Should().Be("mutate.weboperatorintegrationtest.weboperator.test.v1");
         mutators.Webhooks[0].ClientConfig.Url.Should().Contain("/mutate/v1operatorwebintegrationtestentity");
     }
