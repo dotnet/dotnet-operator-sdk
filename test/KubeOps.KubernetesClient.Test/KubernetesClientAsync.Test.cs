@@ -285,6 +285,37 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
         patched.Data["newkey"].Should().Be("newvalue");
     }
 
+    [Fact]
+    public async Task Should_Patch_ConfigMap_With_FieldManager_Async()
+    {
+        // Create a ConfigMap
+        var config = await _client.CreateAsync(
+            new V1ConfigMap
+            {
+                Kind = V1ConfigMap.KubeKind,
+                ApiVersion = V1ConfigMap.KubeApiVersion,
+                Metadata = new()
+                {
+                    Name = RandomName(),
+                    NamespaceProperty = "default",
+                },
+                Data = new Dictionary<string, string> { { "initial", "value" } },
+            }, TestContext.Current.CancellationToken);
+
+        _objects.Add(config);
+
+        // Patch with field manager
+        config.Data["patched"] = "value";
+        var patched = await _client.PatchAsync(
+            config,
+            operationsFilter: null,
+            fieldManager: "test-patch-controller",
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        patched.Data.Should().ContainKey("patched").And.ContainValue("value");
+        patched.Metadata.ManagedFields.Should().Contain(f => f.Manager == "test-patch-controller");
+    }
+
     public void Dispose()
     {
         _client.Delete(_objects);

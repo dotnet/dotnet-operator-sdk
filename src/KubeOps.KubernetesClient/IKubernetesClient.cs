@@ -337,6 +337,9 @@ public interface IKubernetesClient : IDisposable
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity containing the desired updates.</param>
     /// <param name="operationsFilter">The filter that is applied to the <see cref="PatchOperation"/>s in the <see cref="JsonPatch"/> to determine if changes are present.</param>
+    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
+    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the entity to be patched does not exist on the API.</exception>
@@ -347,6 +350,9 @@ public interface IKubernetesClient : IDisposable
     Task<TEntity> PatchAsync<TEntity>(
         TEntity entity,
         Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>>? operationsFilter = null,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
@@ -361,6 +367,9 @@ public interface IKubernetesClient : IDisposable
             currentEntity,
             entity,
             operationsFilter,
+            fieldManager,
+            force,
+            dryRun,
             cancellationToken);
     }
 
@@ -374,6 +383,9 @@ public interface IKubernetesClient : IDisposable
     /// <param name="from">The current/original entity.</param>
     /// <param name="to">The updated entity with desired changes.</param>
     /// <param name="operationsFilter">The filter that is applied to the <see cref="PatchOperation"/>s in the <see cref="JsonPatch"/> to determine if changes are present.</param>
+    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
+    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
     [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
@@ -384,13 +396,16 @@ public interface IKubernetesClient : IDisposable
         TEntity from,
         TEntity to,
         Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>>? operationsFilter = null,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
         var patch = from.CreateJsonPatch(to, operationsFilter);
         return patch.Operations.Count == 0
             ? Task.FromResult(from)
-            : PatchAsync(from, from.CreateJsonPatch(to), cancellationToken);
+            : PatchAsync(from, from.CreateJsonPatch(to), fieldManager, force, dryRun, cancellationToken);
     }
 
     /// <summary>
@@ -399,15 +414,24 @@ public interface IKubernetesClient : IDisposable
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity to patch.</param>
     /// <param name="patch">The <see cref="JsonPatch"/> representing the changes to apply.</param>
+    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
+    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
     [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
                              "Return values may change (e.g. if the patch was actually applied" +
                              "when no changes were detected. Also, the filtering may not include" +
                              "all volatile properties yet.")]
-    Task<TEntity> PatchAsync<TEntity>(TEntity entity, JsonPatch patch, CancellationToken cancellationToken = default)
+    Task<TEntity> PatchAsync<TEntity>(
+        TEntity entity,
+        JsonPatch patch,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null,
+        CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta> =>
-        PatchAsync(entity, patch.ToKubernetesPatch(), cancellationToken);
+        PatchAsync(entity, patch.ToKubernetesPatch(), fieldManager, force, dryRun, cancellationToken);
 
     /// <summary>
     /// Patch a given entity on the Kubernetes API using a <see cref="V1Patch"/> object.
@@ -415,11 +439,20 @@ public interface IKubernetesClient : IDisposable
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity to patch.</param>
     /// <param name="patch">The <see cref="V1Patch"/> representing the changes to apply.</param>
+    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
+    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
-    Task<TEntity> PatchAsync<TEntity>(TEntity entity, V1Patch patch, CancellationToken cancellationToken = default)
+    Task<TEntity> PatchAsync<TEntity>(
+        TEntity entity,
+        V1Patch patch,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null,
+        CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta> =>
-        PatchAsync<TEntity>(patch, entity.Name(), entity.Namespace(), cancellationToken);
+        PatchAsync<TEntity>(patch, entity.Name(), entity.Namespace(), fieldManager, force, dryRun, cancellationToken);
 
     /// <summary>
     /// Patch a given entity on the Kubernetes API by name and namespace using a <see cref="V1Patch"/> object.
@@ -428,12 +461,18 @@ public interface IKubernetesClient : IDisposable
     /// <param name="patch">The <see cref="V1Patch"/> representing the changes to apply.</param>
     /// <param name="name">The name of the entity to patch.</param>
     /// <param name="namespace">The namespace of the entity to patch (if applicable).</param>
+    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
+    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
     Task<TEntity> PatchAsync<TEntity>(
         V1Patch patch,
         string name,
         string? @namespace = null,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>;
 
@@ -450,7 +489,7 @@ public interface IKubernetesClient : IDisposable
                              "all volatile properties yet.")]
     TEntity Patch<TEntity>(TEntity entity)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => PatchAsync(entity).GetAwaiter().GetResult();
+        => PatchAsync(entity, operationsFilter: null, cancellationToken: default).GetAwaiter().GetResult();
 
     /// <summary>
     /// Patch a given entity on the Kubernetes API by calculating the diff between two provided entities.
@@ -473,14 +512,22 @@ public interface IKubernetesClient : IDisposable
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity to patch.</param>
     /// <param name="patch">The <see cref="JsonPatch"/> representing the changes to apply.</param>
+    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
+    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <returns>The patched entity.</returns>
     [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
                              "Return values may change (e.g. if the patch was actually applied" +
                              "when no changes were detected. Also, the filtering may not include" +
                              "all volatile properties yet.")]
-    TEntity Patch<TEntity>(TEntity entity, JsonPatch patch)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => PatchAsync(entity, patch).GetAwaiter().GetResult();
+    TEntity Patch<TEntity>(
+        TEntity entity,
+        JsonPatch patch,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null)
+        where TEntity : IKubernetesObject<V1ObjectMeta> =>
+        PatchAsync(entity, patch, fieldManager, force, dryRun).GetAwaiter().GetResult();
 
     /// <summary>
     /// Patch a given entity on the Kubernetes API using a <see cref="V1Patch"/> object.
@@ -488,10 +535,18 @@ public interface IKubernetesClient : IDisposable
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity to patch.</param>
     /// <param name="patch">The <see cref="V1Patch"/> representing the changes to apply.</param>
+    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
+    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <returns>The patched entity.</returns>
-    TEntity Patch<TEntity>(TEntity entity, V1Patch patch)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => PatchAsync(entity, patch).GetAwaiter().GetResult();
+    TEntity Patch<TEntity>(
+        TEntity entity,
+        V1Patch patch,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null)
+        where TEntity : IKubernetesObject<V1ObjectMeta> =>
+        PatchAsync(entity, patch, fieldManager, force, dryRun).GetAwaiter().GetResult();
 
     /// <summary>
     /// Patch a given entity on the Kubernetes API by name and namespace using a <see cref="V1Patch"/> object.
@@ -500,13 +555,19 @@ public interface IKubernetesClient : IDisposable
     /// <param name="patch">The <see cref="V1Patch"/> representing the changes to apply.</param>
     /// <param name="name">The name of the entity to patch.</param>
     /// <param name="namespace">The namespace of the entity to patch (if applicable).</param>
+    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
+    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <returns>The patched entity.</returns>
     TEntity Patch<TEntity>(
         V1Patch patch,
         string name,
-        string? @namespace = null)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => PatchAsync<TEntity>(patch, name, @namespace).GetAwaiter().GetResult();
+        string? @namespace = null,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null)
+        where TEntity : IKubernetesObject<V1ObjectMeta> =>
+        PatchAsync<TEntity>(patch, name, @namespace, fieldManager, force, dryRun).GetAwaiter().GetResult();
 
     /// <inheritdoc cref="Delete{TEntity}(TEntity)"/>
     /// <returns>A task that completes when the call was made.</returns>

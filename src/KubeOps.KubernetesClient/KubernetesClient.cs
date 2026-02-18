@@ -320,17 +320,39 @@ public class KubernetesClient : IKubernetesClient
         V1Patch patch,
         string name,
         string? @namespace = null,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
         ThrowIfDisposed();
 
-        using var client = CreateGenericClient<TEntity>();
-        return await (@namespace switch
+        var metadata = GetMetadata<TEntity>();
+        return @namespace switch
         {
-            not null => client.PatchNamespacedAsync<TEntity>(patch, @namespace, name, cancellationToken),
-            null => client.PatchAsync<TEntity>(patch, name, cancellationToken),
-        });
+            not null => await ApiClient.CustomObjects.PatchNamespacedCustomObjectAsync<TEntity>(
+                patch,
+                metadata.Group ?? string.Empty,
+                metadata.Version,
+                @namespace,
+                metadata.PluralName,
+                name,
+                dryRun: dryRun,
+                fieldManager: fieldManager,
+                force: force,
+                cancellationToken: cancellationToken),
+            _ => await ApiClient.CustomObjects.PatchClusterCustomObjectAsync<TEntity>(
+                patch,
+                metadata.Group ?? string.Empty,
+                metadata.Version,
+                metadata.PluralName,
+                name,
+                dryRun: dryRun,
+                fieldManager: fieldManager,
+                force: force,
+                cancellationToken: cancellationToken),
+        };
     }
 
     /// <inheritdoc />
