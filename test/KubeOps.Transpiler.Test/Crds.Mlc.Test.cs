@@ -253,9 +253,31 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     {
         var crd = _mlc.Transpile(typeof(LengthAttrEntity));
 
-        var specProperties = crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Properties["property"];
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
 
         specProperties.MinLength.Should().Be(2);
+        specProperties.MaxLength.Should().Be(42);
+    }
+
+    [Fact]
+    public void Should_Set_MinLengthOnly_Information()
+    {
+        var crd = _mlc.Transpile(typeof(MinLengthAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.MinLength.Should().Be(2);
+        specProperties.MaxLength.Should().BeNull();
+    }
+
+    [Fact]
+    public void Should_Set_MaxLengthOnly_Information()
+    {
+        var crd = _mlc.Transpile(typeof(MaxLengthAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.MinLength.Should().BeNull();
         specProperties.MaxLength.Should().Be(42);
     }
 
@@ -915,6 +937,20 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     public class LengthAttrEntity : CustomKubernetesEntity
     {
         [Length(2, 42)]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class MinLengthAttrEntity : CustomKubernetesEntity
+    {
+        [Length(minLength: 2)]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class MaxLengthAttrEntity : CustomKubernetesEntity
+    {
+        [Length(maxLength: 42)]
         public string Property { get; set; } = null!;
     }
 
