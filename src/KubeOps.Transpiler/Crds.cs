@@ -245,8 +245,11 @@ public static class Crds
 
         if (prop.GetCustomAttributeData<LengthAttribute>() is { } length)
         {
-            props.MinLength = length.GetCustomAttributeCtorArg<long>(context, 0);
-            props.MaxLength = length.GetCustomAttributeCtorArg<long>(context, 1);
+            var minLength = length.GetCustomAttributeCtorArg<long>(context, 0);
+            props.MinLength = minLength == -1 ? null : minLength;
+
+            var maxLength = length.GetCustomAttributeCtorArg<long>(context, 1);
+            props.MaxLength = maxLength == -1 ? null : maxLength;
         }
 
         if (prop.GetCustomAttributeData<MultipleOfAttribute>() is { } multi)
