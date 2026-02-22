@@ -68,6 +68,52 @@ For local development, your operator must be accessible from the Kubernetes clus
 The LocalTunnel option is deprecated due to stability issues. It's recommended to use the certificate provider or other more reliable solutions.
 :::
 
+## Endpoint Routing
+
+KubeOps automatically registers an HTTP route for each webhook. The route is determined by the
+attribute applied to the webhook class — specifically by the **entity type** passed to that attribute.
+
+| Webhook Type | Attribute | Route Pattern |
+|---|---|---|
+| Validation | `[ValidationWebhook(typeof(TEntity))]` | `/validate/{entity-type-name}` |
+| Mutation | `[MutationWebhook(typeof(TEntity))]` | `/mutate/{entity-type-name}` |
+| Conversion | `[ConversionWebhook(typeof(TEntity))]` | `/convert/{group}/{plural-name}` |
+
+### How the route segments are derived
+
+For **validation** and **mutation** webhooks, `{entity-type-name}` is the C# type name of
+the entity converted to lowercase. It is computed as:
+
+```
+entityType.Name.ToLowerInvariant()
+```
+
+This means the route segment reflects the **entity type**, not the webhook class name.
+
+For example, a webhook declared as:
+
+```csharp
+[ValidationWebhook(typeof(V1DemoEntity))]
+public class DemoValidationWebhook : ValidationWebhook<V1DemoEntity> { /* ... */ }
+```
+
+registers the route `/validate/v1demoentity` — derived from `V1DemoEntity`, not from `DemoValidationWebhook`.
+
+| Entity type | Validation route | Mutation route |
+|---|---|---|
+| `V1DemoEntity` | `/validate/v1demoentity` | `/mutate/v1demoentity` |
+| `V1TestEntity` | `/validate/v1testentity` | `/mutate/v1testentity` |
+| `MyCustomResource` | `/validate/mycustomresource` | `/mutate/mycustomresource` |
+
+For **conversion** webhooks, the route uses the entity's Kubernetes metadata instead:
+
+- `{group}` — the API group from the `[KubernetesEntity]` attribute (e.g., `webhook.dev`)
+- `{plural-name}` — the plural resource name from the CRD metadata (e.g., `testentities`)
+
+A conversion webhook for an entity annotated with
+`[KubernetesEntity(Group = "webhook.dev", ApiVersion = "v2", Kind = "TestEntity")]`
+registers the route `/convert/webhook.dev/testentities`.
+
 ## Validation Webhooks
 
 Validation webhooks allow you to enforce custom validation rules for your resources. They are called before a resource is created or updated.
