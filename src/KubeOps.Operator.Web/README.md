@@ -66,11 +66,11 @@ Key points:
 
 KubeOps automatically configures routes for your webhooks based on the attributes you apply:
 
-- `[ValidationWebhook(typeof(TEntity))]`: Creates an endpoint at `/validate/{webhook-name}`
-- `[MutationWebhook(typeof(TEntity))]`: Creates an endpoint at `/mutate/{webhook-name}`
-- `[ConversionWebhook(typeof(TStorageEntity))]`: Creates an endpoint at `/convert/{webhook-name}`
+- `[ValidationWebhook(typeof(TEntity))]`: Creates an endpoint at `/validate/{entity-type}`
+- `[MutationWebhook(typeof(TEntity))]`: Creates an endpoint at `/mutate/{entity-type}`
+- `[ConversionWebhook(typeof(TStorageEntity))]`: Creates an endpoint at `/convert/{group}/{plural-name}`
 
-The `{webhook-name}` is typically derived from the C# class name of your webhook implementation (e.g., `TestValidationWebhook` might map to `/validate/testvalidationwebhook`). These are the endpoints you configure in your `ValidatingWebhookConfiguration`, `MutatingWebhookConfiguration`, or `CustomResourceDefinition` Kubernetes manifests.
+For validation and mutation webhooks, `{entity-type}` is derived from the entity CLR type name (e.g., `V1TestEntity` maps to `/validate/v1testentity`). For conversion webhooks, the route uses the entity metadata (`[KubernetesEntity]`) and maps to `/convert/{group}/{plural-name}`. These are the endpoints you configure in your `ValidatingWebhookConfiguration`, `MutatingWebhookConfiguration`, or `CustomResourceDefinition` Kubernetes manifests.
 
 ## Implementation Overview
 
