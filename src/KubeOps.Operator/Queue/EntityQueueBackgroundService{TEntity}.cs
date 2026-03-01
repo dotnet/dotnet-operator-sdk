@@ -145,7 +145,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         }
     }
 
-    private async Task ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
+    private async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
         using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event""", ActivityKind.Consumer);
         using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.ReconciliationType, entry.Entity));
@@ -157,10 +157,10 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         {
             logger.LogWarning(
                 """Queued entity "{Name}" was not found. Skipping reconciliation.""", entry.Entity.Name());
-            return;
+            return ReconciliationResult<TEntity>.Failure(entry.Entity, "Entity was not found.");
         }
 
-        await reconciler.Reconcile(
+        return await reconciler.Reconcile(
             ReconciliationContext<TEntity>.CreateFor(
                 entity,
                 entry.ReconciliationType,
@@ -257,19 +257,20 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
             // At this point, the lock is always acquired (either from switch or WaitAsync above)
             try
             {
-                logger.LogDebug(
+                logger.LogInformation(
                     "Starting reconciliation for {Kind}/{Name} (UID: {Uid}).",
                     entry.Entity.Kind,
                     entry.Entity.Name(),
                     uid);
 
-                await ReconcileSingleAsync(entry, cancellationToken);
+                var result = await ReconcileSingleAsync(entry, cancellationToken);
 
-                logger.LogDebug(
-                    "Completed reconciliation for {Kind}/{Name} (UID: {Uid}).",
+                logger.LogInformation(
+                    "Completed reconciliation for {Kind}/{Name} (UID: {Uid}) {State}.",
                     entry.Entity.Kind,
                     entry.Entity.Name(),
-                    uid);
+                    uid,
+                    result.IsSuccess ? "successfully" : "with failures");
             }
             finally
             {
