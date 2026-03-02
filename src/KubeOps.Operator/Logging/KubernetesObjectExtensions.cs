@@ -13,11 +13,17 @@ namespace KubeOps.Operator.Logging;
 public static class KubernetesObjectExtensions
 {
     /// <summary>
-    /// Returns a human-readable identifier string for the Kubernetes object, suitable for use in log messages.
+    /// Builds a human-readable identifier string for the Kubernetes object, suitable for use in log messages.
     /// </summary>
     /// <param name="kubernetesObject">The Kubernetes object to identify.</param>
     /// <returns>
-    /// A string in the format <c>Kind/Name (UID: uid)</c> that uniquely identifies the object.
+    /// A string that identifies the object. The format varies depending on which metadata fields are populated:
+    /// <list type="bullet">
+    /// <item><description><c>Kind/Name (UID: uid)</c> when all fields are present.</description></item>
+    /// <item><description><c>Kind (UID: uid)</c> when the name is absent.</description></item>
+    /// <item><description><c>Kind/Name</c> when the UID is absent.</description></item>
+    /// <item><description><c>Kind</c> when only the kind is present.</description></item>
+    /// </list>
     /// </returns>
     /// <example>
     /// <code language="csharp">
@@ -27,5 +33,5 @@ public static class KubernetesObjectExtensions
     /// </code>
     /// </example>
     public static string ToIdentifierString(this IKubernetesObject<V1ObjectMeta> kubernetesObject)
-        => $"{kubernetesObject.Kind}/{kubernetesObject.Name()} (UID: {kubernetesObject.Uid()})";
+        => $"{kubernetesObject.Kind}{(string.IsNullOrEmpty(kubernetesObject.Name()) ? string.Empty : $"/{kubernetesObject.Name()}")}{(string.IsNullOrEmpty(kubernetesObject.Uid()) ? string.Empty : $" (UID: {kubernetesObject.Uid()})")}";
 }
