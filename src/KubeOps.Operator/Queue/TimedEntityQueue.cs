@@ -87,6 +87,20 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                 },
                 (_, oldEntry) =>
                 {
+                    // the entry with the earliest execution time should be kept,
+                    // so only update if the new entry is scheduled to be executed sooner
+                    // than the existing one
+                    if (oldEntry.EnqueueAt <= DateTimeOffset.UtcNow.Add(queueIn))
+                    {
+                        _logger
+                            .LogTrace(
+                                """Keeping existing schedule for entity "{Identifier}" to reconcile in {Seconds}s.""",
+                                entity.ToIdentifierString(),
+                                oldEntry.EnqueueAt.Subtract(DateTimeOffset.UtcNow).TotalSeconds);
+
+                        return oldEntry;
+                    }
+
                     _logger
                         .LogTrace(
                             """Updating schedule for entity "{Identifier}" to reconcile in {Seconds}s.""",

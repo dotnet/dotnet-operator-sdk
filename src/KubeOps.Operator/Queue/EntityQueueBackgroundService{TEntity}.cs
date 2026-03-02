@@ -152,7 +152,11 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                 """Executing requested queued reconciliation for "{Identifier}".""",
                 entry.Entity.ToIdentifierString());
 
-        if (await client.GetAsync<TEntity>(entry.Entity.Name(), entry.Entity.Namespace(), cancellationToken) is { } entity)
+        var entity = entry.ReconciliationType == ReconciliationType.Deleted
+            ? entry.Entity
+            : await client.GetAsync<TEntity>(entry.Entity.Name(), entry.Entity.Namespace(), cancellationToken);
+
+        if (entity is not null)
         {
             return await reconciler.Reconcile(
                 ReconciliationContext<TEntity>.CreateFor(
@@ -223,7 +227,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         var uidLock = _uidLocks.GetOrAdd(uid, _ => new(1, 1));
 
         using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event for "{entry.Entity.ToIdentifierString()}".""", ActivityKind.Consumer);
-        using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.ReconciliationType, entry.Entity));
+        using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.ReconciliationType, entry.ReconciliationTriggerSource, entry.Entity));
 
         try
         {

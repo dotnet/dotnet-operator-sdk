@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using FluentAssertions;
+
 using k8s.Models;
 
 using KubeOps.Abstractions.Reconciliation;
@@ -52,7 +54,7 @@ public sealed class TimedEntityQueueTest
             // We expect to timeout watching the queue so that we can assert the items received
         }
 
-        Assert.Equal(2, items.Count);
+        items.Count.Should().Be(2);
     }
 
     private static V1Secret CreateSecret(string secretNamespace, string secretName)

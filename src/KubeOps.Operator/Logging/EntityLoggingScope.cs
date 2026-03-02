@@ -60,6 +60,9 @@ public sealed record EntityLoggingScope : IReadOnlyCollection<KeyValuePair<strin
     /// <param name="eventType">
     /// The type of reconciliation operation for the entity (e.g., Added, Modified, or Deleted).
     /// </param>
+    /// <param name="reconciliationTriggerSource">
+    /// The source of the reconciliation trigger (e.g., ApiServer, Operator). This provides additional context for the logging scope.
+    /// </param>
     /// <param name="entity">
     /// The Kubernetes entity associated with the logging scope. This includes metadata such as Kind, Namespace, Name, UID, and ResourceVersion.
     /// </param>
@@ -67,9 +70,9 @@ public sealed record EntityLoggingScope : IReadOnlyCollection<KeyValuePair<strin
     /// A new <see cref="EntityLoggingScope"/> instance containing contextual key-value pairs
     /// related to the reconciliation operation type and the provided Kubernetes entity.
     /// </returns>
-    public static EntityLoggingScope CreateFor<TEntity>(ReconciliationType eventType, TEntity entity)
+    public static EntityLoggingScope CreateFor<TEntity>(ReconciliationType eventType, ReconciliationTriggerSource reconciliationTriggerSource, TEntity entity)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => CreateLoggingScope(eventType.ToString(), ReconciliationTriggerSource.Operator, entity);
+        => CreateLoggingScope(eventType.ToString(), reconciliationTriggerSource, entity);
 
     /// <inheritdoc />
     public IEnumerator<KeyValuePair<string, object>> GetEnumerator()
