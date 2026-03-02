@@ -136,27 +136,30 @@ public class ResourceWatcher<TEntity>(
     {
         if (eventType != WatchEventType.Deleted)
         {
-            var cachedGeneration = await _entityCache.TryGetAsync<long?>(
-                entity.Uid(),
-                token: cancellationToken);
-
-            // check if entity-spec has changed through "Generation" value increment.
-            // skip reconcile if not changed.
-            if (cachedGeneration.HasValue && cachedGeneration >= entity.Generation())
+            // bypass generation check for finalizer handling
+            // removal does not increase the generation
+            if (entity.Metadata.DeletionTimestamp is null)
             {
-                logger
-                    .LogDebug(
-                        """Entity "{Identifier}" modification did not modify generation. Skip event.""",
-                        entity.ToIdentifierString());
+                var cachedGeneration = await _entityCache.TryGetAsync<long?>(
+                    entity.Uid(),
+                    token: cancellationToken);
 
-                return;
+                // skip reconcile if generation did not increase.
+                if (cachedGeneration.HasValue && cachedGeneration >= entity.Generation())
+                {
+                    logger
+                        .LogDebug(
+                            """Entity "{Identifier}" modification did not modify generation. Skip event.""",
+                            entity.ToIdentifierString());
+
+                    return;
+                }
+
+                await _entityCache.SetAsync(
+                    entity.Uid(),
+                    entity.Generation() ?? 1,
+                    token: cancellationToken);
             }
-
-            // update cached generation since generation now changed
-            await _entityCache.SetAsync(
-                entity.Uid(),
-                entity.Generation() ?? 1,
-                token: cancellationToken);
         }
         else
         {
@@ -210,16 +213,6 @@ public class ResourceWatcher<TEntity>(
                     {
                         await OnEventAsync(type, entity, stoppingToken);
                     }
-                    //// catch (KubernetesException e) when (e.Status.Code is (int)HttpStatusCode.GatewayTimeout)
-                    //// {
-                    ////     logger.LogDebug(e, "Watch restarting due to 504 Gateway Timeout.");
-                    ////     break;
-                    //// }
-                    //// catch (KubernetesException e) when (e.Status.Code is (int)HttpStatusCode.Gone)
-                    //// {
-                    ////     // Special handling when our resource version is outdated.
-                    ////     throw;
-                    //// }
                     catch (Exception e)
                     {
                         logger
@@ -230,15 +223,18 @@ public class ResourceWatcher<TEntity>(
                                 entity.ToIdentifierString());
                     }
                 }
+
+                _watcherReconnectRetries = 0;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                // Don't throw if the cancellation was indeed requested.
                 break;
             }
             catch (KubernetesException e) when (e.Status.Code is (int)HttpStatusCode.Gone)
             {
                 logger.LogDebug(e, "Watch restarting with reset bookmark due to 410 HTTP Gone.");
+
+                _watcherReconnectRetries = 0;
                 currentVersion = null;
             }
             catch (Exception e)
