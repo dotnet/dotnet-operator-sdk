@@ -20,7 +20,7 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Watcher;
 
-internal sealed class LeaderAwareResourceWatcher<TEntity>(
+public class LeaderAwareResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<LeaderAwareResourceWatcher<TEntity>> logger,
     IFusionCacheProvider cacheProvider,
