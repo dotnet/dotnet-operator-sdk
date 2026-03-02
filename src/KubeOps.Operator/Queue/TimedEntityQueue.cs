@@ -164,47 +164,64 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
     /// This method runs in a background task and checks for ready entries at regular intervals.
     /// Entries that have reached their scheduled time and are not cancelled are added to the queue
     /// and removed from the management dictionary.
+    /// If an unexpected error occurs, the loop logs the error and restarts automatically so that
+    /// scheduled entries continue to be promoted to the ready queue. The loop only exits cleanly
+    /// when <see cref="_timerCts"/> is cancelled during disposal.
     /// </remarks>
     private async Task ProcessScheduledEntriesAsync()
     {
-        try
+        while (!_timerCts.IsCancellationRequested)
         {
-            while (await _timer.WaitForNextTickAsync(_timerCts.Token))
+            try
             {
-                var now = DateTimeOffset.UtcNow;
-
-                // Check all scheduled entries
-                foreach (var (key, entry) in _management)
+                while (await _timer.WaitForNextTickAsync(_timerCts.Token))
                 {
-                    // Skip if cancelled
-                    if (entry.IsCancelled)
-                    {
-                        _management.TryRemove(key, out _);
-                        continue;
-                    }
+                    var now = DateTimeOffset.UtcNow;
 
-                    // Check if entry is ready to be added to the queue and remove from management
-                    if (entry.EnqueueAt <= now && _management.TryRemove(key, out _))
+                    // Check all scheduled entries
+                    foreach (var (key, entry) in _management)
                     {
-                        var queueEntry = entry.ToQueueEntry();
-                        _queue.TryAdd(queueEntry);
+                        // Skip if cancelled
+                        if (entry.IsCancelled)
+                        {
+                            _management.TryRemove(key, out _);
+                            continue;
+                        }
 
-                        _logger
-                            .LogTrace(
-                                """Entity "{Identifier}" is queued for reconciliation.""",
-                                queueEntry.Entity.ToIdentifierString());
+                        // Check if entry is ready to be added to the queue and remove from management
+                        if (entry.EnqueueAt <= now && _management.TryRemove(key, out _))
+                        {
+                            var queueEntry = entry.ToQueueEntry();
+                            _queue.TryAdd(queueEntry);
+
+                            _logger
+                                .LogTrace(
+                                    """Entity "{Identifier}" is queued for reconciliation.""",
+                                    queueEntry.Entity.ToIdentifierString());
+                        }
                     }
                 }
             }
-        }
-        catch (OperationCanceledException ex) when (_timerCts.IsCancellationRequested)
-        {
-            // Expected during disposal
-            _logger.LogDebug(ex, "Timed entity queue timer loop cancelled.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error in timed entity queue timer loop.");
+            catch (OperationCanceledException) when (_timerCts.IsCancellationRequested)
+            {
+                // Expected during disposal – exit the outer loop cleanly.
+#pragma warning disable S6667
+                _logger
+                    .LogDebug("Timed entity queue timer loop cancelled.");
+#pragma warning restore S6667
+                return;
+            }
+            catch (Exception ex)
+            {
+                // An unexpected error must not kill the loop permanently, because no further
+                // entries would ever be promoted to the ready queue while the operator keeps
+                // running. Log the error and let the outer while-loop restart the inner loop
+                // on the next tick so that scheduling resumes automatically.
+                _logger
+                    .LogError(
+                        ex,
+                        "Unexpected error in timed entity queue timer loop. Restarting loop.");
+            }
         }
     }
 }
