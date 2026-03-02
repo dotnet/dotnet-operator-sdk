@@ -103,6 +103,8 @@ internal sealed class LeaderAwareResourceWatcher<TEntity>(
         _cts.Cancel();
 
         logger.LogInformation("This instance stopped leading, stopping watcher.");
+
+        EntityCache.Clear();
         _ = base.StopAsync(hostApplicationLifetime.ApplicationStopped);
     }
 }

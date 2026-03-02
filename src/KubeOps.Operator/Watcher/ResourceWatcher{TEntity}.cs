@@ -37,13 +37,14 @@ public class ResourceWatcher<TEntity>(
     : IHostedService, IAsyncDisposable, IDisposable
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private readonly IFusionCache _entityCache = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
     private CancellationTokenSource _cancellationTokenSource = new();
     private uint _watcherReconnectRetries;
     private Task? _eventWatcher;
     private bool _disposed;
 
     ~ResourceWatcher() => Dispose(false);
+
+    protected IFusionCache EntityCache { get; } = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
 
     public virtual Task StartAsync(CancellationToken cancellationToken)
     {
@@ -140,7 +141,7 @@ public class ResourceWatcher<TEntity>(
             // removal does not increase the generation
             if (entity.Metadata.DeletionTimestamp is null)
             {
-                var cachedGeneration = await _entityCache.TryGetAsync<long?>(
+                var cachedGeneration = await EntityCache.TryGetAsync<long?>(
                     entity.Uid(),
                     token: cancellationToken);
 
@@ -155,7 +156,7 @@ public class ResourceWatcher<TEntity>(
                     return;
                 }
 
-                await _entityCache.SetAsync(
+                await EntityCache.SetAsync(
                     entity.Uid(),
                     entity.Generation() ?? 1,
                     token: cancellationToken);
@@ -163,7 +164,7 @@ public class ResourceWatcher<TEntity>(
         }
         else
         {
-            await _entityCache.RemoveAsync(
+            await EntityCache.RemoveAsync(
                 entity.Uid(),
                 token: cancellationToken);
         }
