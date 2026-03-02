@@ -114,14 +114,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
         _timerCts.Cancel();
 
         // Wait for timer task to complete (with timeout)
-        try
-        {
-            _timerTask.Wait(TimeSpan.FromSeconds(5));
-        }
-        catch (AggregateException)
-        {
-            // Ignore cancellation exceptions
-        }
+        _timerTask.Wait(TimeSpan.FromSeconds(5));
 
         // Dispose resources
         _timer.Dispose();

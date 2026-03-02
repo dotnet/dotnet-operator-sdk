@@ -103,9 +103,6 @@ internal sealed class LeaderAwareResourceWatcher<TEntity>(
         _cts.Cancel();
 
         logger.LogInformation("This instance stopped leading, stopping watcher.");
-
-        // Stop the base implementation using the 'ApplicationStopped' cancellation token.
-        // The cancellation token should only be marked as canceled when the stop should no longer be graceful.
-        base.StopAsync(hostApplicationLifetime.ApplicationStopped).Wait();
+        _ = base.StopAsync(hostApplicationLifetime.ApplicationStopped);
     }
 }

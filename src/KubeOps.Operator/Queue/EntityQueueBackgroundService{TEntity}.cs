@@ -195,15 +195,6 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         {
             logger.LogInformation(ex, "Queue processing cancelled during shutdown.");
         }
-#pragma warning disable CA2254, S2139
-        catch (Exception ex)
-        {
-            // Log and rethrow is intentional: we want to log the error for diagnostics
-            // AND signal the hosting infrastructure that the service has failed critically
-            logger.LogCritical(ex, "Fatal error in queue processing. Service will stop.");
-            throw;
-        }
-#pragma warning restore CA2254, S2139
     }
 
     /// <summary>
