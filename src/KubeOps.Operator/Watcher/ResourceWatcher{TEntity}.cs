@@ -206,10 +206,10 @@ public class ResourceWatcher<TEntity>(
                         continue;
                     }
 
-                    //// try
-                    //// {
-                    await OnEventAsync(type, entity, stoppingToken);
-                    //// }
+                    try
+                    {
+                        await OnEventAsync(type, entity, stoppingToken);
+                    }
                     //// catch (KubernetesException e) when (e.Status.Code is (int)HttpStatusCode.GatewayTimeout)
                     //// {
                     ////     logger.LogDebug(e, "Watch restarting due to 504 Gateway Timeout.");
@@ -220,15 +220,15 @@ public class ResourceWatcher<TEntity>(
                     ////     // Special handling when our resource version is outdated.
                     ////     throw;
                     //// }
-                    //// catch (Exception e)
-                    //// {
-                    ////     logger.LogError(
-                    ////         e,
-                    ////         "Reconciliation of {EventType} for {Kind}/{Name} failed.",
-                    ////         type,
-                    ////         entity.Kind,
-                    ////         entity.Name());
-                    //// }
+                    catch (Exception e)
+                    {
+                        logger
+                            .LogError(
+                                e,
+                                """Scheduling for reconciliation of "{EventType}" for "{Identifier}" failed.""",
+                                type,
+                                entity.ToIdentifierString());
+                    }
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
