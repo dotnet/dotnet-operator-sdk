@@ -147,25 +147,21 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
     private async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
-        using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event""", ActivityKind.Consumer);
-        using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.ReconciliationType, entry.Entity));
+        logger.LogTrace("""Executing requested queued reconciliation for "{Kind}/{Name}".""", entry.Entity.Kind, entry.Entity.Name());
 
-        logger.LogTrace("""Executing requested queued reconciliation for "{Name}".""", entry.Entity.Name());
-
-        if (await client.GetAsync<TEntity>(entry.Entity.Name(), entry.Entity.Namespace(), cancellationToken) is not
-            { } entity)
+        if (await client.GetAsync<TEntity>(entry.Entity.Name(), entry.Entity.Namespace(), cancellationToken) is { } entity)
         {
-            logger.LogWarning(
-                """Queued entity "{Name}" was not found. Skipping reconciliation.""", entry.Entity.Name());
-            return ReconciliationResult<TEntity>.Failure(entry.Entity, "Entity was not found.");
+            return await reconciler.Reconcile(
+                ReconciliationContext<TEntity>.CreateFor(
+                    entity,
+                    entry.ReconciliationType,
+                    entry.ReconciliationTriggerSource),
+                cancellationToken);
         }
 
-        return await reconciler.Reconcile(
-            ReconciliationContext<TEntity>.CreateFor(
-                entity,
-                entry.ReconciliationType,
-                entry.ReconciliationTriggerSource),
-            cancellationToken);
+        logger.LogWarning(
+            """Queued entity "{Kind}/{Name}" was not found. Skipping reconciliation.""", entry.Entity.Kind, entry.Entity.Name());
+        return ReconciliationResult<TEntity>.Failure(entry.Entity, "Entity was not found.");
     }
 
     private async Task WatchAsync(CancellationToken cancellationToken)
@@ -176,11 +172,8 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         {
             await foreach (var queueEntry in queue.WithCancellation(cancellationToken))
             {
-                // Acquire semaphore BEFORE reading next item from queue
-                // This implements back-pressure: we only read as many items as we can process
                 await _parallelismSemaphore.WaitAsync(cancellationToken);
 
-                // Start processing without Task.Run (already async)
                 var task = ProcessEntryWithSemaphoreReleaseAsync(queueEntry, cancellationToken);
                 tasks.Add(task);
 
@@ -233,6 +226,9 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         var uid = entry.Entity.Uid();
         var uidLock = _uidLocks.GetOrAdd(uid, _ => new(1, 1));
 
+        using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event for {entry.Entity.Kind}/{entry.Entity.Name()} (UID: {entry.Entity.Uid()})""", ActivityKind.Consumer);
+        using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.ReconciliationType, entry.Entity));
+
         try
         {
             var canAcquireLock = operatorSettings.ParallelReconciliationOptions.ConflictStrategy switch
@@ -251,10 +247,14 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
             if (operatorSettings.ParallelReconciliationOptions.ConflictStrategy is ParallelReconciliationConflictStrategy.WaitForCompletion)
             {
+                logger.LogDebug(
+                    "Trying to acquire lock for {Kind}/{Name} (UID: {Uid}). Waiting for completion.",
+                    entry.Entity.Kind,
+                    entry.Entity.Name(),
+                    uid);
                 await uidLock.WaitAsync(cancellationToken);
             }
 
-            // At this point, the lock is always acquired (either from switch or WaitAsync above)
             try
             {
                 logger.LogInformation(
