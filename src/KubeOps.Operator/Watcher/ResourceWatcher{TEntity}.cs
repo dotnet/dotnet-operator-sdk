@@ -144,10 +144,10 @@ public class ResourceWatcher<TEntity>(
             // skip reconcile if not changed.
             if (cachedGeneration.HasValue && cachedGeneration >= entity.Generation())
             {
-                logger.LogDebug(
-                    """Entity "{Kind}/{Name}" modification did not modify generation. Skip event.""",
-                    entity.Kind,
-                    entity.Name());
+                logger
+                    .LogDebug(
+                        """Entity "{Identifier}" modification did not modify generation. Skip event.""",
+                        entity.ToIdentifierString());
 
                 return;
             }
@@ -193,12 +193,12 @@ public class ResourceWatcher<TEntity>(
                     using var activity = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
                     using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(type, entity));
 
-                    logger.LogInformation(
-                        """Received watch event "{EventType}" for "{Kind}/{Name}", last observed resource version: {ResourceVersion}.""",
-                        type,
-                        entity.Kind,
-                        entity.Name(),
-                        entity.ResourceVersion());
+                    logger
+                        .LogInformation(
+                            """Received watch event "{EventType}" for "{Identifier}", last observed resource version: {ResourceVersion}.""",
+                            type,
+                            entity.ToIdentifierString(),
+                            entity.ResourceVersion());
 
                     if (type == WatchEventType.Bookmark)
                     {

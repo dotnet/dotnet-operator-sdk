@@ -8,6 +8,7 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Operator.Logging;
 
 using Microsoft.Extensions.Logging;
 
@@ -76,21 +77,21 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                 key,
                 _ =>
                 {
-                    _logger.LogTrace(
-                        """Adding schedule for entity "{Kind}/{Name}" to reconcile in {Seconds}s.""",
-                        entity.Kind,
-                        entity.Name(),
-                        queueIn.TotalSeconds);
+                    _logger
+                        .LogTrace(
+                            """Adding schedule for entity "{Identifier}" to reconcile in {Seconds}s.""",
+                            entity.ToIdentifierString(),
+                            queueIn.TotalSeconds);
 
                     return new(entity, type, reconciliationTriggerSource, queueIn);
                 },
                 (_, oldEntry) =>
                 {
-                    _logger.LogTrace(
-                        """Updating schedule for entity "{Kind}/{Name}" to reconcile in {Seconds}s.""",
-                        entity.Kind,
-                        entity.Name(),
-                        queueIn.TotalSeconds);
+                    _logger
+                        .LogTrace(
+                            """Updating schedule for entity "{Identifier}" to reconcile in {Seconds}s.""",
+                            entity.ToIdentifierString(),
+                            queueIn.TotalSeconds);
 
                     oldEntry.Cancel();
                     return new(entity, type, reconciliationTriggerSource, queueIn);
@@ -190,9 +191,8 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
 
                         _logger
                             .LogTrace(
-                                """Entity "{Kind}/{Name}" is queued for reconciliation.""",
-                                queueEntry.Entity.Kind,
-                                queueEntry.Entity.Name());
+                                """Entity "{Identifier}" is queued for reconciliation.""",
+                                queueEntry.Entity.ToIdentifierString());
                     }
                 }
             }

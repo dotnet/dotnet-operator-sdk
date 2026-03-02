@@ -10,6 +10,7 @@ using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Queue;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -129,11 +130,11 @@ internal sealed class Reconciler<TEntity>(
         if (scope.ServiceProvider.GetKeyedService<IEntityFinalizer<TEntity>>(identifier) is not
             { } finalizer)
         {
-            logger.LogInformation(
-                """Entity "{Kind}/{Name}" is finalizing but this operator has no registered finalizers for the identifier {FinalizerIdentifier}.""",
-                entity.Kind,
-                entity.Name(),
-                identifier);
+            logger
+                .LogInformation(
+                    """Entity "{Identifier}" is finalizing but this operator has no registered finalizers for the identifier "{FinalizerIdentifier}".""",
+                    entity.ToIdentifierString(),
+                    identifier);
             return ReconciliationResult<TEntity>.Success(entity);
         }
 
@@ -148,14 +149,19 @@ internal sealed class Reconciler<TEntity>(
 
         if (operatorSettings.AutoDetachFinalizers && entity.RemoveFinalizer(identifier))
         {
-            entity = await client.UpdateAsync(entity, cancellationToken);
+            // FinalizeAsync completed successfully – removing the finalizer entry from the entity
+            // is a commit step that must not be cancelled. If the operator shuts down between
+            // FinalizeAsync and this UpdateAsync, the entity would be stuck in finalizer-limbo
+            // and could never be deleted by Kubernetes until the operator restarts and re-runs
+            // the full finalization again (which may or may not be idempotent in user code).
+            entity = await client.UpdateAsync(entity, CancellationToken.None);
         }
 
-        logger.LogInformation(
-            """Entity "{Kind}/{Name}" finalized with "{Finalizer}".""",
-            entity.Kind,
-            entity.Name(),
-            identifier);
+        logger
+            .LogInformation(
+                """Entity "{Identifier}" finalized with "{FinalizerIdentifier}".""",
+                entity.ToIdentifierString(),
+                identifier);
 
         return ReconciliationResult<TEntity>.Success(entity, result.RequeueAfter);
     }

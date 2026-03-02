@@ -6,6 +6,7 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Reconciliation.Queue;
+using KubeOps.Operator.Logging;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -22,11 +23,11 @@ internal sealed class EntityQueueFactory(IServiceProvider services)
             var logger = services.GetService<ILogger<EntityQueue<TEntity>>>();
             var queue = services.GetRequiredService<ITimedEntityQueue<TEntity>>();
 
-            logger?.LogTrace(
-                """Queue entity "{Kind}/{Name}" in {Milliseconds}ms.""",
-                entity.Kind,
-                entity.Name(),
-                timeSpan.TotalMilliseconds);
+            logger?
+                .LogTrace(
+                    """Queue entity "{Identifier}" in {Seconds}s.""",
+                    entity.ToIdentifierString(),
+                    timeSpan.TotalSeconds);
 
             queue.Enqueue(entity, type, triggerSource, timeSpan, cancellationToken);
         };

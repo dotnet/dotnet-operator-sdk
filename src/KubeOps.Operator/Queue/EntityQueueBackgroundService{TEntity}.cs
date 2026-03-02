@@ -147,7 +147,10 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
     private async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
-        logger.LogTrace("""Executing requested queued reconciliation for "{Kind}/{Name}".""", entry.Entity.Kind, entry.Entity.Name());
+        logger
+            .LogTrace(
+                """Executing requested queued reconciliation for "{Identifier}".""",
+                entry.Entity.ToIdentifierString());
 
         if (await client.GetAsync<TEntity>(entry.Entity.Name(), entry.Entity.Namespace(), cancellationToken) is { } entity)
         {
@@ -159,8 +162,10 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                 cancellationToken);
         }
 
-        logger.LogWarning(
-            """Queued entity "{Kind}/{Name}" was not found. Skipping reconciliation.""", entry.Entity.Kind, entry.Entity.Name());
+        logger
+            .LogWarning(
+                """Queued entity "{Identifier}" was not found. Skipping reconciliation.""",
+                entry.Entity.ToIdentifierString());
         return ReconciliationResult<TEntity>.Failure(entry.Entity, "Entity was not found.");
     }
 
@@ -226,7 +231,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         var uid = entry.Entity.Uid();
         var uidLock = _uidLocks.GetOrAdd(uid, _ => new(1, 1));
 
-        using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event for {entry.Entity.Kind}/{entry.Entity.Name()} (UID: {entry.Entity.Uid()})""", ActivityKind.Consumer);
+        using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event for "{entry.Entity.ToIdentifierString()}".""", ActivityKind.Consumer);
         using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.ReconciliationType, entry.Entity));
 
         try
@@ -241,61 +246,53 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
             if (!canAcquireLock)
             {
-                await HandleLockingConflictAsync(entry, uid, cancellationToken);
+                await HandleLockingConflictAsync(entry, cancellationToken);
                 return;
             }
 
             if (operatorSettings.ParallelReconciliationOptions.ConflictStrategy is ParallelReconciliationConflictStrategy.WaitForCompletion)
             {
-                logger.LogDebug(
-                    "Trying to acquire lock for {Kind}/{Name} (UID: {Uid}). Waiting for completion.",
-                    entry.Entity.Kind,
-                    entry.Entity.Name(),
-                    uid);
+                logger
+                    .LogDebug(
+                        """Trying to acquire lock for "{Identifier}". Waiting for completion.""",
+                        entry.Entity.ToIdentifierString());
                 await uidLock.WaitAsync(cancellationToken);
             }
 
             try
             {
-                logger.LogInformation(
-                    "Starting reconciliation for {Kind}/{Name} (UID: {Uid}).",
-                    entry.Entity.Kind,
-                    entry.Entity.Name(),
-                    uid);
+                logger
+                    .LogInformation(
+                        """Starting reconciliation for "{Identifier}".""",
+                        entry.Entity.ToIdentifierString());
 
                 var result = await ReconcileSingleAsync(entry, cancellationToken);
 
-                logger.LogInformation(
-                    "Completed reconciliation for {Kind}/{Name} (UID: {Uid}) {State}.",
-                    entry.Entity.Kind,
-                    entry.Entity.Name(),
-                    uid,
-                    result.IsSuccess ? "successfully" : "with failures");
+                logger
+                    .LogInformation(
+                        """Completed reconciliation for "{Identifier}" {State}.""",
+                        entry.Entity.ToIdentifierString(),
+                        result.IsSuccess
+                            ? "successfully"
+                            : "with failures");
             }
             finally
             {
                 uidLock.Release();
             }
         }
-        catch (OperationCanceledException e) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            logger.LogError(
-                e,
-                """Queued reconciliation for the entity of type {ResourceType} for "{Kind}/{Name}" (UID: {Uid}) failed.""",
-                typeof(TEntity).Name,
-                entry.Entity.Kind,
-                entry.Entity.Name(),
-                uid);
-        }
-        catch (Exception e)
-        {
-            logger.LogError(
-                e,
-                """Queued reconciliation for the entity of type {ResourceType} for "{Kind}/{Name}" (UID: {Uid}) failed.""",
-                typeof(TEntity).Name,
-                entry.Entity.Kind,
-                entry.Entity.Name(),
-                uid);
+            // Catches all unexpected errors, including OperationCanceledException that was NOT triggered
+            // by the operator's own cancellation token (i.e. an internal abort from within the reconciler).
+            // Intentional shutdown cancellations (IsCancellationRequested == true) are re-thrown and handled
+            // by the caller in WatchAsync.
+            logger
+                .LogError(
+                    e,
+                    """Queued "{ReconciliationType}" reconciliation for "{Identifier}" failed.""",
+                    entry.ReconciliationType,
+                    entry.Entity.ToIdentifierString());
         }
         finally
         {
@@ -306,24 +303,21 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         }
     }
 
-    private async Task HandleLockingConflictAsync(QueueEntry<TEntity> entry, string uid, CancellationToken cancellationToken)
+    private async Task HandleLockingConflictAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
         switch (operatorSettings.ParallelReconciliationOptions.ConflictStrategy)
         {
             case ParallelReconciliationConflictStrategy.Discard:
-                logger.LogDebug(
-                    "Entity {Kind}/{Name} (UID: {Uid}) is already being reconciled. Discarding request.",
-                    entry.Entity.Kind,
-                    entry.Entity.Name(),
-                    uid);
+                logger
+                    .LogDebug(
+                        """Entity "{Identifier}" is already being reconciled. Discarding request.""",
+                        entry.Entity.ToIdentifierString());
                 break;
 
             case ParallelReconciliationConflictStrategy.RequeueAfterDelay:
                 logger.LogDebug(
-                    "Entity {Kind}/{Name} (UID: {Uid}) is already being reconciled. Requeueing after {Delay}s.",
-                    entry.Entity.Kind,
-                    entry.Entity.Name(),
-                    uid,
+                    """Entity "{Identifier}" is already being reconciled. Requeueing after {Delay}s.""",
+                    entry.Entity.ToIdentifierString(),
                     operatorSettings.ParallelReconciliationOptions.GetEffectiveRequeueDelay().TotalSeconds);
 
                 await queue.Enqueue(
