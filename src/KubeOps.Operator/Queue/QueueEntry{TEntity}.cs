@@ -7,20 +7,23 @@ using KubeOps.Abstractions.Reconciliation;
 namespace KubeOps.Operator.Queue;
 
 /// <summary>
-/// Represents an entry in the reconciliation queue for an entity of type <typeparamref name="TEntity"/>.
+/// Represents a single entry in the reconciliation queue, pairing a Kubernetes entity with its
+/// reconciliation context.
 /// </summary>
-/// <remarks>
-/// <para>
-/// Each entry contains an entity and the type of reconciliation operation (Added, Modified, or Deleted)
-/// that determines how the entity will be processed by the reconciler.
-/// </para>
-/// <para>
-/// The source of the reconciliation request can be either the Kubernetes API server
-/// (via ResourceWatcher observing watch events) or an internal operation (error retry,
-/// conflict retry, or periodic requeue).
-/// </para>
-/// </remarks>
 /// <typeparam name="TEntity">
 /// The type of the Kubernetes entity associated with this queue entry.
 /// </typeparam>
+/// <param name="Entity">The Kubernetes entity to be reconciled.</param>
+/// <param name="ReconciliationType">
+/// One of the enumeration values that specifies the reconciliation operation to perform.
+/// </param>
+/// <param name="ReconciliationTriggerSource">
+/// One of the enumeration values that specifies the origin of the reconciliation request.
+/// </param>
+/// <remarks>
+/// Entries originate either from Kubernetes watch events (API server source) or from internal
+/// operator operations such as error retries, conflict retries, or periodic requeues (operator source).
+/// The combination of <see cref="ReconciliationType"/> and <see cref="ReconciliationTriggerSource"/>
+/// gives the reconciler full context to decide how to process the entry.
+/// </remarks>
 public readonly record struct QueueEntry<TEntity>(TEntity Entity, ReconciliationType ReconciliationType, ReconciliationTriggerSource ReconciliationTriggerSource);

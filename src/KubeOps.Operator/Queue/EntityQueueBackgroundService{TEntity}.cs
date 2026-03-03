@@ -76,6 +76,13 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
     private bool _disposed;
 
+    /// <inheritdoc cref="IHostedService.StartAsync"/>
+    /// <remarks>
+    /// Schedules the queue processing loop as a background task using <see cref="Task.Run(Func{Task}, CancellationToken)"/>.
+    /// The <paramref name="cancellationToken"/> passed to this method is intentionally not used for the processing loop;
+    /// cancellation is managed via an internal <see cref="CancellationTokenSource"/> that is signalled by <see cref="StopAsync"/>.
+    /// This avoids cancelling the scheduled work during the host startup phase.
+    /// </remarks>
     public Task StartAsync(CancellationToken cancellationToken)
     {
         // The current implementation of IHostedService expects that StartAsync is "really" asynchronous.
@@ -93,11 +100,13 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc/>
     public Task StopAsync(CancellationToken cancellationToken)
         => _disposed
             ? Task.CompletedTask
             : _cts.CancelAsync();
 
+    /// <inheritdoc/>
     public void Dispose()
     {
         _cts.Dispose();
@@ -115,6 +124,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         _disposed = true;
     }
 
+    /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
         await CastAndDispose(_cts);

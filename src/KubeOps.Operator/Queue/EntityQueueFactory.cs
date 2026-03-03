@@ -13,9 +13,13 @@ using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Queue;
 
+/// <summary>
+/// Creates <see cref="EntityQueue{TEntity}"/> delegates that resolve the required queue and logger from the DI container.
+/// </summary>
 internal sealed class EntityQueueFactory(IServiceProvider services)
     : IEntityQueueFactory
 {
+    /// <inheritdoc/>
     public EntityQueue<TEntity> Create<TEntity>()
         where TEntity : IKubernetesObject<V1ObjectMeta> =>
         (entity, type, triggerSource, timeSpan, cancellationToken) =>

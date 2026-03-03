@@ -44,6 +44,19 @@ public class ResourceWatcher<TEntity>(
 
     ~ResourceWatcher() => Dispose(false);
 
+    /// <summary>
+    /// Gets the fusion cache used to track the last observed generation for each entity,
+    /// enabling generation-based deduplication of watch events.
+    /// </summary>
+    /// <value>
+    /// The <see cref="IFusionCache"/> instance scoped to the resource watcher cache name.
+    /// </value>
+    /// <remarks>
+    /// Subclasses may access this cache to read or invalidate cached generation values.
+    /// For example, <see cref="LeaderAwareResourceWatcher{TEntity}"/> calls
+    /// <see cref="IFusionCache.Clear"/> when leadership is lost to ensure stale generation
+    /// data is not carried over to the next watch session.
+    /// </remarks>
     protected IFusionCache EntityCache { get; } = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
 
     public virtual Task StartAsync(CancellationToken cancellationToken)
