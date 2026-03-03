@@ -363,6 +363,36 @@ public sealed class ReconcilerTest
             Times.Once);
     }
 
+    [Fact]
+    public async Task Reconcile_Should_Update_Entity_With_CancellationToken_None_After_Finalization()
+    {
+        _settings.AutoDetachFinalizers = true;
+
+        const string finalizerName = "test-finalizer";
+        var entity = CreateTestEntityForFinalization(deletionTimestamp: DateTime.UtcNow, finalizer: finalizerName);
+        var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+
+        var mockFinalizer = new Mock<IEntityFinalizer<V1ConfigMap>>();
+
+        _mockClient
+            .Setup(c => c.UpdateAsync(It.IsAny<V1ConfigMap>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entity);
+
+        mockFinalizer
+            .Setup(c => c.FinalizeAsync(It.IsAny<V1ConfigMap>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ReconciliationResult<V1ConfigMap>.Success(entity));
+
+        var reconciler = CreateReconcilerForFinalizer(mockFinalizer.Object, finalizerName);
+
+        // Use a cancellable token to verify the implementation ignores it for the commit step
+        using var cts = new CancellationTokenSource();
+        await reconciler.Reconcile(context, cts.Token);
+
+        _mockClient.Verify(
+            c => c.UpdateAsync(It.IsAny<V1ConfigMap>(), CancellationToken.None),
+            Times.Once);
+    }
+
     private Reconciler<V1ConfigMap> CreateReconcilerForController(IEntityController<V1ConfigMap> controller)
     {
         var mockScope = new Mock<IServiceScope>();

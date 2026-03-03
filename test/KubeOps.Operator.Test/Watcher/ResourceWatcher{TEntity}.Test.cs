@@ -13,6 +13,7 @@ using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Constants;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 using KubeOps.Operator.Watcher;
@@ -60,7 +61,7 @@ public sealed class ResourceWatcherTest
         var entity = CreateTestEntity();
         var mockCache = new Mock<IFusionCache>();
         var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
-        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue:mockQueue.Object);
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object);
 
         // Act
         await watcher.InvokeOnEventAsync(
@@ -71,13 +72,13 @@ public sealed class ResourceWatcherTest
         // Assert
         mockCache.Verify(
             c => c.RemoveAsync(
-                It.Is<string>( uuid => uuid == entity.Uid()),
+                It.Is<string>(uuid => uuid == entity.Uid()),
                 It.IsAny<FusionCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
         mockCache.Verify(
             c => c.SetAsync(
-                It.Is<string>( uuid => uuid == entity.Uid()),
+                It.Is<string>(uuid => uuid == entity.Uid()),
                 It.IsAny<long>(),
                 It.IsAny<FusionCacheEntryOptions>(),
                 It.IsAny<IEnumerable<string>?>(),
@@ -92,7 +93,7 @@ public sealed class ResourceWatcherTest
         var entity = CreateTestEntity();
         var mockCache = new Mock<IFusionCache>();
         var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
-        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue:mockQueue.Object);
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object);
 
         mockCache
             .Setup(c =>
@@ -120,7 +121,7 @@ public sealed class ResourceWatcherTest
             Times.Once);
         mockCache.Verify(
             c => c.SetAsync(
-                It.Is<string>( uuid => uuid == entity.Uid()),
+                It.Is<string>(uuid => uuid == entity.Uid()),
                 It.Is<long>(generation => generation == entity.Generation()),
                 It.IsAny<FusionCacheEntryOptions>(),
                 It.IsAny<IEnumerable<string>?>(),
@@ -163,7 +164,7 @@ public sealed class ResourceWatcherTest
             Times.Never);
         mockCache.Verify(
             c => c.SetAsync(
-                It.Is<string>( uuid => uuid == entity.Uid()),
+                It.Is<string>(uuid => uuid == entity.Uid()),
                 It.IsAny<long>(),
                 It.IsAny<FusionCacheEntryOptions>(),
                 It.IsAny<IEnumerable<string>?>(),
@@ -173,10 +174,44 @@ public sealed class ResourceWatcherTest
         mockLogger.Verify(logger => logger.Log(
                 It.Is<LogLevel>(logLevel => logLevel == LogLevel.Debug),
                 It.Is<EventId>(eventId => eventId.Id == 0),
-                It.Is<It.IsAnyType>((@object, type) => @object.ToString() == $"""Entity "{entity.Kind}/{entity.Name()}" modification did not modify generation. Skip event.""" && type.Name == "FormattedLogValues"),
+                It.Is<It.IsAnyType>((@object, type) => @object.ToString() == $"""Entity "{entity.ToIdentifierString()}" modification did not modify generation. Skip event.""" && type.Name == "FormattedLogValues"),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception, string>>()!),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task OnEvent_Should_Enqueue_When_Entity_Has_DeletionTimestamp_Without_Generation_Check()
+    {
+        // Arrange
+        var entity = CreateTestEntity();
+        entity.Metadata.DeletionTimestamp = DateTime.UtcNow;
+
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object);
+
+        // Act
+        await watcher.InvokeOnEventAsync(
+            WatchEventType.Modified,
+            entity,
+            TestContext.Current.CancellationToken);
+
+        // Assert – enqueued without any cache read (generation check bypassed)
+        mockQueue.Verify(
+            q => q.Enqueue(
+                entity,
+                ReconciliationType.Modified,
+                ReconciliationTriggerSource.ApiServer,
+                TimeSpan.Zero,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        mockCache.Verify(
+            c => c.TryGetAsync<long?>(
+                It.IsAny<string>(),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     private static V1OperatorIntegrationTestEntity CreateTestEntity()
