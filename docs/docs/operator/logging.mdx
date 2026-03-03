@@ -24,12 +24,19 @@ You can log from your code by injecting `ILogger<MyEntityController>` (or a simi
 
 Scopes define a logical boundary in which all log entries are automatically enriched with contextual metadata. This is especially useful for correlating logs related to a specific request or operation.
 
-By default, the [ResourceWatcher](https://github.com/dotnet/dotnet-operator-sdk/blob/main/src/KubeOps.Operator/Watcher/ResourceWatcher%7BTEntity%7D.cs) starts a new scope for every watch event it processes. Each scope includes:
+By default, two components start a new scope for each operation they perform:
 
-- `EventType`: Type of the received watch event (`Added`, `Modified`, `Deleted`, `Error`, `Bookmark`)
+- The [ResourceWatcher](https://github.com/dotnet/dotnet-operator-sdk/blob/main/src/KubeOps.Operator/Watcher/ResourceWatcher%7BTEntity%7D.cs) opens a scope for every watch event received from the Kubernetes API server.
+- The [EntityQueueBackgroundService](https://github.com/dotnet/dotnet-operator-sdk/blob/main/src/KubeOps.Operator/Queue/EntityQueueBackgroundService%7BTEntity%7D.cs) opens a scope for every queue entry it processes before invoking the reconciler.
+
+Both scopes carry the same fields:
+
+- `EventType`: Type of the reconciliation operation (`Added`, `Modified`, `Deleted`)
+- `ReconciliationTriggerSource`: Origin of the reconciliation request (`ApiServer` for watch events, `Operator` for internal retries and periodic requeues)
 - `Kind`: Custom Resource Definition (CRD) kind
 - `Namespace`: CRD namespace
 - `Name`: CRD name
+- `Uid`: CRD unique identifier
 - `ResourceVersion`: CRD resource version
 
 You can create additional scopes in your code using `logger.BeginScope(state)`, where `state` can be either a string or a custom object.
