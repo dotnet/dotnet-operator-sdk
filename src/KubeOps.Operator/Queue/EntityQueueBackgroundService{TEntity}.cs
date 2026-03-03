@@ -298,6 +298,12 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                     """Queued "{ReconciliationType}" reconciliation for "{Identifier}" failed.""",
                     entry.ReconciliationType,
                     entry.Entity.ToIdentifierString());
+
+            // re-enqueue? see: https://github.com/dotnet/dotnet-operator-sdk/issues/554
+            // any exception here is considered a failure of the reconciliation, so we don't want to lose the event.
+            // Re-enqueueing will allow retrying after transient issues (e.g. temporary network failure),
+            // but it also has the risk of causing an infinite loop of failures if the exception is not transient.
+            // To mitigate this, we could consider implementing a retry limit or delay before re-enqueueing.
         }
         finally
         {
