@@ -205,9 +205,9 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
             await Task.WhenAll(tasks);
         }
-        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            logger.LogInformation(ex, "Queue processing cancelled during shutdown.");
+            // Expected during shutdown, no action needed.
         }
     }
 
