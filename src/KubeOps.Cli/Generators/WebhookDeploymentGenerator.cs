@@ -74,7 +74,7 @@ internal sealed class WebhookDeploymentGenerator(OutputFormat format) : IConfigG
                                 {
                                     new() { ConfigMapRef = new() { Name = "webhook-config" } },
                                 },
-                            Ports = new List<V1ContainerPort> { new() { HostPort = 5001, Name = "https" } },
+                            Ports = new List<V1ContainerPort> { new() { HostPort = 5001, ContainerPort = 5001, Name = "https" } },
                             Resources = new()
                             {
                                 Requests = new Dictionary<string, ResourceQuantity>
