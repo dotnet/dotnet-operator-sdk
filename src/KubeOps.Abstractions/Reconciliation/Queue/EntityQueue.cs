@@ -28,6 +28,11 @@ namespace KubeOps.Abstractions.Reconciliation.Queue;
 /// The time span to wait before the entity is processed by the reconciler.
 /// Use <see cref="TimeSpan.Zero"/> for immediate processing.
 /// </param>
+/// <param name="retryCount">
+/// The number of times this entity has already been retried for the current reconciliation attempt.
+/// Pass <c>0</c> for an initial (non-retry) enqueue. The value is carried forward across re-enqueues
+/// so that retry-limit checks and back-off calculations can be applied consistently.
+/// </param>
 /// <param name="cancellationToken">
 /// A token to monitor for cancellation requests while waiting for the queue duration to elapse.
 /// </param>
