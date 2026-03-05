@@ -67,7 +67,7 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromMilliseconds(1000), TestContext.Current.CancellationToken);
+            queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromMilliseconds(1000), retryCount: 0, TestContext.Current.CancellationToken);
             return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
 

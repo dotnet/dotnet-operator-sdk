@@ -92,7 +92,7 @@ public sealed class CancelEntityRequeueIntegrationTest : IntegrationTestBase
             // schedule on first invocation
             if (svc.Invocations.Count == 0)
             {
-                queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+                queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromSeconds(5), retryCount: 0, TestContext.Current.CancellationToken);
             }
             svc.Invocation(entity);
 

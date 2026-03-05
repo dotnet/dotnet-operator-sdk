@@ -22,17 +22,18 @@ internal sealed class EntityQueueFactory(IServiceProvider services)
     /// <inheritdoc/>
     public EntityQueue<TEntity> Create<TEntity>()
         where TEntity : IKubernetesObject<V1ObjectMeta> =>
-        (entity, type, triggerSource, timeSpan, cancellationToken) =>
+        (entity, type, triggerSource, timeSpan, retryCount, cancellationToken) =>
         {
             var logger = services.GetService<ILogger<EntityQueue<TEntity>>>();
             var queue = services.GetRequiredService<ITimedEntityQueue<TEntity>>();
 
             logger?
                 .LogTrace(
-                    """Queue entity "{Identifier}" in {Seconds}s.""",
+                    """Queue entity "{Identifier}"{Retry} in {Seconds}s.""",
                     entity.ToIdentifierString(),
+                    retryCount > 0 ? $" (Retry: {retryCount})" : string.Empty,
                     timeSpan.TotalSeconds);
 
-            queue.Enqueue(entity, type, triggerSource, timeSpan, cancellationToken);
+            queue.Enqueue(entity, type, triggerSource, timeSpan, retryCount, cancellationToken);
         };
 }

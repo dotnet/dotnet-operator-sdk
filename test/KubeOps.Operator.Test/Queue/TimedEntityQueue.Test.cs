@@ -27,12 +27,14 @@ public sealed class TimedEntityQueueTest
             ReconciliationType.Modified,
             ReconciliationTriggerSource.Operator,
             TimeSpan.FromMilliseconds(1),
+            retryCount: 0,
             TestContext.Current.CancellationToken);
         await queue.Enqueue(
             CreateSecret("app-ns2", "secret-name"),
             ReconciliationType.Modified,
             ReconciliationTriggerSource.Operator,
             TimeSpan.FromMilliseconds(100),
+            retryCount: 0,
             TestContext.Current.CancellationToken);
 
         var items = new List<V1Secret>();
@@ -68,6 +70,7 @@ public sealed class TimedEntityQueueTest
             ReconciliationType.Modified,
             ReconciliationTriggerSource.Operator,
             TimeSpan.FromMilliseconds(200),
+            retryCount: 0,
             TestContext.Current.CancellationToken);
 
         // Cancel before the entry is promoted
@@ -104,6 +107,7 @@ public sealed class TimedEntityQueueTest
             ReconciliationType.Added,
             ReconciliationTriggerSource.ApiServer,
             TimeSpan.FromMilliseconds(300),
+            retryCount: 0,
             TestContext.Current.CancellationToken);
 
         await queue.Remove(secret, TestContext.Current.CancellationToken);

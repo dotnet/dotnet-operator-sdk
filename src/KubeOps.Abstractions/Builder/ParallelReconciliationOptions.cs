@@ -140,6 +140,47 @@ public sealed record ParallelReconciliationOptions
     public TimeSpan? RequeueDelay { get; set; }
 
     /// <summary>
+    /// Gets or sets the maximum number of times a failed reconciliation is automatically retried
+    /// before the entry is permanently dropped.
+    /// </summary>
+    /// <value>
+    /// The maximum number of retry attempts after an error. The default is <c>5</c>.
+    /// Set to <c>0</c> to disable automatic error retries entirely.
+    /// </value>
+    /// <remarks>
+    /// <para>
+    /// When a reconciliation throws an unhandled exception, the operator requeues the entry with an
+    /// exponential back-off delay (see <see cref="ErrorBackoffBase"/>). Once the number of retries
+    /// reaches this limit the entry is discarded and only an error is logged. This prevents a
+    /// non-transient failure from causing an infinite retry loop.
+    /// </para>
+    /// </remarks>
+    /// <seealso cref="ErrorBackoffBase"/>
+    public int MaxErrorRetries { get; set; } = 5;
+
+    /// <summary>
+    /// Gets or sets the base duration used to compute the exponential back-off delay between
+    /// successive error retries.
+    /// </summary>
+    /// <value>
+    /// The base time span for exponential back-off. The default is <c>2 seconds</c>.
+    /// </value>
+    /// <remarks>
+    /// <para>
+    /// The actual delay for retry attempt <c>n</c> (1-based) is calculated as
+    /// <c>ErrorBackoffBase * 2^(n-1)</c>. For example, with the default of 2 seconds:
+    /// attempt 1 waits 2 s, attempt 2 waits 4 s, attempt 3 waits 8 s, and so on.
+    /// </para>
+    /// <para>
+    /// Choose a base that fits the expected duration of transient failures (e.g., temporary
+    /// network outages or API server unavailability). Very short bases may cause excessive load
+    /// during outages; very long bases may delay recovery unnecessarily.
+    /// </para>
+    /// </remarks>
+    /// <seealso cref="MaxErrorRetries"/>
+    public TimeSpan ErrorBackoffBase { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     /// Gets the effective requeue delay, using a default value if <see cref="RequeueDelay"/> is <see langword="null"/>.
     /// </summary>
     /// <returns>
@@ -150,4 +191,25 @@ public sealed record ParallelReconciliationOptions
     /// default value when the delay is not explicitly configured.
     /// </remarks>
     public TimeSpan GetEffectiveRequeueDelay() => RequeueDelay ?? TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Computes the back-off delay for a given error-retry attempt using exponential back-off.
+    /// </summary>
+    /// <param name="retryCount">The 1-based index of the retry attempt.</param>
+    /// <returns>
+    /// The delay before the next retry attempt, calculated as <c>ErrorBackoffBase * 2^(retryCount-1)</c>.
+    /// </returns>
+    /// <example>
+    /// <code language="csharp">
+    /// var options = new ParallelReconciliationOptions { ErrorBackoffBase = TimeSpan.FromSeconds(2) };
+    /// // Retry 1 → 2 s, Retry 2 → 4 s, Retry 3 → 8 s
+    /// var delay = options.GetErrorBackoffDelay(retryCount: 2); // TimeSpan.FromSeconds(4)
+    /// </code>
+    /// </example>
+    public TimeSpan GetErrorBackoffDelay(int retryCount)
+    {
+        // 2^(retryCount-1) grows quickly; cap the exponent at 30 to avoid TimeSpan overflow.
+        var exponent = Math.Min(retryCount - 1, 30);
+        return ErrorBackoffBase * Math.Pow(2, exponent);
+    }
 }

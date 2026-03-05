@@ -66,7 +66,8 @@ internal sealed class Reconciler<TEntity>(
                     result.Entity,
                     reconciliationContext.EventType,
                     ReconciliationTriggerSource.Operator,
-                    result.RequeueAfter.Value,
+                    queueIn: result.RequeueAfter.Value,
+                    retryCount: 0,
                     cancellationToken);
         }
 

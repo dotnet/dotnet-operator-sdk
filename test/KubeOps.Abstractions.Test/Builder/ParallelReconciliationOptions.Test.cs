@@ -47,4 +47,32 @@ public sealed class ParallelReconciliationOptionsTest
 
         options.GetEffectiveRequeueDelay().Should().Be(configured);
     }
+
+    [Fact]
+    public void MaxErrorRetries_Should_Default_To_Five()
+    {
+        var options = new ParallelReconciliationOptions();
+
+        options.MaxErrorRetries.Should().Be(5);
+    }
+
+    [Fact]
+    public void ErrorBackoffBase_Should_Default_To_Two_Seconds()
+    {
+        var options = new ParallelReconciliationOptions();
+
+        options.ErrorBackoffBase.Should().Be(TimeSpan.FromSeconds(2));
+    }
+
+    [Theory]
+    [InlineData(1, 2)]   // base * 2^0 = 2 s
+    [InlineData(2, 4)]   // base * 2^1 = 4 s
+    [InlineData(3, 8)]   // base * 2^2 = 8 s
+    [InlineData(4, 16)]  // base * 2^3 = 16 s
+    public void GetErrorBackoffDelay_Should_Return_Exponential_Backoff(int retryCount, double expectedSeconds)
+    {
+        var options = new ParallelReconciliationOptions { ErrorBackoffBase = TimeSpan.FromSeconds(2) };
+
+        options.GetErrorBackoffDelay(retryCount).Should().Be(TimeSpan.FromSeconds(expectedSeconds));
+    }
 }

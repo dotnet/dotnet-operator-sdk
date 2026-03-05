@@ -20,6 +20,7 @@ internal sealed record TimedQueueEntry<TEntity>
     private readonly TEntity _entity;
     private readonly ReconciliationType _reconciliationType;
     private readonly ReconciliationTriggerSource _reconciliationTriggerSource;
+    private readonly int _retryCount;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TimedQueueEntry{TEntity}"/> class.
@@ -28,28 +29,33 @@ internal sealed record TimedQueueEntry<TEntity>
     /// <param name="reconciliationType">The type of reconciliation operation.</param>
     /// <param name="reconciliationTriggerSource">The source of the reconciliation request.</param>
     /// <param name="queueIn">The delay before the entry should be added to the queue.</param>
-    public TimedQueueEntry(TEntity entity, ReconciliationType reconciliationType, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn)
+    /// <param name="retryCount">
+    /// The number of previous failed reconciliation attempts. Preserved in the resulting
+    /// <see cref="QueueEntry{TEntity}"/> so back-off and retry-limit logic stays correct.
+    /// </param>
+    internal TimedQueueEntry(TEntity entity, ReconciliationType reconciliationType, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount)
     {
         _entity = entity;
         _reconciliationType = reconciliationType;
         _reconciliationTriggerSource = reconciliationTriggerSource;
+        _retryCount = retryCount;
         EnqueueAt = DateTimeOffset.UtcNow.Add(queueIn);
     }
 
     /// <summary>
     /// Gets the timestamp when this entry should be added to the queue.
     /// </summary>
-    public DateTimeOffset EnqueueAt { get; }
+    internal DateTimeOffset EnqueueAt { get; }
 
     /// <summary>
     /// Gets a value indicating whether this entry has been cancelled.
     /// </summary>
-    public bool IsCancelled { get; private set; }
+    internal bool IsCancelled { get; private set; }
 
     /// <summary>
     /// Marks this entry as cancelled, preventing it from being added to the queue.
     /// </summary>
-    public void Cancel()
+    internal void Cancel()
     {
         IsCancelled = true;
     }
@@ -58,6 +64,6 @@ internal sealed record TimedQueueEntry<TEntity>
     /// Creates a <see cref="QueueEntry{TEntity}"/> from this timed entry.
     /// </summary>
     /// <returns>A queue entry ready for reconciliation processing.</returns>
-    public QueueEntry<TEntity> ToQueueEntry()
-        => new(_entity, _reconciliationType, _reconciliationTriggerSource);
+    internal QueueEntry<TEntity> ToQueueEntry()
+        => new(_entity, _reconciliationType, _reconciliationTriggerSource, _retryCount);
 }

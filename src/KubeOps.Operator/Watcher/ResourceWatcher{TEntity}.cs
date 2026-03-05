@@ -188,7 +188,8 @@ public class ResourceWatcher<TEntity>(
                 entity,
                 eventType.ToReconciliationType(),
                 ReconciliationTriggerSource.ApiServer,
-                TimeSpan.Zero,
+                queueIn: TimeSpan.Zero,
+                retryCount: 0,
                 cancellationToken);
     }
 

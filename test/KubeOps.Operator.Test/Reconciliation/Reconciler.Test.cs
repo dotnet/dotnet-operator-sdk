@@ -78,6 +78,7 @@ public sealed class ReconcilerTest
                 ReconciliationType.Added,
                 ReconciliationTriggerSource.Operator,
                 requeueAfter,
+                0,
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -101,6 +102,7 @@ public sealed class ReconcilerTest
                 It.IsAny<ReconciliationType>(),
                 It.IsAny<ReconciliationTriggerSource>(),
                 It.IsAny<TimeSpan>(),
+                It.IsAny<int>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }
@@ -261,6 +263,7 @@ public sealed class ReconcilerTest
                 ReconciliationType.Added,
                 ReconciliationTriggerSource.Operator,
                 requeueAfter,
+                0,
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }

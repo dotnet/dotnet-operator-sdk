@@ -33,18 +33,19 @@ public sealed class EntityQueueBackgroundServiceTest
             ReconciliationType type,
             ReconciliationTriggerSource reconciliationTriggerSource,
             TimeSpan queueIn,
+            int retryCount,
             CancellationToken cancellationToken)
         {
             EnqueueCallCount++;
-            _channel.Writer.TryWrite(new(entity, type, reconciliationTriggerSource));
+            _channel.Writer.TryWrite(new(entity, type, reconciliationTriggerSource, retryCount));
             return Task.CompletedTask;
         }
 
         public Task Remove(TEntity entity, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
-        public void Push(TEntity entity, ReconciliationType type, ReconciliationTriggerSource source)
-            => _channel.Writer.TryWrite(new(entity, type, source));
+        public void Push(TEntity entity, ReconciliationType type, ReconciliationTriggerSource source, int retryCount = 0)
+            => _channel.Writer.TryWrite(new(entity, type, source, retryCount));
 
         public void Complete()
             => _channel.Writer.Complete();
@@ -304,5 +305,124 @@ public sealed class EntityQueueBackgroundServiceTest
         await service.StopAsync(TestContext.Current.CancellationToken);
 
         queue.EnqueueCallCount.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task Failed_Reconciliation_Is_Requeued_With_ErrorRetry_Source()
+    {
+        var entity = CreateEntity();
+        var queue = new ControllableQueue<V1ConfigMap>();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+
+        clientMock
+            .Setup(c => c.GetAsync<V1ConfigMap>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entity);
+
+        reconcilerMock
+            .Setup(r => r.Reconcile(It.IsAny<ReconciliationContext<V1ConfigMap>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("transient error"));
+
+        var settings = new OperatorSettings
+        {
+            ParallelReconciliationOptions = new()
+            {
+                MaxParallelReconciliations = 2,
+                MaxErrorRetries = 3,
+                ErrorBackoffBase = TimeSpan.FromMilliseconds(10),
+            },
+        };
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        queue.Push(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+        queue.Complete();
+
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        // The entry should be requeued (at least once) with an ErrorRetry trigger.
+        queue.EnqueueCallCount.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task Failed_Reconciliation_Is_Dropped_After_Retry_Limit()
+    {
+        var entity = CreateEntity();
+
+        // Use a manually-drained queue so we can count re-enqueue calls without
+        // feeding them back into processing, which would make the count non-deterministic.
+        var queue = new ControllableQueue<V1ConfigMap>();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+
+        clientMock
+            .Setup(c => c.GetAsync<V1ConfigMap>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entity);
+
+        reconcilerMock
+            .Setup(r => r.Reconcile(It.IsAny<ReconciliationContext<V1ConfigMap>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("persistent error"));
+
+        const int maxRetries = 2;
+        var settings = new OperatorSettings
+        {
+            ParallelReconciliationOptions = new()
+            {
+                MaxParallelReconciliations = 1,
+                MaxErrorRetries = maxRetries,
+                ErrorBackoffBase = TimeSpan.FromMilliseconds(10),
+            },
+        };
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        queue.Push(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+
+        // Wait long enough for all retries to be scheduled (10ms * (1+2+4) = 70ms, add headroom).
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        // Exactly maxRetries re-enqueue calls are expected; the last attempt is dropped.
+        queue.EnqueueCallCount.Should().Be(maxRetries);
+    }
+
+    [Fact]
+    public async Task Error_Retry_Is_Disabled_When_MaxErrorRetries_Is_Zero()
+    {
+        var entity = CreateEntity();
+        var queue = new ControllableQueue<V1ConfigMap>();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+
+        clientMock
+            .Setup(c => c.GetAsync<V1ConfigMap>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entity);
+
+        reconcilerMock
+            .Setup(r => r.Reconcile(It.IsAny<ReconciliationContext<V1ConfigMap>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("error with retries disabled"));
+
+        var settings = new OperatorSettings
+        {
+            ParallelReconciliationOptions = new()
+            {
+                MaxParallelReconciliations = 2,
+                MaxErrorRetries = 0,
+            },
+        };
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        queue.Push(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+        queue.Complete();
+
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        queue.EnqueueCallCount.Should().Be(0);
     }
 }

@@ -105,7 +105,7 @@ public sealed class EventPublisherIntegrationTest : IntegrationTestBase
 
             if (svc.Invocations.Count < svc.TargetInvocationCount)
             {
-                queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromMilliseconds(10), TestContext.Current.CancellationToken);
+                queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromMilliseconds(10), retryCount: 0, TestContext.Current.CancellationToken);
             }
 
             return ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity);

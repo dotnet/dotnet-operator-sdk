@@ -68,7 +68,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
     internal int Count => _management.Count;
 
     /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Enqueue"/>
-    public Task Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, CancellationToken cancellationToken)
+    public Task Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken)
     {
         var key = this.GetKey(entity) ?? throw new InvalidOperationException("Cannot enqueue entities without name.");
 
@@ -83,7 +83,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                             entity.ToIdentifierString(),
                             queueIn.TotalSeconds);
 
-                    return new(entity, type, reconciliationTriggerSource, queueIn);
+                    return new(entity, type, reconciliationTriggerSource, queueIn, retryCount);
                 },
                 (_, oldEntry) =>
                 {
@@ -108,7 +108,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                             queueIn.TotalSeconds);
 
                     oldEntry.Cancel();
-                    return new(entity, type, reconciliationTriggerSource, queueIn);
+                    return new(entity, type, reconciliationTriggerSource, queueIn, retryCount);
                 });
 
         return Task.CompletedTask;

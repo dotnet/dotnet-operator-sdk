@@ -20,10 +20,20 @@ namespace KubeOps.Operator.Queue;
 /// <param name="ReconciliationTriggerSource">
 /// One of the enumeration values that specifies the origin of the reconciliation request.
 /// </param>
+/// <param name="RetryCount">
+/// The number of previous failed reconciliation attempts for this entry.
+/// A value of <c>0</c> indicates the first (non-retry) attempt.
+/// </param>
 /// <remarks>
 /// Entries originate either from Kubernetes watch events (API server source) or from internal
 /// operator operations such as error retries, conflict retries, or periodic requeues (operator source).
 /// The combination of <see cref="ReconciliationType"/> and <see cref="ReconciliationTriggerSource"/>
 /// gives the reconciler full context to decide how to process the entry.
+/// When <see cref="RetryCount"/> is greater than zero, the entry is being retried after a previous failure.
+/// The operator uses this value to apply exponential back-off and enforce the configured retry limit.
 /// </remarks>
-public readonly record struct QueueEntry<TEntity>(TEntity Entity, ReconciliationType ReconciliationType, ReconciliationTriggerSource ReconciliationTriggerSource);
+public readonly record struct QueueEntry<TEntity>(
+    TEntity Entity,
+    ReconciliationType ReconciliationType,
+    ReconciliationTriggerSource ReconciliationTriggerSource,
+    int RetryCount);

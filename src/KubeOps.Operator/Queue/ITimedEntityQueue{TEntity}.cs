@@ -49,6 +49,11 @@ public interface ITimedEntityQueue<TEntity> : IDisposable, IAsyncEnumerable<Queu
     /// The time span to wait before the entity becomes eligible for reconciliation.
     /// Use <see cref="TimeSpan.Zero"/> for immediate processing.
     /// </param>
+    /// <param name="retryCount">
+    /// The number of previous failed reconciliation attempts for this entry. Pass <c>0</c> for the
+    /// initial (non-retry) attempt. The value is preserved in the resulting <see cref="QueueEntry{TEntity}"/>
+    /// so that exponential back-off and retry-limit checks remain correct across requeues.
+    /// </param>
     /// <param name="cancellationToken">
     /// A token to monitor for cancellation requests during the asynchronous operation.
     /// </param>
@@ -56,10 +61,9 @@ public interface ITimedEntityQueue<TEntity> : IDisposable, IAsyncEnumerable<Queu
     /// A task that represents the asynchronous enqueue operation.
     /// </returns>
     /// <remarks>
-    /// If an entity with the same key is already queued, the existing entry is typically replaced
-    /// with the new entry and its associated delay.
+    /// If an entity with the same key is already queued, the entry scheduled to run earliest is kept.
     /// </remarks>
-    Task Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, CancellationToken cancellationToken);
+    Task Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken);
 
     /// <summary>
     /// Removes the specified entity from the queue if it is currently scheduled.

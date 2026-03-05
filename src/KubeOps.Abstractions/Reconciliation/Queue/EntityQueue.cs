@@ -58,5 +58,5 @@ namespace KubeOps.Abstractions.Reconciliation.Queue;
 /// <seealso cref="ReconciliationTriggerSource"/>
 /// <seealso cref="IEntityQueueFactory"/>
 public delegate void EntityQueue<in TEntity>(
-    TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, CancellationToken cancellationToken)
+    TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken)
     where TEntity : IKubernetesObject<V1ObjectMeta>;

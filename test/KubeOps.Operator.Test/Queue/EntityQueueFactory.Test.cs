@@ -31,22 +31,25 @@ public sealed class EntityQueueFactoryTest
 
         var entity = new V1ConfigMap { Metadata = new() { Name = "test", Uid = Guid.NewGuid().ToString() } };
         var queueIn = TimeSpan.FromSeconds(10);
+        const int retryCount = 3;
 
         enqueue(
             entity,
             ReconciliationType.Modified,
             ReconciliationTriggerSource.Operator,
             queueIn,
+            retryCount,
             TestContext.Current.CancellationToken);
 
         mockQueue
             .Verify(
                 q =>
                     q.Enqueue(
-                        entity,
-                        ReconciliationType.Modified,
-                        ReconciliationTriggerSource.Operator,
-                        queueIn,
+                        It.Is<V1ConfigMap>(e => e == entity),
+                        It.Is<ReconciliationType>(rt => rt == ReconciliationType.Modified),
+                        It.Is<ReconciliationTriggerSource>(rts => rts == ReconciliationTriggerSource.Operator),
+                        It.Is<TimeSpan>(ts => ts == queueIn),
+                        It.Is<int>(rc => rc == retryCount),
                         TestContext.Current.CancellationToken),
                 Times.Once);
     }

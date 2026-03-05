@@ -117,6 +117,7 @@ public sealed class ResourceWatcherTest
                     ReconciliationType.Modified,
                     ReconciliationTriggerSource.ApiServer,
                     TimeSpan.Zero,
+                    0,
                     It.IsAny<CancellationToken>()),
             Times.Once);
         mockCache.Verify(
@@ -160,6 +161,7 @@ public sealed class ResourceWatcherTest
                 It.IsAny<ReconciliationType>(),
                 It.IsAny<ReconciliationTriggerSource>(),
                 It.IsAny<TimeSpan>(),
+                It.IsAny<int>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
         mockCache.Verify(
@@ -204,6 +206,7 @@ public sealed class ResourceWatcherTest
                 ReconciliationType.Modified,
                 ReconciliationTriggerSource.ApiServer,
                 TimeSpan.Zero,
+                0,
                 It.IsAny<CancellationToken>()),
             Times.Once);
         mockCache.Verify(

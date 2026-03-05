@@ -299,11 +299,42 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                     entry.ReconciliationType,
                     entry.Entity.ToIdentifierString());
 
-            // re-enqueue? see: https://github.com/dotnet/dotnet-operator-sdk/issues/554
-            // any exception here is considered a failure of the reconciliation, so we don't want to lose the event.
-            // Re-enqueueing will allow retrying after transient issues (e.g. temporary network failure),
-            // but it also has the risk of causing an infinite loop of failures if the exception is not transient.
-            // To mitigate this, we could consider implementing a retry limit or delay before re-enqueueing.
+            // Retry with exponential back-off up to the configured limit to handle transient failures
+            // (e.g. temporary network outages). Once the limit is reached the entry is dropped so that
+            // a non-transient error cannot cause an infinite retry loop.
+            // See: https://github.com/dotnet/dotnet-operator-sdk/issues/554
+            var nextRetryCount = entry.RetryCount + 1;
+            var maxRetries = operatorSettings.ParallelReconciliationOptions.MaxErrorRetries;
+
+            if (maxRetries > 0 && nextRetryCount <= maxRetries)
+            {
+                var delay = operatorSettings.ParallelReconciliationOptions.GetErrorBackoffDelay(nextRetryCount);
+                logger.LogWarning(
+                    """Requeueing "{Identifier}" for error-retry {RetryCount}/{MaxRetries} in {Delay}s.""",
+                    entry.Entity.ToIdentifierString(),
+                    nextRetryCount,
+                    maxRetries,
+                    delay.TotalSeconds);
+
+                // The original trigger source is preserved so the reconciler always knows
+                // what event originally caused this reconciliation (e.g. ApiServer or Operator).
+                // RetryCount is incremented and passed explicitly so the back-off calculation
+                // stays correct across successive failures without losing state.
+                await queue.Enqueue(
+                    entry.Entity,
+                    entry.ReconciliationType,
+                    entry.ReconciliationTriggerSource,
+                    delay,
+                    nextRetryCount,
+                    CancellationToken.None);
+            }
+            else
+            {
+                logger.LogError(
+                    """Entity "{Identifier}" has exceeded the maximum error-retry limit of {MaxRetries}. Dropping entry.""",
+                    entry.Entity.ToIdentifierString(),
+                    maxRetries);
+            }
         }
         finally
         {
@@ -336,6 +367,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                     entry.ReconciliationType,
                     entry.ReconciliationTriggerSource,
                     operatorSettings.ParallelReconciliationOptions.GetEffectiveRequeueDelay(),
+                    retryCount: 0,
                     cancellationToken);
                 break;
 
