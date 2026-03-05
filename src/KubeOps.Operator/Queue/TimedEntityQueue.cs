@@ -87,28 +87,31 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                 },
                 (_, oldEntry) =>
                 {
-                    // the entry with the earliest execution time should be kept,
-                    // so only update if the new entry is scheduled to be executed sooner
-                    // than the existing one
-                    if (oldEntry.EnqueueAt <= DateTimeOffset.UtcNow.Add(queueIn))
+                    var newQueueIn = queueIn;
+                    var oldQueueIn = TimeSpan.FromTicks(Math.Max(0, oldEntry.EnqueueAt.Subtract(DateTimeOffset.UtcNow).Ticks));
+
+                    // the earliest execution time should be kept,
+                    if (oldQueueIn <= newQueueIn)
                     {
+                        newQueueIn = oldQueueIn;
+
                         _logger
                             .LogTrace(
                                 """Keeping existing schedule for entity "{Identifier}" to reconcile in {Seconds}s.""",
                                 entity.ToIdentifierString(),
-                                oldEntry.EnqueueAt.Subtract(DateTimeOffset.UtcNow).TotalSeconds);
-
-                        return oldEntry;
+                                newQueueIn.TotalSeconds);
+                    }
+                    else
+                    {
+                        _logger
+                            .LogTrace(
+                                """Updating schedule for entity "{Identifier}" to reconcile in {Seconds}s.""",
+                                entity.ToIdentifierString(),
+                                newQueueIn.TotalSeconds);
                     }
 
-                    _logger
-                        .LogTrace(
-                            """Updating schedule for entity "{Identifier}" to reconcile in {Seconds}s.""",
-                            entity.ToIdentifierString(),
-                            queueIn.TotalSeconds);
-
                     oldEntry.Cancel();
-                    return new(entity, type, reconciliationTriggerSource, queueIn, retryCount);
+                    return new(entity, type, reconciliationTriggerSource, newQueueIn, retryCount);
                 });
 
         return Task.CompletedTask;
@@ -185,7 +188,6 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                 {
                     var now = DateTimeOffset.UtcNow;
 
-                    // Check all scheduled entries
                     foreach (var (key, entry) in _management)
                     {
                         // Skip if cancelled
@@ -195,7 +197,8 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                             continue;
                         }
 
-                        // Check if entry is ready to be added to the queue and remove from management
+                        // Check if entry is ready to be added
+                        // to the queue and remove from management
                         if (entry.EnqueueAt <= now && _management.TryRemove(key, out _))
                         {
                             var queueEntry = entry.ToQueueEntry();
@@ -211,7 +214,6 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
             }
             catch (OperationCanceledException) when (_timerCts.IsCancellationRequested)
             {
-                // Expected during disposal – exit the outer loop cleanly.
 #pragma warning disable S6667
                 _logger
                     .LogDebug("Timed entity queue timer loop cancelled.");
