@@ -28,9 +28,17 @@ internal sealed class ValidationWebhookGenerator
 
         foreach (var hook in webhooks)
         {
+            var name = string.Join(".", new[]
+            {
+                "validate",
+                hook.Metadata.SingularName,
+                hook.Metadata.Group,
+                hook.Metadata.Version,
+            }.Where(s => !string.IsNullOrEmpty(s)));
+
             validatorConfig.Webhooks.Add(new()
             {
-                Name = $"validate.{hook.Metadata.SingularName}.{hook.Metadata.Group}.{hook.Metadata.Version}",
+                Name = name,
                 MatchPolicy = "Exact",
                 AdmissionReviewVersions = new[] { "v1" },
                 SideEffects = "None",
