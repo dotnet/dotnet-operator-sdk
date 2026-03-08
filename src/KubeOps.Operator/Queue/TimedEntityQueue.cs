@@ -110,8 +110,13 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                                 newQueueIn.TotalSeconds);
                     }
 
+                    // schedule deleted reconciliations must not be cancelled
+                    var newReconciliationType = oldEntry.ReconciliationType == ReconciliationType.Deleted
+                        ? oldEntry.ReconciliationType
+                        : type;
+
                     oldEntry.Cancel();
-                    return new(entity, type, reconciliationTriggerSource, newQueueIn, retryCount);
+                    return new(entity, newReconciliationType, reconciliationTriggerSource, newQueueIn, retryCount);
                 });
 
         return Task.CompletedTask;

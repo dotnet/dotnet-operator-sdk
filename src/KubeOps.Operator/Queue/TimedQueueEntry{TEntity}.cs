@@ -18,7 +18,6 @@ namespace KubeOps.Operator.Queue;
 internal sealed record TimedQueueEntry<TEntity>
 {
     private readonly TEntity _entity;
-    private readonly ReconciliationType _reconciliationType;
     private readonly ReconciliationTriggerSource _reconciliationTriggerSource;
     private readonly int _retryCount;
 
@@ -36,7 +35,7 @@ internal sealed record TimedQueueEntry<TEntity>
     internal TimedQueueEntry(TEntity entity, ReconciliationType reconciliationType, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount)
     {
         _entity = entity;
-        _reconciliationType = reconciliationType;
+        ReconciliationType = reconciliationType;
         _reconciliationTriggerSource = reconciliationTriggerSource;
         _retryCount = retryCount;
         EnqueueAt = DateTimeOffset.UtcNow.Add(queueIn);
@@ -52,6 +51,8 @@ internal sealed record TimedQueueEntry<TEntity>
     /// </summary>
     internal bool IsCancelled { get; private set; }
 
+    internal ReconciliationType ReconciliationType { get; }
+
     /// <summary>
     /// Marks this entry as cancelled, preventing it from being added to the queue.
     /// </summary>
@@ -65,5 +66,5 @@ internal sealed record TimedQueueEntry<TEntity>
     /// </summary>
     /// <returns>A queue entry ready for reconciliation processing.</returns>
     internal QueueEntry<TEntity> ToQueueEntry()
-        => new(_entity, _reconciliationType, _reconciliationTriggerSource, _retryCount);
+        => new(_entity, ReconciliationType, _reconciliationTriggerSource, _retryCount);
 }

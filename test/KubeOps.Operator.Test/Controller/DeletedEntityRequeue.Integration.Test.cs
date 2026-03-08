@@ -29,6 +29,7 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
         var e = await _client.CreateAsync(
             new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
             TestContext.Current.CancellationToken);
+
         await _client.DeleteAsync(e, TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 

@@ -47,6 +47,8 @@ public sealed class EntityControllerIntegrationTest : IntegrationTestBase
             await _client.CreateAsync(
                 new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
                 TestContext.Current.CancellationToken);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
         result.Spec.Username = "changed";
         await _client.UpdateAsync(
             result,
@@ -100,6 +102,7 @@ public sealed class EntityControllerIntegrationTest : IntegrationTestBase
             await _client.CreateAsync(
                 new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
                 TestContext.Current.CancellationToken);
+
         await _client.DeleteAsync(result, TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
