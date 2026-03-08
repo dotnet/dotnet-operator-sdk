@@ -24,7 +24,7 @@ public class HostedServiceDisposeIntegrationTest : IntegrationTestBase
         foreach (IHostedService service in hostedServices)
         {
             await Assert.IsAssignableFrom<IAsyncDisposable>(service).DisposeAsync();
-            await service.StopAsync(CancellationToken.None);
+            await service.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -36,7 +36,7 @@ public class HostedServiceDisposeIntegrationTest : IntegrationTestBase
 
         foreach (IHostedService service in hostedServices)
         {
-            await service.StopAsync(CancellationToken.None);
+            await service.StopAsync(TestContext.Current.CancellationToken);
             await Assert.IsAssignableFrom<IAsyncDisposable>(service).DisposeAsync();
         }
     }

@@ -7,6 +7,7 @@ using k8s.Models;
 
 using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 
 using Microsoft.Extensions.Logging;
 
@@ -22,22 +23,22 @@ internal sealed class KubeOpsEventFinalizerAttacherFactory(ILoggerFactory logger
         var logger = loggerFactory.CreateLogger<EntityFinalizerAttacher<TImplementation, TEntity>>();
         return (entity, token) =>
         {
-            logger.LogTrace(
-                """Try to add finalizer "{Finalizer}" on entity "{Kind}/{Name}".""",
-                identifier,
-                entity.Kind,
-                entity.Name());
+            logger
+                .LogTrace(
+                    """Try to add finalizer "{FinalizerIdentifier}" on entity "{Identifier}".""",
+                    identifier,
+                    entity.ToIdentifierString());
 
             if (!entity.AddFinalizer(identifier))
             {
                 return Task.FromResult(entity);
             }
 
-            logger.LogInformation(
-                """Added finalizer "{Finalizer}" on entity "{Kind}/{Name}".""",
-                identifier,
-                entity.Kind,
-                entity.Name());
+            logger
+                .LogInformation(
+                    """Added finalizer "{FinalizerIdentifier}" on entity "{Identifier}".""",
+                    identifier,
+                    entity.ToIdentifierString());
             return client.UpdateAsync(entity, token);
         };
     }

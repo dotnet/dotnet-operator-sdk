@@ -30,13 +30,14 @@ internal static class CacheExtensions
         var cacheBuilder = services
             .AddFusionCache(CacheConstants.CacheNames.ResourceWatcher);
 
-        if (settings.ConfigureResourceWatcherEntityCache != default)
+        if (settings.ConfigureResourceWatcherEntityCache != null)
         {
             settings.ConfigureResourceWatcherEntityCache(cacheBuilder);
         }
         else
         {
             cacheBuilder
+                .WithoutDistributedCache()
                 .WithOptions(options =>
                 {
                     options.CacheKeyPrefix = $"{CacheConstants.CacheNames.ResourceWatcher}:";

@@ -29,6 +29,7 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
         var e = await _client.CreateAsync(
             new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
             TestContext.Current.CancellationToken);
+
         await _client.DeleteAsync(e, TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
@@ -61,13 +62,13 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
     }
 
     private class TestController(InvocationCounter<V1OperatorIntegrationTestEntity> svc,
-            EntityRequeue<V1OperatorIntegrationTestEntity> requeue)
+            EntityQueue<V1OperatorIntegrationTestEntity> queue)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             svc.Invocation(entity);
-            requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(1000), CancellationToken.None);
+            queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromMilliseconds(1000), retryCount: 0, TestContext.Current.CancellationToken);
             return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
 

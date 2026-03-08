@@ -49,15 +49,15 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
         Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
 
-        // Requeue
-        Services.TryAddTransient<IEntityRequeueFactory, KubeOpsEntityRequeueFactory>();
-        Services.TryAddTransient<EntityRequeue<TEntity>>(services =>
-            services.GetRequiredService<IEntityRequeueFactory>().Create<TEntity>());
+        // Queue
+        Services.TryAddTransient<IEntityQueueFactory, EntityQueueFactory>();
+        Services.TryAddTransient<EntityQueue<TEntity>>(services =>
+            services.GetRequiredService<IEntityQueueFactory>().Create<TEntity>());
 
-        if (Settings.RequeueStrategy == RequeueStrategy.InMemory)
+        if (Settings.QueueStrategy == QueueStrategy.InMemory)
         {
             Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
-            Services.AddHostedService<EntityRequeueBackgroundService<TEntity>>();
+            Services.AddHostedService<EntityQueueBackgroundService<TEntity>>();
         }
 
         // Leader Election
