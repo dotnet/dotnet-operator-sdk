@@ -18,22 +18,39 @@ namespace KubeOps.Operator.Test.Controller;
 
 public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
 {
-    private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
+    private readonly MethodInvocationObserver<V1OperatorIntegrationTestEntity> _observer = new();
     private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
     private readonly TestNamespaceProvider _ns = new();
 
-    [Fact]
+    [Fact(Timeout = 30_000)]
     public async Task Should_Cancel_Requeue_If_Entity_Is_Deleted()
     {
-        _mock.TargetInvocationCount = 2;
-        var e = await _client.CreateAsync(
-            new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
-            TestContext.Current.CancellationToken);
+        // Arrange
+        var waitTask = _observer
+            .WaitForMethod(
+                nameof(IEntityController<>.DeletedAsync),
+                TestContext.Current.CancellationToken);
 
-        await _client.DeleteAsync(e, TestContext.Current.CancellationToken);
-        await _mock.WaitForInvocations;
+        // Act
+        var entity = await _client
+            .CreateAsync(
+                new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
+                TestContext.Current.CancellationToken);
 
-        _mock.Invocations.Count.Should().Be(2);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        await _client
+            .DeleteAsync(
+                entity,
+                TestContext.Current.CancellationToken);
+
+        await waitTask;
+
+        // Assert
+        _observer.Invocations.Count.Should().Be(2);
+        _observer.Invocations[0].Method.Should().Be(nameof(TestController.ReconcileAsync));
+        _observer.Invocations[1].Method.Should().Be(nameof(TestController.DeletedAsync));
+
         var timedEntityQueue = Services.GetRequiredService<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
         timedEntityQueue.Should().NotBeNull();
         timedEntityQueue.Should().BeOfType<TimedEntityQueue<V1OperatorIntegrationTestEntity>>();
@@ -56,25 +73,25 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
     protected override void ConfigureHost(HostApplicationBuilder builder)
     {
         builder.Services
-            .AddSingleton(_mock)
+            .AddSingleton(_observer)
             .AddKubernetesOperator(s => s.Namespace = _ns.Namespace)
             .AddController<TestController, V1OperatorIntegrationTestEntity>();
     }
 
-    private class TestController(InvocationCounter<V1OperatorIntegrationTestEntity> svc,
+    private sealed class TestController(MethodInvocationObserver<V1OperatorIntegrationTestEntity> observer,
             EntityQueue<V1OperatorIntegrationTestEntity> queue)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
-            svc.Invocation(entity);
-            queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromMilliseconds(1000), retryCount: 0, TestContext.Current.CancellationToken);
+            observer.RecordInvocation(entity);
+            queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromSeconds(60), retryCount: 0, TestContext.Current.CancellationToken);
             return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
 
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
-            svc.Invocation(entity);
+            observer.RecordInvocation(entity);
             return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
         }
     }
