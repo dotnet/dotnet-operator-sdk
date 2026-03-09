@@ -103,6 +103,8 @@ public sealed class EntityControllerIntegrationTest : IntegrationTestBase
                 new V1OperatorIntegrationTestEntity("test-entity", "username", _ns.Namespace),
                 TestContext.Current.CancellationToken);
 
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
         await _client.DeleteAsync(result, TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
 
