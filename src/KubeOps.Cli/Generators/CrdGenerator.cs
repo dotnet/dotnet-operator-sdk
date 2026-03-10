@@ -38,6 +38,7 @@ internal class CrdGenerator(MetadataLoadContext parser, byte[] caBundle,
                             {
                                 Path = $"/convert/{crd.Spec.Group}/{crd.Spec.Names.Plural}",
                                 Name = "service",
+                                NamespaceProperty = "system",
                             },
                         },
                     },

@@ -58,6 +58,7 @@ internal sealed class ValidationWebhookGenerator
                     Service = new()
                     {
                         Name = "operator",
+                        NamespaceProperty = "system",
                         Path = hook.WebhookPath,
                     },
                 },
