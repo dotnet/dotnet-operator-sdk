@@ -39,20 +39,23 @@ graph LR
 When a watch event arrives from the Kubernetes API server, KubeOps routes it through a fixed pipeline before your controller code runs:
 
 ```mermaid
-flowchart LR
-    API[Kubernetes\nAPI Server]
+flowchart TB
+    API[Kubernetes<br/>API Server]
     W[ResourceWatcher]
     Q[(TimedEntityQueue)]
     B[EntityQueueBackgroundService]
     R[Reconciler]
-    C[Your Controller\nReconcileAsync / DeletedAsync]
+    C[Your Controller<br/>ReconcileAsync / DeletedAsync]
+    F[Your Finalizer<br/>FinalizeAsync]
 
     API -->|watch event| W
-    W -->|generation check\nenqueue| Q
-    Q -->|dequeue\nafter delay| B
-    B -->|acquire semaphore\nUID lock| R
-    R --> C
-    C -->|requeueAfter| Q
+    W -->|generation check / enqueue| Q
+    Q -->|dequeue after delay| B
+    B -->|acquire semaphore / UID lock| R
+    R -->|reconcile| C
+    R -->|finalize| F
+    C -.->|requeueAfter| Q
+    F -.->|requeueAfter| Q
 ```
 
 | Component | Responsibility |
@@ -60,8 +63,9 @@ flowchart LR
 | `ResourceWatcher` | Receives raw watch events, skips events without a generation change, enqueues the rest |
 | `TimedEntityQueue` | Holds entries until their scheduled time; supports immediate and delayed dispatch |
 | `EntityQueueBackgroundService` | Controls parallelism via a global semaphore and per-UID locks before handing off to the reconciler |
-| `Reconciler` | Resolves the controller, manages finalizer attach/detach, calls `ReconcileAsync` or `DeletedAsync` |
+| `Reconciler` | Resolves the controller, manages finalizer attach/detach, calls either `ReconcileAsync`/`DeletedAsync` on the controller or `FinalizeAsync` on a registered finalizer |
 | Your Controller | Implements the business logic for desired-state reconciliation |
+| Your Finalizer | Runs cleanup logic before a resource is deleted; invoked instead of the controller when finalization is required |
 
 The `requeueAfter` path (dashed) is triggered when your controller returns a `ReconciliationResult` with a non-zero `RequeueAfter` value.
 
