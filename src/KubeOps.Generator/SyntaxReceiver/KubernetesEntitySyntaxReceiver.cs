@@ -93,19 +93,30 @@ internal sealed class KubernetesEntitySyntaxReceiver : ISyntaxContextReceiver
         }
 
         var typeSymbol = ModelExtensions.GetDeclaredSymbol(context.SemanticModel, cls);
-        if (typeSymbol is not INamedTypeSymbol namedTypeSymbol || !DiscoveredEntities.Add(namedTypeSymbol))
+        if (typeSymbol is not INamedTypeSymbol namedTypeSymbol)
         {
             return;
+        }
+
+        var fullyQualifiedName = namedTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        // if the entity was already discovered via another controller/finalizer,
+        // remove it to register the entity as coming from the same assembly
+        if (!DiscoveredEntities.Add(namedTypeSymbol))
+        {
+            var entity = Entities
+                .First(e => e.ClassDeclaration.FullyQualifiedName == fullyQualifiedName);
+            Entities.Remove(entity);
         }
 
         Entities.Add(
             new(
                 new(
                     ClassName: cls.Identifier.ToString(),
-                    FullyQualifiedName: typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    Namespace: typeSymbol.ContainingNamespace.IsGlobalNamespace
+                    FullyQualifiedName: fullyQualifiedName,
+                    Namespace: namedTypeSymbol.ContainingNamespace.IsGlobalNamespace
                         ? null
-                        : typeSymbol.ContainingNamespace.ToDisplayString(),
+                        : namedTypeSymbol.ContainingNamespace.ToDisplayString(),
                     Modifiers: cls.Modifiers,
                     IsPartial: cls.Modifiers.Any(SyntaxKind.PartialKeyword),
                     HasParameterlessConstructor: cls.Members.Any(m
@@ -138,9 +149,9 @@ internal sealed class KubernetesEntitySyntaxReceiver : ISyntaxContextReceiver
         }
     }
 
-    private void AddEntityFromSymbol(INamedTypeSymbol typeSymbol)
+    private void AddEntityFromSymbol(INamedTypeSymbol namedTypeSymbol)
     {
-        var attr = typeSymbol
+        var attr = namedTypeSymbol
             .GetAttributes()
             .FirstOrDefault(a => a.AttributeClass?.Name == "KubernetesEntityAttribute");
 
@@ -149,7 +160,7 @@ internal sealed class KubernetesEntitySyntaxReceiver : ISyntaxContextReceiver
             return;
         }
 
-        var kind = GetAttributeValue(attr, KindName) ?? typeSymbol.Name;
+        var kind = GetAttributeValue(attr, KindName) ?? namedTypeSymbol.Name;
         var version = GetAttributeValue(attr, VersionName) ?? DefaultVersion;
         var group = GetAttributeValue(attr, GroupName);
         var plural = GetAttributeValue(attr, PluralName);
@@ -157,14 +168,14 @@ internal sealed class KubernetesEntitySyntaxReceiver : ISyntaxContextReceiver
         Entities.Add(
             new(
                 new(
-                    ClassName: typeSymbol.Name,
-                    FullyQualifiedName: typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    Namespace: typeSymbol.ContainingNamespace.IsGlobalNamespace
+                    ClassName: namedTypeSymbol.Name,
+                    FullyQualifiedName: namedTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    Namespace: namedTypeSymbol.ContainingNamespace.IsGlobalNamespace
                         ? null
-                        : typeSymbol.ContainingNamespace.ToDisplayString(),
+                        : namedTypeSymbol.ContainingNamespace.ToDisplayString(),
                     Modifiers: null,
                     IsPartial: false,
-                    HasParameterlessConstructor: typeSymbol.Constructors
+                    HasParameterlessConstructor: namedTypeSymbol.Constructors
                         .Any(c => c.Parameters.Length == 0 && c.DeclaredAccessibility == Accessibility.Public),
                     IsFromReferencedAssembly: true),
                 Kind: kind,

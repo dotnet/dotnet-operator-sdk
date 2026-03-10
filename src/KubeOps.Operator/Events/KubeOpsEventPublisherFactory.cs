@@ -12,6 +12,7 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Events;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 
 using Microsoft.Extensions.Logging;
 
@@ -48,12 +49,12 @@ internal sealed class KubeOpsEventPublisherFactory(
         }
         catch (Exception e)
         {
-            logger.LogError(
-                e,
-                """Could not receive event with name "{EventName}" on entity "{Kind}/{Name}".""",
-                eventName,
-                entity.Kind,
-                entity.Name());
+            logger
+                .LogError(
+                    e,
+                    """Could not receive event with name "{EventName}" on entity "{Identifier}".""",
+                    eventName,
+                    entity.ToIdentifierString());
             return;
         }
 
@@ -91,21 +92,21 @@ internal sealed class KubeOpsEventPublisherFactory(
         try
         {
             await client.SaveAsync(@event, token);
-            logger.LogInformation(
-                """Created or updated event with name "{EventName}" to new count {Count} on entity "{Kind}/{Name}".""",
-                eventName,
-                @event.Count,
-                entity.Kind,
-                entity.Name());
+            logger
+                .LogInformation(
+                    """Created or updated event with name "{EventName}" to new count {Count} on entity "{Identifier}".""",
+                    eventName,
+                    @event.Count,
+                    entity.ToIdentifierString());
         }
         catch (Exception e)
         {
-            logger.LogError(
-                e,
-                """Could not publish event with name "{EventName}" on entity "{Kind}/{Name}".""",
-                eventName,
-                entity.Kind,
-                entity.Name());
+            logger
+                .LogError(
+                    e,
+                    """Could not publish event with name "{EventName}" on entity "{Identifier}".""",
+                    eventName,
+                    entity.ToIdentifierString());
         }
     };
 }

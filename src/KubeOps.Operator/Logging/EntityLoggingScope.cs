@@ -52,24 +52,27 @@ public sealed record EntityLoggingScope : IReadOnlyCollection<KeyValuePair<strin
         => CreateLoggingScope(eventType.ToString(), ReconciliationTriggerSource.ApiServer, entity);
 
     /// <summary>
-    /// Creates a new instance of <see cref="EntityLoggingScope"/> for the given Kubernetes entity and requeue event type.
+    /// Creates a new instance of <see cref="EntityLoggingScope"/> for the given Kubernetes entity and reconciliation operation type.
     /// </summary>
     /// <typeparam name="TEntity">
     /// The type of the Kubernetes entity. Must implement <see cref="IKubernetesObject{V1ObjectMeta}"/>.
     /// </typeparam>
     /// <param name="eventType">
-    /// The type of the requeue operation for the entity (e.g., Added, Modified, or Deleted).
+    /// The type of reconciliation operation for the entity (e.g., Added, Modified, or Deleted).
+    /// </param>
+    /// <param name="reconciliationTriggerSource">
+    /// The source of the reconciliation trigger (e.g., ApiServer, Operator). This provides additional context for the logging scope.
     /// </param>
     /// <param name="entity">
     /// The Kubernetes entity associated with the logging scope. This includes metadata such as Kind, Namespace, Name, UID, and ResourceVersion.
     /// </param>
     /// <returns>
     /// A new <see cref="EntityLoggingScope"/> instance containing contextual key-value pairs
-    /// related to the requeue event type and the provided Kubernetes entity.
+    /// related to the reconciliation operation type and the provided Kubernetes entity.
     /// </returns>
-    public static EntityLoggingScope CreateFor<TEntity>(RequeueType eventType, TEntity entity)
+    public static EntityLoggingScope CreateFor<TEntity>(ReconciliationType eventType, ReconciliationTriggerSource reconciliationTriggerSource, TEntity entity)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => CreateLoggingScope(eventType.ToString(), ReconciliationTriggerSource.Operator, entity);
+        => CreateLoggingScope(eventType.ToString(), reconciliationTriggerSource, entity);
 
     /// <inheritdoc />
     public IEnumerator<KeyValuePair<string, object>> GetEnumerator()
