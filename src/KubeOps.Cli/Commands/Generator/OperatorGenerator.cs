@@ -98,9 +98,7 @@ internal static class OperatorGenerator
             console.MarkupLine("[green]Generate Deployment and Service.[/]");
             new WebhookDeploymentGenerator(format).Generate(result);
 
-            var caBundle =
-                Encoding.ASCII.GetBytes(
-                    Convert.ToBase64String(Encoding.ASCII.GetBytes(result["ca.pem"].ToString() ?? string.Empty)));
+            var caBundle = Encoding.ASCII.GetBytes(result["ca.pem"].ToString() ?? string.Empty);
 
             console.MarkupLine("[green]Generate Validation Webhooks.[/]");
             new ValidationWebhookGenerator(validators, caBundle, format).Generate(result);
