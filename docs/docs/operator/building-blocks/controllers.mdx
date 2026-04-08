@@ -196,7 +196,7 @@ public class V1DemoEntityController(
     {
         // Schedule a follow-up reconciliation in 30 seconds without returning a result
         queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator,
-            TimeSpan.FromSeconds(30), cancellationToken);
+            TimeSpan.FromSeconds(30), retryCount: 0, cancellationToken);
 
         return ReconciliationResult<V1DemoEntity>.Success(entity);
     }
