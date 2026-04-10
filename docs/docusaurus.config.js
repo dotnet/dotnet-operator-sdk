@@ -55,6 +55,7 @@ const config = {
         hashed: true,
         language: ["en"],
         indexPages: true,
+        indexBlog: false,
       }),
     ],
   ],
