@@ -8,6 +8,7 @@ const config = {
 
   future: {
     v4: true,
+    faster: true,
   },
 
   url: "https://dotnet.github.io",
@@ -17,7 +18,6 @@ const config = {
   projectName: "dotnet-operator-sdk",
 
   onBrokenLinks: "throw",
-  onBrokenMarkdownLinks: "warn",
 
   i18n: {
     defaultLocale: "en",
@@ -42,6 +42,9 @@ const config = {
 
   markdown: {
     mermaid: true,
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
   },
 
   themes: [
