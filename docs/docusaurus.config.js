@@ -17,7 +17,6 @@ const config = {
   projectName: "dotnet-operator-sdk",
 
   onBrokenLinks: "throw",
-  onBrokenMarkdownLinks: "warn",
 
   i18n: {
     defaultLocale: "en",
@@ -42,6 +41,9 @@ const config = {
 
   markdown: {
     mermaid: true,
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
   },
 
   themes: [
@@ -53,6 +55,7 @@ const config = {
         hashed: true,
         language: ["en"],
         indexPages: true,
+        indexBlog: false,
       }),
     ],
   ],
