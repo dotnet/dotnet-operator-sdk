@@ -8,7 +8,6 @@ const config = {
 
   future: {
     v4: true,
-    faster: true,
   },
 
   url: "https://dotnet.github.io",
