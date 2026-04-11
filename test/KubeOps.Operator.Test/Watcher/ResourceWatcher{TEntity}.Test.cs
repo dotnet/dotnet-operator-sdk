@@ -97,11 +97,11 @@ public sealed class ResourceWatcherTest
 
         mockCache
             .Setup(c =>
-                c.TryGetAsync<long?>(
+                c.TryGetAsync<long>(
                     It.Is<string>(s => s == entity.Uid()),
                     It.IsAny<FusionCacheEntryOptions>(),
                     It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MaybeValue<long?>.FromValue(entity.Generation() - 1));
+            .ReturnsAsync(MaybeValue<long>.FromValue(entity.Generation()!.Value - 1));
 
         // Act
         await watcher
@@ -141,11 +141,11 @@ public sealed class ResourceWatcherTest
         var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, logger: mockLogger.Object);
 
         mockCache
-            .Setup(c => c.TryGetAsync<long?>(
+            .Setup(c => c.TryGetAsync<long>(
                 It.Is<string>(s => s == entity.Uid()),
                 It.IsAny<FusionCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MaybeValue<long?>.FromValue(entity.Generation()));
+            .ReturnsAsync(MaybeValue<long>.FromValue(entity.Generation()!.Value));
 
         // Act
         await watcher
@@ -210,7 +210,7 @@ public sealed class ResourceWatcherTest
                 It.IsAny<CancellationToken>()),
             Times.Once);
         mockCache.Verify(
-            c => c.TryGetAsync<long?>(
+            c => c.TryGetAsync<long>(
                 It.IsAny<string>(),
                 It.IsAny<FusionCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()),

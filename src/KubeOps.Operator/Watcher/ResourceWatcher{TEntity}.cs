@@ -154,12 +154,12 @@ public class ResourceWatcher<TEntity>(
             // removal does not increase the generation
             if (entity.Metadata.DeletionTimestamp is null)
             {
-                var cachedGeneration = await EntityCache.TryGetAsync<long?>(
+                var cachedGeneration = await EntityCache.TryGetAsync<long>(
                     entity.Uid(),
                     token: cancellationToken);
 
                 // skip reconcile if generation did not increase.
-                if (cachedGeneration.HasValue && cachedGeneration >= entity.Generation())
+                if (cachedGeneration.HasValue && cachedGeneration.Value >= entity.Generation())
                 {
                     logger
                         .LogDebug(
