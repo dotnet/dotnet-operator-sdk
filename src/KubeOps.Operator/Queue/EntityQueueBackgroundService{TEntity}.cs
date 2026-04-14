@@ -32,14 +32,14 @@ namespace KubeOps.Operator.Queue;
 /// <list type="number">
 /// <item>
 /// <description>
-/// A global semaphore (<c>_parallelismSemaphore</c>) limits the total number of concurrent reconciliations
+/// Global semaphore (<c>_parallelismSemaphore</c>) limits the total number of concurrent reconciliations
 /// based on <see cref="ParallelReconciliationOptions.MaxParallelReconciliations"/>. This semaphore is acquired
 /// <strong>before</strong> reading from the queue, implementing true back-pressure to prevent unbounded memory growth.
 /// </description>
 /// </item>
 /// <item>
 /// <description>
-/// Per-entity UID locks (<c>_uidLocks</c>) ensure that only one reconciliation per entity can run at a time,
+/// Per-entity UID locks (<c>_uidEntries</c>) ensure that only one reconciliation per entity can run at a time,
 /// preventing concurrent modifications to the same entity. Each entity's UID gets its own <see cref="SemaphoreSlim"/> instance.
 /// </description>
 /// </item>
@@ -55,7 +55,7 @@ namespace KubeOps.Operator.Queue;
 /// </list>
 /// <para>
 /// The service implements back-pressure by acquiring the parallelism semaphore before reading from the queue.
-/// This ensures that queue consumption rate matches the processing capacity, preventing memory leaks from
+/// This ensures that the queue consumption rate matches the processing capacity, preventing memory leaks from
 /// unbounded task accumulation.
 /// </para>
 /// </remarks>
@@ -69,7 +69,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private readonly CancellationTokenSource _cts = new();
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _uidLocks = new();
+    private readonly ConcurrentDictionary<string, UidEntry> _uidEntries = new();
     private readonly SemaphoreSlim _parallelismSemaphore = new(
         operatorSettings.ParallelReconciliationOptions.MaxParallelReconciliations,
         operatorSettings.ParallelReconciliationOptions.MaxParallelReconciliations);
@@ -80,7 +80,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
     /// <remarks>
     /// Schedules the queue processing loop as a background task using <see cref="Task.Run(Func{Task}, CancellationToken)"/>.
     /// The <paramref name="cancellationToken"/> passed to this method is intentionally not used for the processing loop;
-    /// cancellation is managed via an internal <see cref="CancellationTokenSource"/> that is signalled by <see cref="StopAsync"/>.
+    /// cancellation is managed via an internal <see cref="CancellationTokenSource"/> that is signaled by <see cref="StopAsync"/>.
     /// This avoids cancelling the scheduled work during the host startup phase.
     /// </remarks>
     public Task StartAsync(CancellationToken cancellationToken)
@@ -88,12 +88,12 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         // The current implementation of IHostedService expects that StartAsync is "really" asynchronous.
         // Blocking calls are not allowed, they would stop the rest of the startup flow.
         //
-        // This is an open issue since 2019 and not expected to be closed soon. (https://github.com/dotnet/runtime/issues/36063)
+        // This has been an open issue since 2019 and is not expected to be closed soon. (https://github.com/dotnet/runtime/issues/36063)
         // For reasons unknown at the time of writing this code, "await Task.Yield()" didn't work as expected, it caused
         // a deadlock in 1/10 of the cases.
         //
         // Therefore, we use Task.Run() and put the work to queue. The passed cancellation token of the StartAsync
-        // method is not used, because it would only cancel the scheduling (which we definitely don't want to cancel).
+        // method is not used because it would only cancel the scheduling (which we definitely don't want to cancel).
         // To make this intention explicit, CancellationToken.None gets passed.
         _ = Task.Run(() => WatchAsync(_cts.Token), CancellationToken.None);
 
@@ -112,12 +112,12 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         _cts.Dispose();
         _parallelismSemaphore.Dispose();
 
-        foreach (var lockItem in _uidLocks.Values)
+        foreach (var entry in _uidEntries.Values)
         {
-            lockItem.Dispose();
+            entry.Semaphore.Dispose();
         }
 
-        _uidLocks.Clear();
+        _uidEntries.Clear();
         client.Dispose();
         queue.Dispose();
 
@@ -130,12 +130,12 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         await CastAndDispose(_cts);
         await CastAndDispose(_parallelismSemaphore);
 
-        foreach (var lockItem in _uidLocks.Values)
+        foreach (var entry in _uidEntries.Values)
         {
-            await CastAndDispose(lockItem);
+            await CastAndDispose(entry.Semaphore);
         }
 
-        _uidLocks.Clear();
+        _uidEntries.Clear();
         await CastAndDispose(client);
         await CastAndDispose(queue);
 
@@ -234,7 +234,11 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
     private async Task ProcessEntryAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
         var uid = entry.Entity.Uid();
-        var uidLock = _uidLocks.GetOrAdd(uid, _ => new(1, 1));
+        var uidEntry = _uidEntries.GetOrAdd(uid, _ => new UidEntry(new SemaphoreSlim(1, 1)));
+
+        // Increment access count at the start.
+        // This ensures the lock will not be disposed while any task is still accessing it.
+        Interlocked.Increment(ref uidEntry.AccessCount);
 
         using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event for "{entry.Entity.ToIdentifierString()}".""", ActivityKind.Consumer);
         using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.ReconciliationType, entry.ReconciliationTriggerSource, entry.Entity));
@@ -243,8 +247,8 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         {
             var canAcquireLock = operatorSettings.ParallelReconciliationOptions.ConflictStrategy switch
             {
-                ParallelReconciliationConflictStrategy.Discard => await uidLock.WaitAsync(0, cancellationToken),
-                ParallelReconciliationConflictStrategy.RequeueAfterDelay => await uidLock.WaitAsync(0, cancellationToken),
+                ParallelReconciliationConflictStrategy.Discard => await uidEntry.Semaphore.WaitAsync(0, cancellationToken),
+                ParallelReconciliationConflictStrategy.RequeueAfterDelay => await uidEntry.Semaphore.WaitAsync(0, cancellationToken),
                 ParallelReconciliationConflictStrategy.WaitForCompletion => true,
                 _ => throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliationOptions.ConflictStrategy} is not supported."),
             };
@@ -261,7 +265,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                     .LogDebug(
                         """Trying to acquire lock for "{Identifier}". Waiting for completion.""",
                         entry.Entity.ToIdentifierString());
-                await uidLock.WaitAsync(cancellationToken);
+                await uidEntry.Semaphore.WaitAsync(cancellationToken);
             }
 
             try
@@ -283,7 +287,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
             }
             finally
             {
-                uidLock.Release();
+                uidEntry.Semaphore.Release();
             }
         }
         catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -300,7 +304,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                     entry.Entity.ToIdentifierString());
 
             // Retry with exponential back-off up to the configured limit to handle transient failures
-            // (e.g. temporary network outages). Once the limit is reached the entry is dropped so that
+            // (e.g. temporary network outages). Once the limit is reached, the entry is dropped so that
             // a non-transient error cannot cause an infinite retry loop.
             // See: https://github.com/dotnet/dotnet-operator-sdk/issues/554
             var nextRetryCount = entry.RetryCount + 1;
@@ -338,9 +342,13 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         }
         finally
         {
-            if (uidLock.CurrentCount is 1 && _uidLocks.TryRemove(uid, out var removedLock))
+            // Decrement the access count. When it reaches 0, all tasks for this UID have completed,
+            // so it's safe to remove and dispose the lock.
+            if (Interlocked.Decrement(ref uidEntry.AccessCount) == 0
+                && uidEntry.Semaphore.CurrentCount is 1
+                && _uidEntries.TryRemove(uid, out var removedEntry))
             {
-                removedLock.Dispose();
+                removedEntry.Semaphore.Dispose();
             }
         }
     }
@@ -374,5 +382,12 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
             default:
                 throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliationOptions.ConflictStrategy} is not supported in HandleUidConflictAsync.");
         }
+    }
+
+    private sealed record UidEntry(SemaphoreSlim Semaphore)
+    {
+#pragma warning disable SA1401 – Interlocked requires ref access
+        public int AccessCount;
+#pragma warning restore SA1401
     }
 }
