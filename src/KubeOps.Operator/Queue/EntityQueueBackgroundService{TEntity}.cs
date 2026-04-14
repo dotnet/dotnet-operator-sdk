@@ -74,7 +74,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         operatorSettings.ParallelReconciliationOptions.MaxParallelReconciliations,
         operatorSettings.ParallelReconciliationOptions.MaxParallelReconciliations);
 
-    private bool _disposed;
+    private volatile bool _disposed;
 
     /// <inheritdoc cref="IHostedService.StartAsync"/>
     /// <remarks>
@@ -112,12 +112,16 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         _cts.Dispose();
         _parallelismSemaphore.Dispose();
 
-        foreach (var entry in _uidEntries.Values)
+        lock (_uidEntries)
         {
-            entry.Semaphore.Dispose();
+            foreach (var entry in _uidEntries.Values)
+            {
+                entry.Semaphore.Dispose();
+            }
+
+            _uidEntries.Clear();
         }
 
-        _uidEntries.Clear();
         client.Dispose();
         queue.Dispose();
 
@@ -234,11 +238,12 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
     private async Task ProcessEntryAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
         var uid = entry.Entity.Uid();
-        var uidEntry = _uidEntries.GetOrAdd(uid, _ => new UidEntry(new SemaphoreSlim(1, 1)));
-
-        // Increment access count at the start.
-        // This ensures the lock will not be disposed while any task is still accessing it.
-        Interlocked.Increment(ref uidEntry.AccessCount);
+        UidEntry uidEntry;
+        lock (_uidEntries)
+        {
+            uidEntry = _uidEntries.GetOrAdd(uid, _ => new(new(1, 1)));
+            uidEntry.AccessCount++;
+        }
 
         using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event for "{entry.Entity.ToIdentifierString()}".""", ActivityKind.Consumer);
         using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.ReconciliationType, entry.ReconciliationTriggerSource, entry.Entity));
@@ -247,8 +252,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         {
             var canAcquireLock = operatorSettings.ParallelReconciliationOptions.ConflictStrategy switch
             {
-                ParallelReconciliationConflictStrategy.Discard => await uidEntry.Semaphore.WaitAsync(0, cancellationToken),
-                ParallelReconciliationConflictStrategy.RequeueAfterDelay => await uidEntry.Semaphore.WaitAsync(0, cancellationToken),
+                ParallelReconciliationConflictStrategy.Discard or ParallelReconciliationConflictStrategy.RequeueAfterDelay => await uidEntry.Semaphore.WaitAsync(0, cancellationToken),
                 ParallelReconciliationConflictStrategy.WaitForCompletion => true,
                 _ => throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliationOptions.ConflictStrategy} is not supported."),
             };
@@ -342,13 +346,12 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         }
         finally
         {
-            // Decrement the access count. When it reaches 0, all tasks for this UID have completed,
-            // so it's safe to remove and dispose the lock.
-            if (Interlocked.Decrement(ref uidEntry.AccessCount) == 0
-                && uidEntry.Semaphore.CurrentCount is 1
-                && _uidEntries.TryRemove(uid, out var removedEntry))
+            lock (_uidEntries)
             {
-                removedEntry.Semaphore.Dispose();
+                if (--uidEntry.AccessCount == 0)
+                {
+                    _uidEntries.TryRemove(uid, out _);
+                }
             }
         }
     }
@@ -365,16 +368,18 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                 break;
 
             case ParallelReconciliationConflictStrategy.RequeueAfterDelay:
+                var requeueDelay = operatorSettings.ParallelReconciliationOptions.GetEffectiveRequeueDelay();
+
                 logger.LogDebug(
                     """Entity "{Identifier}" is already being reconciled. Requeueing after {Delay}s.""",
                     entry.Entity.ToIdentifierString(),
-                    operatorSettings.ParallelReconciliationOptions.GetEffectiveRequeueDelay().TotalSeconds);
+                    requeueDelay.TotalSeconds);
 
                 await queue.Enqueue(
                     entry.Entity,
                     entry.ReconciliationType,
                     entry.ReconciliationTriggerSource,
-                    operatorSettings.ParallelReconciliationOptions.GetEffectiveRequeueDelay(),
+                    requeueDelay,
                     retryCount: 0,
                     cancellationToken);
                 break;
@@ -386,8 +391,6 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
     private sealed record UidEntry(SemaphoreSlim Semaphore)
     {
-#pragma warning disable SA1401 // Interlocked requires ref access
-        public int AccessCount;
-#pragma warning restore SA1401
+        public int AccessCount { get; set; }
     }
 }
