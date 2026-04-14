@@ -386,7 +386,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
     private sealed record UidEntry(SemaphoreSlim Semaphore)
     {
-#pragma warning disable SA1401 – Interlocked requires ref access
+#pragma warning disable SA1401 // Interlocked requires ref access
         public int AccessCount;
 #pragma warning restore SA1401
     }
