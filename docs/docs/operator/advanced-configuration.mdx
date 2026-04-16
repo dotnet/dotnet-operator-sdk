@@ -244,8 +244,9 @@ builder.Services
 
 ## Queue Strategy
 
-KubeOps uses a queue to schedule and dispatch reconciliation events. The strategy is controlled via
-`OperatorSettings.QueueStrategy`, which accepts one of two values.
+KubeOps uses an internal queue to schedule and dispatch reconciliation work. The queue buffers events
+from the Kubernetes watch stream and feeds them to the reconciler at a controlled rate. The strategy
+is controlled via `OperatorSettings.QueueStrategy`.
 
 ### `InMemory` (Default)
 
@@ -256,22 +257,18 @@ builder.Services
 ```
 
 With `InMemory`, KubeOps registers `TimedEntityQueue<TEntity>` as `ITimedEntityQueue<TEntity>` and
-starts `EntityQueueBackgroundService<TEntity>` as a hosted service. All queue state is held in the
-operator pod's memory.
+starts `EntityQueueBackgroundService<TEntity>` as a hosted service. All scheduling state lives in
+the operator pod's heap.
 
-- **Advantages**: Requires zero configuration. Very fast.
-- **Disadvantages**: Pending queue entries are lost on pod restart.
+- **Advantages**: Zero configuration. Minimal latency between watch event and reconciliation call.
+- **Disadvantages**: Pending requeue timers are lost when the pod restarts. In practice this is
+  rarely critical because the Kubernetes watch list provides a full snapshot of existing resources
+  on startup and drives the operator back to convergence automatically.
 
 ### `Custom`
 
-Setting `QueueStrategy.Custom` tells KubeOps to skip registration of the built-in
-`ITimedEntityQueue<TEntity>` and `EntityQueueBackgroundService<TEntity>`. You are responsible for
-providing both.
-
-This is the correct choice when you want to back the queue with an external system such as
-Azure Service Bus, RabbitMQ, or AWS SQS to make pending requeue entries survive operator restarts.
-
-#### Step 1: Set the strategy
+Setting `QueueStrategy.Custom` instructs KubeOps to skip registration of `ITimedEntityQueue<TEntity>`
+and `EntityQueueBackgroundService<TEntity>`. You supply both implementations yourself.
 
 ```csharp
 builder.Services
@@ -279,106 +276,150 @@ builder.Services
     {
         settings.QueueStrategy = QueueStrategy.Custom;
     });
+
+// Register one ITimedEntityQueue<TEntity> per entity type
+builder.Services.AddSingleton<ITimedEntityQueue<V1DemoEntity>, MyCustomEntityQueue<V1DemoEntity>>();
+
+// Register one background service per entity type that drains the queue
+builder.Services.AddHostedService<MyCustomQueueBackgroundService<V1DemoEntity>>();
 ```
 
-#### Step 2: Implement `ITimedEntityQueue<TEntity>`
+:::note
+Register one `ITimedEntityQueue<TEntity>` implementation and one corresponding background service
+for each entity type that should use the custom queue.
+:::
 
-The interface requires three members: `Enqueue`, `Remove`, and `GetAsyncEnumerator`.
+Use this strategy when you need scheduling behaviour that differs from the built-in timer-based
+queue — for example, priority queues or implementations that integrate with your own observability
+stack.
+
+## Triggering Reconciliation from External Sources
+
+The standard reconciliation loop is driven by the Kubernetes watch stream: every `ADDED`,
+`MODIFIED`, and `DELETED` event the API server emits flows through the watcher into the queue and
+eventually reaches your controller. This covers the vast majority of real-world use cases.
+
+However, some architectures require a way for systems _outside the operator_ to request
+reconciliation — for example:
+
+- A CI/CD pipeline that just deployed a new image and wants the operator to react immediately.
+- An event bus consumer that receives domain events and needs to reconcile the corresponding custom resource.
+- An admin HTTP endpoint used during development or incident response.
+
+KubeOps makes this straightforward by exposing the `EntityQueue<TEntity>` delegate. Inject it into
+any DI-registered component to enqueue an entity for reconciliation on demand.
 
 ```csharp
-public sealed class ServiceBusEntityQueue<TEntity>(
-    ServiceBusClient serviceBusClient,
-    TimeProvider timeProvider)
-    : ITimedEntityQueue<TEntity>
-    where TEntity : IKubernetesObject<V1ObjectMeta>
+// Signature (fire-and-forget; enqueue is synchronous)
+public delegate void EntityQueue<in TEntity>(
+    TEntity entity,
+    ReconciliationType type,
+    ReconciliationTriggerSource reconciliationTriggerSource,
+    TimeSpan queueIn,
+    int retryCount,
+    CancellationToken cancellationToken)
+    where TEntity : IKubernetesObject<V1ObjectMeta>;
+```
+
+Always pass `ReconciliationTriggerSource.Operator` for externally triggered reconciliations.
+`ReconciliationTriggerSource.ApiServer` is reserved for events originating from the Kubernetes
+watch stream.
+
+### HTTP Endpoint
+
+An ASP.NET Core minimal API endpoint is the simplest way to expose an on-demand reconciliation
+trigger. This pattern is useful for admin tooling, CI/CD pipelines, and testing.
+
+```csharp
+app.MapPost("/reconcile/{namespace}/{name}", async (
+    string @namespace,
+    string name,
+    IKubernetesClient kubernetesClient,
+    EntityQueue<V1DemoEntity> entityQueue,
+    CancellationToken cancellationToken) =>
 {
-    private readonly ServiceBusSender _sender =
-        serviceBusClient.CreateSender($"operator-queue-{typeof(TEntity).Name.ToLowerInvariant()}");
-
-    public async Task Enqueue(
-        TEntity entity,
-        ReconciliationType type,
-        ReconciliationTriggerSource reconciliationTriggerSource,
-        TimeSpan queueIn,
-        CancellationToken cancellationToken)
+    var entity = await kubernetesClient.GetAsync<V1DemoEntity>(name, @namespace, cancellationToken);
+    if (entity is null)
     {
-        var entry = new QueueEntry<TEntity>(entity, type, reconciliationTriggerSource);
-        var message = new ServiceBusMessage(BinaryData.FromObjectAsJson(entry));
-
-        await _sender.ScheduleMessageAsync(
-            message,
-            timeProvider.GetUtcNow().Add(queueIn),
-            cancellationToken);
+        return Results.NotFound();
     }
 
-    public Task Remove(TEntity entity, CancellationToken cancellationToken)
-    {
-        // Automatic when the message is consumed; no-op here.
-        return Task.CompletedTask;
-    }
+    entityQueue(
+        entity,
+        ReconciliationType.Modified,
+        ReconciliationTriggerSource.Operator,
+        TimeSpan.Zero,
+        retryCount: 0,
+        cancellationToken);
 
-    public async IAsyncEnumerator<QueueEntry<TEntity>> GetAsyncEnumerator(
-        CancellationToken cancellationToken = default)
-    {
-        // Consumed via the background service below; not used directly.
-        await Task.CompletedTask;
-        yield break;
-    }
-
-    public void Dispose() =>
-        _sender.DisposeAsync().AsTask().GetAwaiter().GetResult();
-}
+    return Results.Accepted();
+});
 ```
 
-#### Step 3: Implement a background service to consume the queue
+:::note
+Secure this endpoint appropriately. In a Kubernetes-native deployment, consider restricting access
+via a `NetworkPolicy` or an Ingress authentication annotation rather than exposing it publicly.
+:::
+
+### Message Queue Consumer
+
+For event-driven architectures, a background service can receive messages from an external message
+broker and enqueue the affected entity for reconciliation. The message bus acts as a
+**notification channel** — it signals that something has changed, but the operator always fetches
+the authoritative resource state from the Kubernetes API before reconciling.
 
 ```csharp
-public sealed class ServiceBusQueueBackgroundService<TEntity>(
+public sealed class DemoEntityReconcileTriggerService(
     ServiceBusClient serviceBusClient,
     IKubernetesClient kubernetesClient,
-    IReconciler<TEntity> reconciler,
-    ILogger<ServiceBusQueueBackgroundService<TEntity>> logger)
+    EntityQueue<V1DemoEntity> entityQueue,
+    ILogger<DemoEntityReconcileTriggerService> logger)
     : BackgroundService
-    where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private readonly ServiceBusProcessor _processor = serviceBusClient.CreateProcessor(
-        $"operator-queue-{typeof(TEntity).Name.ToLowerInvariant()}",
+        "demo-entity-reconcile-triggers",
         new ServiceBusProcessorOptions { MaxConcurrentCalls = 1, AutoCompleteMessages = false });
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _processor.ProcessMessageAsync += ProcessMessageAsync;
         _processor.ProcessErrorAsync += ProcessErrorAsync;
+
         await _processor.StartProcessingAsync(stoppingToken);
         await Task.Delay(Timeout.Infinite, stoppingToken).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
     }
 
     private async Task ProcessMessageAsync(ProcessMessageEventArgs args)
     {
-        var entry = args.Message.Body.ToObjectFromJson<QueueEntry<TEntity>>();
+        var trigger = args.Message.Body.ToObjectFromJson<ReconcileTrigger>();
 
-        var entity = await kubernetesClient.GetAsync<TEntity>(
-            entry.Entity.Name(),
-            entry.Entity.Namespace(),
+        var entity = await kubernetesClient.GetAsync<V1DemoEntity>(
+            trigger.Name,
+            trigger.Namespace,
             args.CancellationToken);
 
         if (entity is null)
         {
-            logger.LogInformation("Entity no longer exists, skipping reconciliation.");
+            logger.LogWarning("Entity {Name}/{Namespace} no longer exists — skipping trigger.",
+                trigger.Name, trigger.Namespace);
             await args.CompleteMessageAsync(args.Message, args.CancellationToken);
             return;
         }
 
-        await args.CompleteMessageAsync(args.Message, args.CancellationToken);
-
-        await reconciler.Reconcile(
-            ReconciliationContext<TEntity>.CreateFor(entity, entry.ReconciliationType, entry.ReconciliationTriggerSource),
+        entityQueue(
+            entity,
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.Zero,
+            retryCount: 0,
             args.CancellationToken);
+
+        await args.CompleteMessageAsync(args.Message, args.CancellationToken);
     }
 
     private Task ProcessErrorAsync(ProcessErrorEventArgs args)
     {
-        logger.LogError(args.Exception, "Error processing queue message.");
+        logger.LogError(args.Exception, "Error processing reconcile trigger.");
         return Task.CompletedTask;
     }
 
@@ -391,30 +432,27 @@ public sealed class ServiceBusQueueBackgroundService<TEntity>(
         await base.StopAsync(cancellationToken);
     }
 }
+
+public sealed record ReconcileTrigger(string Name, string Namespace);
 ```
 
-#### Step 4: Register both implementations
+Register the background service alongside your operator:
 
 ```csharp
 builder.Services
     .AddSingleton<ServiceBusClient>(_ =>
         new ServiceBusClient(configuration["ServiceBus:ConnectionString"]))
-    .AddKubernetesOperator(settings =>
-    {
-        settings.QueueStrategy = QueueStrategy.Custom;
-    })
+    .AddKubernetesOperator()
     .RegisterComponents();
 
-// Register the custom queue for each entity type
-builder.Services.AddSingleton<ITimedEntityQueue<V1DemoEntity>, ServiceBusEntityQueue<V1DemoEntity>>();
-
-// Register the background service that processes messages from the external queue
-builder.Services.AddHostedService<ServiceBusQueueBackgroundService<V1DemoEntity>>();
+builder.Services.AddHostedService<DemoEntityReconcileTriggerService>();
 ```
 
 :::note
-When using `QueueStrategy.Custom`, register one `ITimedEntityQueue<TEntity>` and one background
-service per entity type that requires an external queue.
+The message bus carries only a **pointer** to the resource (name and namespace), not a full
+resource snapshot. The operator always re-fetches the current state from the Kubernetes API.
+This keeps the operator's view of the world consistent with the API server — the single source
+of truth for all custom resource data.
 :::
 
 ## Parallel Reconciliation
@@ -500,10 +538,10 @@ UID are affected by `ConflictStrategy`.
 
 ### Queue Strategy
 
-1. **Use `InMemory`** for development and simple operators
-2. **Use `Custom`** for production workloads that require durable queues
-3. **Monitor queue depth** to detect processing issues
-4. **Set appropriate requeue delays** to avoid overwhelming your system
+1. **Use `InMemory`** for development and most production operators — the Kubernetes watch stream guarantees convergence on restart.
+2. **Use `Custom`** only when you need scheduling behaviour that the built-in queue cannot provide.
+3. **Monitor consumer lag** on any external trigger channel to detect processing issues early.
+4. **Always re-fetch entity state** from the API server in external trigger consumers rather than deserialising resource state from the message payload.
 
 ## Troubleshooting
 
@@ -524,7 +562,7 @@ UID are affected by `ConflictStrategy`.
 ### Queue Problems
 
 - Verify the external queue connection when using `QueueStrategy.Custom`
-- Check queue permissions and quotas
-- Monitor message processing errors
-- Review requeue delay settings
-- Ensure entities still exist before reprocessing
+- Check queue permissions and quotas when using an external message broker as a reconciliation trigger
+- Monitor message processing errors in external trigger consumers
+- Ensure entities still exist before enqueuing — the Kubernetes API is the authoritative source of truth
+- If externally triggered reconciliations are not running, confirm the background service is registered and started correctly
