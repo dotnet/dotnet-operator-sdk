@@ -89,7 +89,7 @@ public sealed record EntityLoggingScope : IReadOnlyCollection<KeyValuePair<strin
     private static EntityLoggingScope CreateLoggingScope<TEntity>(string eventType, ReconciliationTriggerSource triggerSource, TEntity entity)
         where TEntity : IKubernetesObject<V1ObjectMeta>
         => new(
-            new Dictionary<string, object>
+            new Dictionary<string, object>(7)
             {
                 { "EventType", eventType },
                 { "ReconciliationTriggerSource", triggerSource },

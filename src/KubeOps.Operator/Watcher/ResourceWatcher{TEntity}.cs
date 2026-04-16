@@ -294,7 +294,7 @@ public class ResourceWatcher<TEntity>(
 
         var delay = TimeSpan
             .FromSeconds(Math.Pow(2, Math.Clamp(_watcherReconnectRetries, 0, 5)))
-            .Add(TimeSpan.FromMilliseconds(new Random().Next(0, 1000)));
+            .Add(TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1000)));
         logger.LogWarning(
             "There were {Retries} errors / retries in the watcher. Wait {Seconds}s before next attempt to connect.",
             _watcherReconnectRetries,
