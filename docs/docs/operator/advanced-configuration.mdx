@@ -293,6 +293,85 @@ Use this strategy when you need scheduling behaviour that differs from the built
 queue — for example, priority queues or implementations that integrate with your own observability
 stack.
 
+## Reconcile Strategy
+
+The reconcile strategy controls which watch events actually trigger a reconciliation cycle.
+It is set via `OperatorSettings.ReconcileStrategy` and defaults to `ByGenerationId`.
+
+### Background: Generation vs. ResourceVersion
+
+Every Kubernetes resource carries two version counters in `metadata`:
+
+| Field | Incremented by | When |
+|---|---|---|
+| `metadata.generation` | The API server | Only when `.spec` changes |
+| `metadata.resourceVersion` | The API server | On **every** successful write (spec, status, labels, annotations, finalizers, …) |
+
+Understanding this distinction is key to choosing the right strategy.
+
+### `ByGenerationId` (Default)
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings =>
+    {
+        settings.ReconcileStrategy = ReconcileStrategy.ByGenerationId; // default
+    });
+```
+
+The watcher caches the last seen `metadata.generation` for each resource. A watch event triggers
+reconciliation only when the incoming generation is **greater** than the cached one.
+
+**Consequences:**
+- Status updates do **not** trigger reconciliation.
+- Label or annotation changes do **not** trigger reconciliation.
+- Finalizer additions/removals during deletion bypass the check because `DeletionTimestamp` is set
+  — deletion does not increment `generation`, so bypassing is required to handle finalizers correctly.
+
+This matches the pattern used by most Kubernetes controllers (e.g., `kube-controller-manager`)
+and is the correct default for the majority of operators.
+
+:::tip When to use `ByGenerationId`
+Your controller only reacts to `.spec` changes. Status writes, label updates, and annotation
+changes are either performed by your own controller (and should not re-trigger it), or performed
+by other actors and are irrelevant to your business logic.
+:::
+
+### `ByResourceVersion`
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings =>
+    {
+        settings.ReconcileStrategy = ReconcileStrategy.ByResourceVersion;
+    });
+```
+
+The watcher caches the last seen `metadata.resourceVersion` (a string). A watch event triggers
+reconciliation whenever the incoming `resourceVersion` differs from the cached one — which is true
+for **every successful API server write**, regardless of which field changed.
+
+**Consequences:**
+- Status updates **do** trigger reconciliation.
+- Label or annotation changes **do** trigger reconciliation.
+- Finalizer removals during deletion trigger reconciliation naturally without any special bypass,
+  because each finalizer removal is a real API write that increments `resourceVersion`.
+- Your controller must be **idempotent** for status-only changes, since it will be called when
+  another actor updates `.status` on the same resource.
+
+:::tip When to use `ByResourceVersion`
+Your controller needs to react to changes outside `.spec`. Common examples:
+- A controller that mirrors label or annotation values into child resources.
+- A controller that acts on status conditions written by another controller.
+- A controller that must respond to ownership or finalizer changes made by external actors.
+:::
+
+:::caution Performance consideration
+`ByResourceVersion` can significantly increase the number of reconciliation calls, especially for
+resources whose `.status` is updated frequently. Size `MaxParallelReconciliations` and the error
+backoff settings accordingly and ensure your controller logic is fast for status-only no-op cases.
+:::
+
 ## Triggering Reconciliation from External Sources
 
 The standard reconciliation loop is driven by the Kubernetes watch stream: every `ADDED`,
