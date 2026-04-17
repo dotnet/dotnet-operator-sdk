@@ -4,7 +4,6 @@
 
 using FluentAssertions;
 
-using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Reconciliation;
@@ -13,56 +12,30 @@ namespace KubeOps.Abstractions.Test.Reconciliation;
 
 public sealed class ReconciliationContextTest
 {
-    [Fact]
-    public void CreateFromApiServerEvent_Should_Create_Context_With_ApiServer_TriggerSource()
+    [Theory]
+    [InlineData(ReconciliationType.Added)]
+    [InlineData(ReconciliationType.Modified)]
+    [InlineData(ReconciliationType.Deleted)]
+    public void CreateFor_Should_Create_Context_With_ApiServer_TriggerSource(ReconciliationType eventType)
     {
         var entity = CreateTestEntity();
-        const WatchEventType eventType = WatchEventType.Added;
-
-        var context = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, eventType);
+        var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, eventType, ReconciliationTriggerSource.ApiServer);
 
         context.Entity.Should().Be(entity);
         context.EventType.Should().Be(eventType);
         context.ReconciliationTriggerSource.Should().Be(ReconciliationTriggerSource.ApiServer);
     }
 
-    [Fact]
-    public void CreateFromOperatorEvent_Should_Create_Context_With_Operator_TriggerSource()
+    [Theory]
+    [InlineData(ReconciliationType.Added)]
+    [InlineData(ReconciliationType.Modified)]
+    [InlineData(ReconciliationType.Deleted)]
+    public void CreateFor_Should_Create_Context_With_Operator_TriggerSource(ReconciliationType eventType)
     {
         var entity = CreateTestEntity();
-        const WatchEventType eventType = WatchEventType.Modified;
-
-        var context = ReconciliationContext<V1ConfigMap>.CreateFromOperatorEvent(entity, eventType);
+        var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, eventType, ReconciliationTriggerSource.Operator);
 
         context.Entity.Should().Be(entity);
-        context.EventType.Should().Be(eventType);
-        context.ReconciliationTriggerSource.Should().Be(ReconciliationTriggerSource.Operator);
-    }
-
-    [Theory]
-    [InlineData(WatchEventType.Added)]
-    [InlineData(WatchEventType.Modified)]
-    [InlineData(WatchEventType.Deleted)]
-    public void CreateFromApiServerEvent_Should_Support_All_WatchEventTypes(WatchEventType eventType)
-    {
-        var entity = CreateTestEntity();
-
-        var context = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, eventType);
-
-        context.EventType.Should().Be(eventType);
-        context.ReconciliationTriggerSource.Should().Be(ReconciliationTriggerSource.ApiServer);
-    }
-
-    [Theory]
-    [InlineData(WatchEventType.Added)]
-    [InlineData(WatchEventType.Modified)]
-    [InlineData(WatchEventType.Deleted)]
-    public void CreateFromOperatorEvent_Should_Support_All_WatchEventTypes(WatchEventType eventType)
-    {
-        var entity = CreateTestEntity();
-
-        var context = ReconciliationContext<V1ConfigMap>.CreateFromOperatorEvent(entity, eventType);
-
         context.EventType.Should().Be(eventType);
         context.ReconciliationTriggerSource.Should().Be(ReconciliationTriggerSource.Operator);
     }
@@ -71,7 +44,7 @@ public sealed class ReconciliationContextTest
     public void IsTriggeredByApiServer_Should_Return_True_For_ApiServer_Context()
     {
         var entity = CreateTestEntity();
-        var context = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, WatchEventType.Added);
+        var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.ApiServer);
 
         var isTriggeredByApiServer = context.IsTriggeredByApiServer();
         var isTriggeredByOperator = context.IsTriggeredByOperator();
@@ -84,7 +57,7 @@ public sealed class ReconciliationContextTest
     public void IsTriggeredByOperator_Should_Return_True_For_Operator_Context()
     {
         var entity = CreateTestEntity();
-        var context = ReconciliationContext<V1ConfigMap>.CreateFromOperatorEvent(entity, WatchEventType.Modified);
+        var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator);
 
         var isTriggeredByOperator = context.IsTriggeredByOperator();
         var isTriggeredByApiServer = context.IsTriggeredByApiServer();
@@ -98,8 +71,8 @@ public sealed class ReconciliationContextTest
     {
         var entity = CreateTestEntity("test-entity");
 
-        var context1 = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, WatchEventType.Added);
-        var context2 = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, WatchEventType.Added);
+        var context1 = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.Operator);
+        var context2 = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.Operator);
 
         context1.Should().NotBeSameAs(context2);
         context1.Entity.Should().BeSameAs(context2.Entity);
@@ -112,13 +85,13 @@ public sealed class ReconciliationContextTest
     {
         var entity = CreateTestEntity();
 
-        var contextAdded = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, WatchEventType.Added);
-        var contextModified = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, WatchEventType.Modified);
-        var contextDeleted = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, WatchEventType.Deleted);
+        var contextAdded = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.ApiServer);
+        var contextModified = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+        var contextDeleted = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Deleted, ReconciliationTriggerSource.ApiServer);
 
-        contextAdded.EventType.Should().Be(WatchEventType.Added);
-        contextModified.EventType.Should().Be(WatchEventType.Modified);
-        contextDeleted.EventType.Should().Be(WatchEventType.Deleted);
+        contextAdded.EventType.Should().Be(ReconciliationType.Added);
+        contextModified.EventType.Should().Be(ReconciliationType.Modified);
+        contextDeleted.EventType.Should().Be(ReconciliationType.Deleted);
     }
 
     [Fact]
@@ -126,8 +99,8 @@ public sealed class ReconciliationContextTest
     {
         var entity = CreateTestEntity();
 
-        var apiServerContext = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, WatchEventType.Added);
-        var operatorContext = ReconciliationContext<V1ConfigMap>.CreateFromOperatorEvent(entity, WatchEventType.Added);
+        var apiServerContext = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.ApiServer);
+        var operatorContext = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.Operator);
 
         apiServerContext.ReconciliationTriggerSource.Should().Be(ReconciliationTriggerSource.ApiServer);
         operatorContext.ReconciliationTriggerSource.Should().Be(ReconciliationTriggerSource.Operator);
@@ -139,28 +112,25 @@ public sealed class ReconciliationContextTest
     {
         var entity = CreateTestEntity("test-configmap", "test-namespace");
 
-        var context = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, WatchEventType.Added);
+        var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.ApiServer);
 
         context.Entity.Metadata.Name.Should().Be("test-configmap");
         context.Entity.Metadata.NamespaceProperty.Should().Be("test-namespace");
     }
 
     [Theory]
-    [InlineData(ReconciliationTriggerSource.ApiServer, WatchEventType.Added)]
-    [InlineData(ReconciliationTriggerSource.ApiServer, WatchEventType.Modified)]
-    [InlineData(ReconciliationTriggerSource.ApiServer, WatchEventType.Deleted)]
-    [InlineData(ReconciliationTriggerSource.Operator, WatchEventType.Added)]
-    [InlineData(ReconciliationTriggerSource.Operator, WatchEventType.Modified)]
-    [InlineData(ReconciliationTriggerSource.Operator, WatchEventType.Deleted)]
+    [InlineData(ReconciliationTriggerSource.ApiServer, ReconciliationType.Added)]
+    [InlineData(ReconciliationTriggerSource.ApiServer, ReconciliationType.Modified)]
+    [InlineData(ReconciliationTriggerSource.ApiServer, ReconciliationType.Deleted)]
+    [InlineData(ReconciliationTriggerSource.Operator, ReconciliationType.Added)]
+    [InlineData(ReconciliationTriggerSource.Operator, ReconciliationType.Modified)]
+    [InlineData(ReconciliationTriggerSource.Operator, ReconciliationType.Deleted)]
     public void Context_Should_Support_All_Combinations_Of_TriggerSource_And_EventType(
         ReconciliationTriggerSource triggerSource,
-        WatchEventType eventType)
+        ReconciliationType eventType)
     {
         var entity = CreateTestEntity();
-
-        var context = triggerSource == ReconciliationTriggerSource.ApiServer
-            ? ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, eventType)
-            : ReconciliationContext<V1ConfigMap>.CreateFromOperatorEvent(entity, eventType);
+        var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, eventType, triggerSource);
 
         context.ReconciliationTriggerSource.Should().Be(triggerSource);
         context.EventType.Should().Be(eventType);
@@ -171,8 +141,8 @@ public sealed class ReconciliationContextTest
     {
         var entity = CreateTestEntity();
 
-        var context1 = ReconciliationContext<V1ConfigMap>.CreateFromApiServerEvent(entity, WatchEventType.Added);
-        var context2 = ReconciliationContext<V1ConfigMap>.CreateFromOperatorEvent(entity, WatchEventType.Modified);
+        var context1 = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.ApiServer);
+        var context2 = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator);
 
         context1.Entity.Should().BeSameAs(context2.Entity);
     }

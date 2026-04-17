@@ -2,67 +2,69 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Collections.Concurrent;
-
-using KubeOps.Abstractions.Reconciliation.Queue;
+using KubeOps.Abstractions.Reconciliation;
 
 namespace KubeOps.Operator.Queue;
 
-internal sealed record TimedQueueEntry<TEntity> : IDisposable
+/// <summary>
+/// Represents a scheduled queue entry that will be added to the reconciliation queue
+/// at a specific time in the future.
+/// </summary>
+/// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
+/// <remarks>
+/// This implementation uses a timer-based approach instead of Task.Delay to reduce
+/// memory overhead when many entities are scheduled with long delays.
+/// </remarks>
+internal sealed record TimedQueueEntry<TEntity>
 {
-    private readonly CancellationTokenSource _cts = new();
-    private readonly TimeSpan _requeueIn;
     private readonly TEntity _entity;
-    private readonly RequeueType _requeueType;
+    private readonly ReconciliationTriggerSource _reconciliationTriggerSource;
+    private readonly int _retryCount;
 
-    public TimedQueueEntry(TEntity entity, RequeueType requeueType, TimeSpan requeueIn)
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TimedQueueEntry{TEntity}"/> class.
+    /// </summary>
+    /// <param name="entity">The entity to be reconciled.</param>
+    /// <param name="reconciliationType">The type of reconciliation operation.</param>
+    /// <param name="reconciliationTriggerSource">The source of the reconciliation request.</param>
+    /// <param name="queueIn">The delay before the entry should be added to the queue.</param>
+    /// <param name="retryCount">
+    /// The number of previous failed reconciliation attempts. Preserved in the resulting
+    /// <see cref="QueueEntry{TEntity}"/> so back-off and retry-limit logic stays correct.
+    /// </param>
+    internal TimedQueueEntry(TEntity entity, ReconciliationType reconciliationType, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount)
     {
-        _requeueIn = requeueIn;
         _entity = entity;
-        _requeueType = requeueType;
+        ReconciliationType = reconciliationType;
+        _reconciliationTriggerSource = reconciliationTriggerSource;
+        _retryCount = retryCount;
+        EnqueueAt = DateTimeOffset.UtcNow.Add(queueIn);
     }
 
     /// <summary>
-    /// A <see cref="CancellationToken"/> that is triggered after calling <see cref="Cancel"/>.
+    /// Gets the timestamp when this entry should be added to the queue.
     /// </summary>
-    public CancellationToken Token => _cts.Token;
-
-    public void Dispose() => _cts.Dispose();
+    internal DateTimeOffset EnqueueAt { get; }
 
     /// <summary>
-    /// Cancels the execution of <see cref="AddAfterDelay"/> and disposes any associated resources.
+    /// Gets a value indicating whether this entry has been cancelled.
     /// </summary>
-    public void Cancel()
+    internal bool IsCancelled { get; private set; }
+
+    internal ReconciliationType ReconciliationType { get; }
+
+    /// <summary>
+    /// Marks this entry as cancelled, preventing it from being added to the queue.
+    /// </summary>
+    internal void Cancel()
     {
-        _cts.Cancel();
-        Dispose();
+        IsCancelled = true;
     }
 
     /// <summary>
-    /// Adds the entity to <paramref name="collection"/> after <see cref="_requeueIn"/>.
-    /// Can be canceled with <see cref="Cancel"/>.
+    /// Creates a <see cref="QueueEntry{TEntity}"/> from this timed entry.
     /// </summary>
-    /// <param name="collection">The collection to add the entry to.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    public async Task AddAfterDelay(BlockingCollection<RequeueEntry<TEntity>> collection)
-    {
-        try
-        {
-            await Task.Delay(_requeueIn, _cts.Token);
-            if (_cts.IsCancellationRequested)
-            {
-                return;
-            }
-
-            collection.TryAdd(new() { Entity = _entity, RequeueType = _requeueType });
-        }
-        catch (TaskCanceledException)
-        {
-            // Ignore canceled tasks
-        }
-        catch (ObjectDisposedException)
-        {
-            // And also if the object is disposed.
-        }
-    }
+    /// <returns>A queue entry ready for reconciliation processing.</returns>
+    internal QueueEntry<TEntity> ToQueueEntry()
+        => new(_entity, ReconciliationType, _reconciliationTriggerSource, _retryCount);
 }

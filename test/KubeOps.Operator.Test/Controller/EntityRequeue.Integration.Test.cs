@@ -7,7 +7,6 @@ using FluentAssertions;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Queue;
-using KubeOps.KubernetesClient;
 using KubeOps.Operator.Test.TestEntities;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -18,7 +17,7 @@ namespace KubeOps.Operator.Test.Controller;
 public sealed class EntityRequeueIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
-    private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
+    private readonly KubernetesClient.KubernetesClient _client = new();
     private readonly TestNamespaceProvider _ns = new();
 
     [Fact]
@@ -98,7 +97,7 @@ public sealed class EntityRequeueIntegrationTest : IntegrationTestBase
     }
 
     private class TestController(InvocationCounter<V1OperatorIntegrationTestEntity> svc,
-            EntityRequeue<V1OperatorIntegrationTestEntity> requeue)
+            EntityQueue<V1OperatorIntegrationTestEntity> queue)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
@@ -106,7 +105,7 @@ public sealed class EntityRequeueIntegrationTest : IntegrationTestBase
             svc.Invocation(entity);
             if (svc.Invocations.Count <= svc.TargetInvocationCount)
             {
-                requeue(entity, RequeueType.Modified, TimeSpan.FromMilliseconds(1), CancellationToken.None);
+                queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromMilliseconds(1), retryCount: 0, TestContext.Current.CancellationToken);
             }
 
             return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));

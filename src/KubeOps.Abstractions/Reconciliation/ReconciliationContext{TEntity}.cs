@@ -8,18 +8,29 @@ using k8s.Models;
 namespace KubeOps.Abstractions.Reconciliation;
 
 /// <summary>
-/// Represents the context for the reconciliation process.
-/// This class contains information about the entity to be reconciled and
-/// the source that triggered the reconciliation process.
+/// Represents the context for a reconciliation operation on a Kubernetes entity.
 /// </summary>
 /// <typeparam name="TEntity">
-/// The type of the Kubernetes resource being reconciled. Must implement
-/// <see cref="IKubernetesObject{V1ObjectMeta}"/>.
+/// The type of the Kubernetes resource being reconciled. Must implement <see cref="IKubernetesObject{V1ObjectMeta}"/>.
 /// </typeparam>
+/// <remarks>
+/// <para>
+/// This record encapsulates all the contextual information required to perform a reconciliation operation,
+/// including the entity being reconciled, the type of reconciliation operation to perform, and the source
+/// that triggered the reconciliation.
+/// </para>
+/// <para>
+/// Instances are immutable and should be created using the <see cref="CreateFor"/> factory method.
+/// The context is passed to controller reconciliation methods to provide complete information about
+/// the reconciliation request.
+/// </para>
+/// </remarks>
+/// <seealso cref="ReconciliationType"/>
+/// <seealso cref="ReconciliationTriggerSource"/>
 public sealed record ReconciliationContext<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private ReconciliationContext(TEntity entity, WatchEventType eventType, ReconciliationTriggerSource reconciliationTriggerSource)
+    private ReconciliationContext(TEntity entity, ReconciliationType eventType, ReconciliationTriggerSource reconciliationTriggerSource)
     {
         Entity = entity;
         EventType = eventType;
@@ -27,51 +38,59 @@ public sealed record ReconciliationContext<TEntity>
     }
 
     /// <summary>
-    /// Represents the Kubernetes entity involved in the reconciliation process.
+    /// Gets the Kubernetes entity being reconciled.
     /// </summary>
+    /// <value>
+    /// The entity instance that requires reconciliation processing.
+    /// </value>
     public TEntity Entity { get; }
 
     /// <summary>
-    /// Specifies the type of Kubernetes watch event that triggered the reconciliation process.
-    /// This property provides information about the nature of the change detected
-    /// within the Kubernetes resource, such as addition, modification, or deletion.
+    /// Gets the type of reconciliation operation to perform.
     /// </summary>
-    public WatchEventType EventType { get; }
+    /// <value>
+    /// One of the enumeration values that indicates whether the entity was added, modified, or deleted.
+    /// This determines which controller methods will be invoked during reconciliation.
+    /// </value>
+    /// <remarks>
+    /// This property corresponds to Kubernetes watch event types and determines the reconciliation
+    /// logic to be applied (e.g., creation, update, or deletion handling).
+    /// </remarks>
+    public ReconciliationType EventType { get; }
 
     /// <summary>
-    /// Specifies the source that initiated the reconciliation process.
+    /// Gets the source that triggered the reconciliation operation.
     /// </summary>
+    /// <value>
+    /// One of the enumeration values that indicates whether the reconciliation was triggered by
+    /// the Kubernetes API server or by an internal operator operation.
+    /// </value>
+    /// <remarks>
+    /// This property provides diagnostic context about the origin of the reconciliation request,
+    /// which can be useful for logging, metrics, and debugging purposes.
+    /// </remarks>
     public ReconciliationTriggerSource ReconciliationTriggerSource { get; }
 
     /// <summary>
-    /// Creates a new instance of <see cref="ReconciliationContext{TEntity}"/> from an API server event.
+    /// Creates a new reconciliation context for the specified entity and reconciliation parameters.
     /// </summary>
     /// <param name="entity">
-    /// The Kubernetes entity associated with the reconciliation context.
+    /// The Kubernetes entity to be reconciled.
     /// </param>
     /// <param name="eventType">
-    /// The type of watch event that triggered the context creation.
+    /// One of the enumeration values that specifies the type of reconciliation operation to perform.
+    /// </param>
+    /// <param name="reconciliationTriggerSource">
+    /// One of the enumeration values that specifies whether the reconciliation was triggered by
+    /// the Kubernetes API server or by an internal operator operation.
     /// </param>
     /// <returns>
-    /// A new <see cref="ReconciliationContext{TEntity}"/> instance representing the reconciliation context
-    /// for the specified entity and event type, triggered by the API server.
+    /// A new reconciliation context instance containing the specified entity and reconciliation parameters.
     /// </returns>
-    public static ReconciliationContext<TEntity> CreateFromApiServerEvent(TEntity entity, WatchEventType eventType)
-        => new(entity, eventType, ReconciliationTriggerSource.ApiServer);
-
-    /// <summary>
-    /// Creates a new instance of <see cref="ReconciliationContext{TEntity}"/> from an operator-driven event.
-    /// </summary>
-    /// <param name="entity">
-    /// The Kubernetes entity associated with the reconciliation context.
-    /// </param>
-    /// <param name="eventType">
-    /// The type of watch event that triggered the context creation.
-    /// </param>
-    /// <returns>
-    /// A new <see cref="ReconciliationContext{TEntity}"/> instance representing the reconciliation context
-    /// for the specified entity and event type, triggered by the operator.
-    /// </returns>
-    public static ReconciliationContext<TEntity> CreateFromOperatorEvent(TEntity entity, WatchEventType eventType)
-        => new(entity, eventType, ReconciliationTriggerSource.Operator);
+    /// <remarks>
+    /// This is the recommended way to create reconciliation context instances. The method ensures
+    /// all required contextual information is properly initialized.
+    /// </remarks>
+    public static ReconciliationContext<TEntity> CreateFor(TEntity entity, ReconciliationType eventType, ReconciliationTriggerSource reconciliationTriggerSource)
+        => new(entity, eventType, reconciliationTriggerSource);
 }

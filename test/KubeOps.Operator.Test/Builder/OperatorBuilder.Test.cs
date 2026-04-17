@@ -75,7 +75,7 @@ public sealed class OperatorBuilderTest
             s.ServiceType == typeof(ITimedEntityQueue<V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Singleton);
         _builder.Services.Should().Contain(s =>
-            s.ServiceType == typeof(EntityRequeue<V1OperatorIntegrationTestEntity>) &&
+            s.ServiceType == typeof(EntityQueue<V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Transient);
     }
 
@@ -96,7 +96,7 @@ public sealed class OperatorBuilderTest
             s.ServiceType == typeof(ITimedEntityQueue<V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Singleton);
         _builder.Services.Should().Contain(s =>
-            s.ServiceType == typeof(EntityRequeue<V1OperatorIntegrationTestEntity>) &&
+            s.ServiceType == typeof(EntityQueue<V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Transient);
         _builder.Services.Should().Contain(s =>
             s.ServiceType == typeof(IEntityLabelSelector<V1OperatorIntegrationTestEntity>) &&

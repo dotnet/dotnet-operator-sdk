@@ -14,17 +14,23 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Constants;
 using KubeOps.Operator.Logging;
+using KubeOps.Operator.Queue;
+using KubeOps.Operator.Reconciliation;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+
+using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Watcher;
 
 public class ResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<ResourceWatcher<TEntity>> logger,
-    IReconciler<TEntity> reconciler,
+    IFusionCacheProvider cacheProvider,
+    ITimedEntityQueue<TEntity> entityQueue,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
     IKubernetesClient client)
@@ -37,6 +43,21 @@ public class ResourceWatcher<TEntity>(
     private bool _disposed;
 
     ~ResourceWatcher() => Dispose(false);
+
+    /// <summary>
+    /// Gets the fusion cache used to track the last observed generation for each entity,
+    /// enabling generation-based deduplication of watch events.
+    /// </summary>
+    /// <value>
+    /// The <see cref="IFusionCache"/> instance scoped to the resource watcher cache name.
+    /// </value>
+    /// <remarks>
+    /// Subclasses may access this cache to read or invalidate cached generation values.
+    /// For example, <see cref="LeaderAwareResourceWatcher{TEntity}"/> calls
+    /// <see cref="IFusionCache.Clear"/> when leadership is lost to ensure stale generation
+    /// data is not carried over to the next watch session.
+    /// </remarks>
+    protected IFusionCache EntityCache { get; } = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
 
     public virtual Task StartAsync(CancellationToken cancellationToken)
     {
@@ -125,10 +146,52 @@ public class ResourceWatcher<TEntity>(
         }
     }
 
-    protected virtual async Task<ReconciliationResult<TEntity>> OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
-        => await reconciler.Reconcile(
-            ReconciliationContext<TEntity>.CreateFromApiServerEvent(entity, eventType),
-            cancellationToken);
+    protected virtual async Task OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
+    {
+        if (eventType != WatchEventType.Deleted)
+        {
+            // bypass generation check for finalizer handling
+            // removal does not increase the generation
+            if (entity.Metadata.DeletionTimestamp is null)
+            {
+                var cachedGeneration = await EntityCache.TryGetAsync<long>(
+                    entity.Uid(),
+                    token: cancellationToken);
+
+                // skip reconcile if generation did not increase.
+                if (cachedGeneration.HasValue && cachedGeneration.Value >= entity.Generation())
+                {
+                    logger
+                        .LogDebug(
+                            """Entity "{Identifier}" modification did not modify generation. Skip event.""",
+                            entity.ToIdentifierString());
+
+                    return;
+                }
+
+                await EntityCache.SetAsync(
+                    entity.Uid(),
+                    entity.Generation() ?? 1,
+                    token: cancellationToken);
+            }
+        }
+        else
+        {
+            await EntityCache.RemoveAsync(
+                entity.Uid(),
+                token: cancellationToken);
+        }
+
+        // queue entity for reconciliation
+        await entityQueue
+            .Enqueue(
+                entity,
+                eventType.ToReconciliationType(),
+                ReconciliationTriggerSource.ApiServer,
+                queueIn: TimeSpan.Zero,
+                retryCount: 0,
+                cancellationToken);
+    }
 
     private async Task WatchClientEventsAsync(CancellationToken stoppingToken)
     {
@@ -148,12 +211,12 @@ public class ResourceWatcher<TEntity>(
                     using var activity = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
                     using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(type, entity));
 
-                    logger.LogInformation(
-                        """Received watch event "{EventType}" for "{Kind}/{Name}", last observed resource version: {ResourceVersion}.""",
-                        type,
-                        entity.Kind,
-                        entity.Name(),
-                        entity.ResourceVersion());
+                    logger
+                        .LogInformation(
+                            """Received watch event "{EventType}" for "{Identifier}", last observed resource version: {ResourceVersion}.""",
+                            type,
+                            entity.ToIdentifierString(),
+                            entity.ResourceVersion());
 
                     if (type == WatchEventType.Bookmark)
                     {
@@ -163,48 +226,30 @@ public class ResourceWatcher<TEntity>(
 
                     try
                     {
-                        var result = await OnEventAsync(type, entity, stoppingToken);
-
-                        if (!result.IsSuccess)
-                        {
-                            logger.LogError(
-                                result.Error,
-                                "Reconciliation of {EventType} for {Kind}/{Name} failed with message '{Message}'.",
-                                type,
-                                entity.Kind,
-                                entity.Name(),
-                                result.ErrorMessage);
-                        }
-                    }
-                    catch (KubernetesException e) when (e.Status.Code is (int)HttpStatusCode.GatewayTimeout)
-                    {
-                        logger.LogDebug(e, "Watch restarting due to 504 Gateway Timeout.");
-                        break;
-                    }
-                    catch (KubernetesException e) when (e.Status.Code is (int)HttpStatusCode.Gone)
-                    {
-                        // Special handling when our resource version is outdated.
-                        throw;
+                        await OnEventAsync(type, entity, stoppingToken);
                     }
                     catch (Exception e)
                     {
-                        logger.LogError(
-                            e,
-                            "Reconciliation of {EventType} for {Kind}/{Name} failed.",
-                            type,
-                            entity.Kind,
-                            entity.Name());
+                        logger
+                            .LogError(
+                                e,
+                                """Scheduling for reconciliation of "{EventType}" for "{Identifier}" failed.""",
+                                type,
+                                entity.ToIdentifierString());
                     }
                 }
+
+                _watcherReconnectRetries = 0;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
-                // Don't throw if the cancellation was indeed requested.
                 break;
             }
             catch (KubernetesException e) when (e.Status.Code is (int)HttpStatusCode.Gone)
             {
                 logger.LogDebug(e, "Watch restarting with reset bookmark due to 410 HTTP Gone.");
+
+                _watcherReconnectRetries = 0;
                 currentVersion = null;
             }
             catch (Exception e)
@@ -249,7 +294,7 @@ public class ResourceWatcher<TEntity>(
 
         var delay = TimeSpan
             .FromSeconds(Math.Pow(2, Math.Clamp(_watcherReconnectRetries, 0, 5)))
-            .Add(TimeSpan.FromMilliseconds(new Random().Next(0, 1000)));
+            .Add(TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1000)));
         logger.LogWarning(
             "There were {Retries} errors / retries in the watcher. Wait {Seconds}s before next attempt to connect.",
             _watcherReconnectRetries,

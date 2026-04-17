@@ -171,16 +171,11 @@ public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
 
 ### Requeuing Entities
 
-You can request automatic requeuing by specifying a `requeueAfter` parameter:
+You can request automatic requeuing by specifying a `requeueAfter` parameter on the result:
 
 ```csharp
 // Requeue after 5 minutes
 return ReconciliationResult<V1DemoEntity>.Success(entity, TimeSpan.FromMinutes(5));
-
-// Or set it after creation
-var result = ReconciliationResult<V1DemoEntity>.Success(entity);
-result.RequeueAfter = TimeSpan.FromSeconds(30);
-return result;
 ```
 
 This is useful for:
@@ -189,8 +184,28 @@ This is useful for:
 - Periodic status checks
 - Waiting for external dependencies
 
-:::info Durable Requeue Mechanisms
-By default, requeue requests are stored in memory and will be lost on operator restart. For production scenarios requiring persistence, see [Advanced Configuration - Custom Requeue Mechanism](../advanced-configuration#custom-requeue-mechanism) to learn how to implement durable queues using Azure Service Bus, RabbitMQ, or other messaging systems.
+You can also enqueue an entity manually from within your controller using the `EntityQueue<TEntity>` delegate injected via DI. This allows you to schedule a reconciliation outside the normal return path:
+
+```csharp
+public class V1DemoEntityController(
+    EntityQueue<V1DemoEntity> queue) : IEntityController<V1DemoEntity>
+{
+    public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+        V1DemoEntity entity,
+        CancellationToken cancellationToken)
+    {
+        // Schedule a follow-up reconciliation in 30 seconds without returning a result
+        queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator,
+            TimeSpan.FromSeconds(30), retryCount: 0, cancellationToken);
+
+        return ReconciliationResult<V1DemoEntity>.Success(entity);
+    }
+    // ...
+}
+```
+
+:::info Durable Queue
+By default, queue entries are held in memory and lost on operator restart. To back the queue with an external system, see [Advanced Configuration — Queue Strategy](../advanced-configuration#queue-strategy).
 :::
 
 ### Error Handling with Results
@@ -244,11 +259,25 @@ public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
 - Only changes to the `Spec` section trigger reconciliation
 - Use status updates to track the current state of your resource
 
-### Race Conditions
+### Generation-Based Deduplication
 
-- If a reconciliation is currently running for a resource, new reconciliation requests for the same resource will be queued
-- This prevents race conditions and ensures consistent state management
-- The queue is processed in order, maintaining the sequence of changes
+KubeOps skips `MODIFIED` events that do not represent a spec change. The `ResourceWatcher` compares
+the incoming `.metadata.generation` against the last cached value. If the generation has not
+increased (e.g., a status-only update), the event is dropped before it reaches the queue. Your
+controller only sees events for which the spec has actually changed, or for which a
+`DeletionTimestamp` is set (finalizer handling).
+
+### Parallel Reconciliation
+
+`EntityQueueBackgroundService` enforces two levels of concurrency control before calling your controller:
+
+1. A global `SemaphoreSlim` limits total concurrent reconciliations to `ParallelReconciliationOptions.MaxParallelReconciliations` (default: `Environment.ProcessorCount * 2`).
+2. A per-UID `SemaphoreSlim` prevents two reconciliations for the same entity from running simultaneously.
+
+When a second event for the same UID arrives while a reconciliation is in progress, the configured
+`ConflictStrategy` applies (`WaitForCompletion` by default). See
+[Advanced Configuration — Parallel Reconciliation](../advanced-configuration#parallel-reconciliation)
+to change the defaults.
 
 ### RBAC Requirements
 

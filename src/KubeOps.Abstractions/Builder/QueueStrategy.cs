@@ -5,19 +5,19 @@
 namespace KubeOps.Abstractions.Builder;
 
 /// <summary>
-/// Defines the strategy for requeuing reconciliation events within the operator.
+/// Defines the strategy for queuing reconciliation events within the operator.
 /// </summary>
-public enum RequeueStrategy
+public enum QueueStrategy
 {
     /// <summary>
-    /// Represents an in-memory requeue strategy where reconciliation events
-    /// are managed and requeued without external persistence or reliance on third-party systems.
+    /// Represents an in-memory queue strategy where reconciliation events
+    /// are managed and queued without external persistence or reliance on third-party systems.
     /// Suitable for scenarios requiring lightweight or transient processing.
     /// </summary>
     InMemory,
 
     /// <summary>
-    /// Represents a custom requeue strategy where the logic for managing and
+    /// Represents a custom queue strategy where the logic for managing and
     /// handling reconciliation events is fully defined and implemented by the user.
     /// This provides maximum flexibility for scenarios with specific or complex requirements.
     /// </summary>
