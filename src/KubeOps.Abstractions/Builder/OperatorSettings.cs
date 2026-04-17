@@ -90,7 +90,7 @@ public sealed partial class OperatorSettings
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <see cref="ReconcileStrategy.ByGenerationId"/> (the default) skips watch events that do not
+    /// <see cref="ReconcileStrategy.ByGeneration"/> (the default) skips watch events that do not
     /// increase <c>metadata.generation</c>. Generation is only incremented on spec changes, so
     /// status updates and metadata-only writes are ignored. This matches standard Kubernetes
     /// controller behaviour.
@@ -102,7 +102,7 @@ public sealed partial class OperatorSettings
     /// Choose this strategy when your controller must react to changes outside the spec.
     /// </para>
     /// </remarks>
-    public ReconcileStrategy ReconcileStrategy { get; set; } = ReconcileStrategy.ByGenerationId;
+    public ReconcileStrategy ReconcileStrategy { get; set; } = ReconcileStrategy.ByGeneration;
 
     /// <summary>
     /// Gets or sets the configuration options for parallel reconciliation processing.

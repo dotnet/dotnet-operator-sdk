@@ -13,7 +13,7 @@ The cache key is always the resource's `metadata.uid`.
 Which value is cached — and therefore which events are skipped — depends on the configured
 [Reconcile Strategy](./advanced-configuration.mdx#reconcile-strategy).
 
-### `ByGenerationId` (Default)
+### `ByGeneration` (Default)
 
 The cache stores the last observed `metadata.generation` (`long`) for each resource.
 
@@ -35,7 +35,7 @@ The cache stores the last observed `metadata.resourceVersion` (`string`) for eac
    incoming one. If they are equal (identical write already seen), the event is dropped. Because
    every API server write — spec, status, labels, annotations, finalizers — produces a new
    `resourceVersion`, this strategy triggers reconciliation for **all** changes.
-2. **`DELETED` event**: same as `ByGenerationId` — the cache entry is removed and the event is
+2. **`DELETED` event**: same as `ByGeneration` — the cache entry is removed and the event is
    always forwarded.
 3. **Entities with `DeletionTimestamp`**: no special bypass is needed. Each finalizer removal is
    a real API write, so the `resourceVersion` changes naturally and reconciliation fires.
@@ -69,7 +69,7 @@ KubeOps uses two named FusionCache instances — one per reconcile strategy:
 
 | Strategy | Cache name constant | Value |
 |---|---|---|
-| `ByGenerationId` | `CacheConstants.CacheNames.ResourceWatcher` | `"ResourceWatcher"` |
+| `ByGeneration` | `CacheConstants.CacheNames.ResourceWatcher` | `"ResourceWatcher"` |
 | `ByResourceVersion` | `CacheConstants.CacheNames.ResourceWatcherByResourceVersion` | `"ResourceWatcher.ByResourceVersion"` |
 
 Only the cache corresponding to the configured strategy is used at runtime. Having separate named
@@ -81,7 +81,7 @@ provided that configures the **active** cache (whichever strategy is selected). 
 caches individually, register named FusionCache instances directly on the DI container using the
 FusionCache builder API.
 
-**Example: L2 cache for the default `ByGenerationId` strategy**
+**Example: L2 cache for the default `ByGeneration` strategy**
 
 ```csharp
 builder

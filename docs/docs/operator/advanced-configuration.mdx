@@ -296,7 +296,7 @@ stack.
 ## Reconcile Strategy
 
 The reconcile strategy controls which watch events actually trigger a reconciliation cycle.
-It is set via `OperatorSettings.ReconcileStrategy` and defaults to `ByGenerationId`.
+It is set via `OperatorSettings.ReconcileStrategy` and defaults to `ByGeneration`.
 
 ### Background: Generation vs. ResourceVersion
 
@@ -309,13 +309,13 @@ Every Kubernetes resource carries two version counters in `metadata`:
 
 Understanding this distinction is key to choosing the right strategy.
 
-### `ByGenerationId` (Default)
+### `ByGeneration` (Default)
 
 ```csharp
 builder.Services
     .AddKubernetesOperator(settings =>
     {
-        settings.ReconcileStrategy = ReconcileStrategy.ByGenerationId; // default
+        settings.ReconcileStrategy = ReconcileStrategy.ByGeneration; // default
     });
 ```
 
@@ -331,7 +331,7 @@ reconciliation only when the incoming generation is **greater** than the cached 
 This matches the pattern used by most Kubernetes controllers (e.g., `kube-controller-manager`)
 and is the correct default for the majority of operators.
 
-:::tip When to use `ByGenerationId`
+:::tip When to use `ByGeneration`
 Your controller only reacts to `.spec` changes. Status writes, label updates, and annotation
 changes are either performed by your own controller (and should not re-trigger it), or performed
 by other actors and are irrelevant to your business logic.

@@ -15,7 +15,7 @@ public enum ReconcileStrategy
     /// Status updates, label/annotation changes, and other metadata writes are ignored.
     /// This is the default strategy and matches the behaviour of most Kubernetes controllers.
     /// </summary>
-    ByGenerationId = 0,
+    ByGeneration = 0,
 
     /// <summary>
     /// Reconcile whenever the entity's <c>metadata.resourceVersion</c> changes,

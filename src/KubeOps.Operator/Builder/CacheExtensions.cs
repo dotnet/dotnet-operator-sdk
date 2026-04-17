@@ -27,22 +27,24 @@ internal static class CacheExtensions
     /// <returns>The modified service collection with resource watcher caching configured.</returns>
     internal static IServiceCollection WithResourceWatcherEntityCaching(this IServiceCollection services, OperatorSettings settings)
     {
-        var cacheBuilder = services
-            .AddFusionCache(CacheConstants.CacheNames.ResourceWatcher);
+        var cacheName = settings.ReconcileStrategy == ReconcileStrategy.ByResourceVersion
+            ? CacheConstants.CacheNames.ResourceWatcherByResourceVersion
+            : CacheConstants.CacheNames.ResourceWatcher;
+
+        var builder = services.AddFusionCache(cacheName);
 
         if (settings.ConfigureResourceWatcherEntityCache != null)
         {
-            settings.ConfigureResourceWatcherEntityCache(cacheBuilder);
+            settings.ConfigureResourceWatcherEntityCache(builder);
         }
         else
         {
-            cacheBuilder
+            builder
                 .WithoutDistributedCache()
                 .WithOptions(options =>
                 {
-                    options.CacheKeyPrefix = $"{CacheConstants.CacheNames.ResourceWatcher}:";
-                    options.DefaultEntryOptions
-                        .SetDuration(TimeSpan.MaxValue);
+                    options.CacheKeyPrefix = $"{cacheName}:";
+                    options.DefaultEntryOptions.SetDuration(TimeSpan.MaxValue);
                 });
         }
 

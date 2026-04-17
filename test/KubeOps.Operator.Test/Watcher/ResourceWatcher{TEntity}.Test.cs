@@ -31,7 +31,7 @@ public sealed class ResourceWatcherTest
     [Fact]
     public void ReconcileStrategy_Should_Have_Expected_Values()
     {
-        Assert.Equal(0, (int)ReconcileStrategy.ByGenerationId);
+        Assert.Equal(0, (int)ReconcileStrategy.ByGeneration);
         Assert.Equal(1, (int)ReconcileStrategy.ByResourceVersion);
     }
 
@@ -190,7 +190,7 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
-    public void Constructor_Should_Request_ResourceWatcher_Cache_For_ByGenerationId_Strategy()
+    public void Constructor_Should_Request_ResourceWatcher_Cache_For_ByGeneration_Strategy()
     {
         var mockCacheProvider = new Mock<IFusionCacheProvider>();
         mockCacheProvider
@@ -199,7 +199,7 @@ public sealed class ResourceWatcherTest
 
         _ = CreateTestableWatcher(
             cacheProvider: mockCacheProvider.Object,
-            settings: new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByGenerationId });
+            settings: new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByGeneration });
 
         mockCacheProvider.Verify(
             cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcher)),

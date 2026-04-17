@@ -155,7 +155,7 @@ public class ResourceWatcher<TEntity>(
         {
             await EntityCache.RemoveAsync(entity.Uid(), token: cancellationToken);
         }
-        else if (settings.ReconcileStrategy == ReconcileStrategy.ByGenerationId)
+        else if (settings.ReconcileStrategy == ReconcileStrategy.ByGeneration)
         {
             // bypass generation check for finalizer handling
             // removal does not increase the generation
