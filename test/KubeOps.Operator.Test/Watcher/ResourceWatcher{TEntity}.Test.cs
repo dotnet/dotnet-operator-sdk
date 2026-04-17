@@ -264,7 +264,132 @@ public sealed class ResourceWatcherTest
             Times.Never);
     }
 
-    private static V1OperatorIntegrationTestEntity CreateTestEntity()
+    [Fact]
+    public async Task OnEvent_Should_Enqueue_When_ResourceVersion_Changed_And_Strategy_Is_ByResourceVersion()
+    {
+        // Arrange – cache holds old resourceVersion "1", entity now has "2"
+        var entity = CreateTestEntity(resourceVersion: "2");
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion };
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, settings: settings);
+
+        mockCache
+            .Setup(c => c.TryGetAsync<string>(
+                It.Is<string>(s => s == entity.Uid()),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MaybeValue<string>.FromValue("1"));
+
+        // Act
+        await watcher.InvokeOnEventAsync(WatchEventType.Modified, entity, TestContext.Current.CancellationToken);
+
+        // Assert – enqueued and cache updated to new resourceVersion
+        mockQueue.Verify(
+            q => q.Enqueue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer, TimeSpan.Zero, 0, It.IsAny<CancellationToken>()),
+            Times.Once);
+        mockCache.Verify(
+            c => c.SetAsync(
+                It.Is<string>(uid => uid == entity.Uid()),
+                It.Is<string>(rv => rv == "2"),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<IEnumerable<string>?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task OnEvent_Should_Skip_Enqueue_When_ResourceVersion_Not_Changed_And_Strategy_Is_ByResourceVersion()
+    {
+        // Arrange – cache holds same resourceVersion as entity
+        var entity = CreateTestEntity(resourceVersion: "5");
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var mockLogger = new Mock<ILogger<ResourceWatcher<V1OperatorIntegrationTestEntity>>>();
+        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion };
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, logger: mockLogger.Object, settings: settings);
+
+        mockCache
+            .Setup(c => c.TryGetAsync<string>(
+                It.Is<string>(s => s == entity.Uid()),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MaybeValue<string>.FromValue("5"));
+
+        // Act
+        await watcher.InvokeOnEventAsync(WatchEventType.Modified, entity, TestContext.Current.CancellationToken);
+
+        // Assert – not enqueued
+        mockQueue.Verify(
+            q => q.Enqueue(
+                It.IsAny<V1OperatorIntegrationTestEntity>(), It.IsAny<ReconciliationType>(),
+                It.IsAny<ReconciliationTriggerSource>(), It.IsAny<TimeSpan>(),
+                It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        mockLogger.Verify(logger => logger.Log(
+                It.Is<LogLevel>(l => l == LogLevel.Debug),
+                It.Is<EventId>(e => e.Id == 0),
+                It.Is<It.IsAnyType>((@object, type) =>
+                    @object.ToString() == $"""Entity "{entity.ToIdentifierString()}" resourceVersion unchanged. Skip event."""
+                    && type.Name == "FormattedLogValues"),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception, string>>()!),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task OnEvent_Should_Enqueue_On_Entity_With_DeletionTimestamp_When_Strategy_Is_ByResourceVersion()
+    {
+        // Arrange – entity undergoing finalizer processing (DeletionTimestamp set, new resourceVersion)
+        var entity = CreateTestEntity(resourceVersion: "10");
+        entity.Metadata.DeletionTimestamp = DateTime.UtcNow;
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion };
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, settings: settings);
+
+        mockCache
+            .Setup(c => c.TryGetAsync<string>(
+                It.Is<string>(s => s == entity.Uid()),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MaybeValue<string>.FromValue("9"));
+
+        // Act
+        await watcher.InvokeOnEventAsync(WatchEventType.Modified, entity, TestContext.Current.CancellationToken);
+
+        // Assert – enqueued because resourceVersion changed (finalizer removal is a real write)
+        mockQueue.Verify(
+            q => q.Enqueue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer, TimeSpan.Zero, 0, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task OnEvent_Should_Remove_From_Cache_On_Deleted_When_Strategy_Is_ByResourceVersion()
+    {
+        // Arrange
+        var entity = CreateTestEntity(resourceVersion: "7");
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion };
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, settings: settings);
+
+        // Act
+        await watcher.InvokeOnEventAsync(WatchEventType.Deleted, entity, TestContext.Current.CancellationToken);
+
+        // Assert – cache entry removed and entity enqueued for deletion reconciliation
+        mockCache.Verify(
+            c => c.RemoveAsync(
+                It.Is<string>(uid => uid == entity.Uid()),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        mockQueue.Verify(
+            q => q.Enqueue(entity, ReconciliationType.Deleted, ReconciliationTriggerSource.ApiServer, TimeSpan.Zero, 0, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    private static V1OperatorIntegrationTestEntity CreateTestEntity(string resourceVersion = "1")
         => new()
         {
             Metadata = new()
@@ -273,6 +398,7 @@ public sealed class ResourceWatcherTest
                 NamespaceProperty = "unit-test",
                 Uid = Guid.NewGuid().ToString(),
                 Generation = 1,
+                ResourceVersion = resourceVersion,
             },
         };
 

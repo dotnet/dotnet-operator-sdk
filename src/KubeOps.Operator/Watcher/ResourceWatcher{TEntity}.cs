@@ -151,7 +151,11 @@ public class ResourceWatcher<TEntity>(
 
     protected virtual async Task OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
     {
-        if (eventType != WatchEventType.Deleted)
+        if (eventType == WatchEventType.Deleted)
+        {
+            await EntityCache.RemoveAsync(entity.Uid(), token: cancellationToken);
+        }
+        else if (settings.ReconcileStrategy == ReconcileStrategy.ByGenerationId)
         {
             // bypass generation check for finalizer handling
             // removal does not increase the generation
@@ -180,8 +184,25 @@ public class ResourceWatcher<TEntity>(
         }
         else
         {
-            await EntityCache.RemoveAsync(
+            // ByResourceVersion: reconcile on every write; resourceVersion changes for all mutations
+            // including finalizer removals, so no DeletionTimestamp bypass is required
+            var cachedResourceVersion = await EntityCache.TryGetAsync<string>(
                 entity.Uid(),
+                token: cancellationToken);
+
+            if (cachedResourceVersion.HasValue && cachedResourceVersion.Value == entity.ResourceVersion())
+            {
+                logger
+                    .LogDebug(
+                        """Entity "{Identifier}" resourceVersion unchanged. Skip event.""",
+                        entity.ToIdentifierString());
+
+                return;
+            }
+
+            await EntityCache.SetAsync(
+                entity.Uid(),
+                entity.ResourceVersion() ?? string.Empty,
                 token: cancellationToken);
         }
 
