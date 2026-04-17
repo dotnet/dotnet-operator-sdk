@@ -41,6 +41,20 @@ public interface IEntityController<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     /// <summary>
+    /// Returns <c>true</c> when this controller is responsible for the given entity.
+    /// The default implementation returns <c>true</c>, preserving single-controller backward-compatible behaviour.
+    ///
+    /// When multiple controllers are registered for the same entity type the reconciler asks every
+    /// controller whether it <see cref="ShouldHandle"/> the entity and dispatches to all that claim
+    /// responsibility in registration order. Typical use cases: filtering by labels, annotations,
+    /// namespace, status conditions, or any other entity-derived predicate the consumer needs.
+    /// </summary>
+    /// <param name="entity">The entity the reconciler is about to dispatch.</param>
+    /// <param name="cancellationToken">The token used to signal cancellation of the operation.</param>
+    /// <returns>A <see cref="ValueTask{Boolean}"/> that resolves to <c>true</c> if this controller should reconcile the entity.</returns>
+    ValueTask<bool> ShouldHandle(TEntity entity, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
+
+    /// <summary>
     /// Reconciles the state of the specified entity with the desired state.
     /// This method is triggered for `added` and `modified` events from the watcher.
     /// </summary>

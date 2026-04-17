@@ -46,7 +46,10 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         where TImplementation : class, IEntityController<TEntity>
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
-        Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
+        // TryAddEnumerable dedupes by (ServiceType, ImplementationType), so calling AddController
+        // with the same TImplementation twice registers it only once — while still allowing
+        // distinct implementations to coexist for the same TEntity.
+        Services.TryAddEnumerable(ServiceDescriptor.Scoped<IEntityController<TEntity>, TImplementation>());
         Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
 
         // Requeue

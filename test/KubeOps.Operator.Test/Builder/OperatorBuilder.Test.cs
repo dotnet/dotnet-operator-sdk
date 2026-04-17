@@ -128,6 +128,72 @@ public sealed class OperatorBuilderTest
     }
 
     [Fact]
+    public void Should_Allow_Multiple_Controllers_For_Same_Entity_Type()
+    {
+        _builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+        _builder.AddController<SecondTestController, V1OperatorIntegrationTestEntity>();
+
+        var registrations = _builder.Services
+            .Where(s =>
+                s.ServiceType == typeof(IEntityController<V1OperatorIntegrationTestEntity>) &&
+                s.Lifetime == ServiceLifetime.Scoped)
+            .ToList();
+
+        registrations.Should().HaveCount(2);
+        registrations.Should().Contain(s => s.ImplementationType == typeof(TestController));
+        registrations.Should().Contain(s => s.ImplementationType == typeof(SecondTestController));
+    }
+
+    [Fact]
+    public void Should_Dedupe_Identical_Controller_Registrations()
+    {
+        _builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+        _builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+
+        var registrations = _builder.Services
+            .Where(s => s.ServiceType == typeof(IEntityController<V1OperatorIntegrationTestEntity>))
+            .ToList();
+
+        registrations.Should().HaveCount(1);
+        registrations.Should().ContainSingle(s => s.ImplementationType == typeof(TestController));
+    }
+
+    [Fact]
+    public void Should_Resolve_All_Controllers_For_Same_Entity_Type()
+    {
+        _builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+        _builder.AddController<SecondTestController, V1OperatorIntegrationTestEntity>();
+
+        // Resolve from a scope (with scope validation enabled) to mirror how the runtime reconciler
+        // dispatches — directly resolving scoped services from the root provider would throw with
+        // ValidateScopes=true, which is exactly the scenario production hits.
+        var provider = _builder.Services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var controllers = scope.ServiceProvider
+            .GetServices<IEntityController<V1OperatorIntegrationTestEntity>>()
+            .ToList();
+
+        controllers.Should().HaveCount(2);
+        controllers.Should().ContainItemsAssignableTo<IEntityController<V1OperatorIntegrationTestEntity>>();
+        controllers.Select(c => c.GetType()).Should().Contain(typeof(TestController));
+        controllers.Select(c => c.GetType()).Should().Contain(typeof(SecondTestController));
+    }
+
+    [Fact]
+    public void Should_Not_Register_Duplicate_ResourceWatcher_For_Multiple_Controllers()
+    {
+        _builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+        _builder.AddController<SecondTestController, V1OperatorIntegrationTestEntity>();
+
+        _builder.Services
+            .Where(s =>
+                s.ServiceType == typeof(IHostedService) &&
+                s.ImplementationType == typeof(ResourceWatcher<V1OperatorIntegrationTestEntity>))
+            .Should().HaveCount(1);
+    }
+
+    [Fact]
     public void Should_Add_LeaderAwareResourceWatcher()
     {
         var builder = new OperatorBuilder(new ServiceCollection(), new() { LeaderElectionType = LeaderElectionType.Single });
@@ -144,6 +210,15 @@ public sealed class OperatorBuilderTest
     }
 
     private sealed class TestController : IEntityController<V1OperatorIntegrationTestEntity>
+    {
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
+            Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
+
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
+            Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
+    }
+
+    private sealed class SecondTestController : IEntityController<V1OperatorIntegrationTestEntity>
     {
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken) =>
             Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));

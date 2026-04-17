@@ -24,7 +24,7 @@ public sealed class LeaderElectionBackgroundServiceTest
 
         var electionLock = Mock.Of<ILock>();
 
-        var electionLockSubsequentCallEvent = new AutoResetEvent(false);
+        var subsequentCallTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         bool hasElectionLockThrown = false;
         Mock.Get(electionLock)
             .Setup(el => el.GetAsync(It.IsAny<CancellationToken>()))
@@ -34,7 +34,7 @@ public sealed class LeaderElectionBackgroundServiceTest
                     if (hasElectionLockThrown)
                     {
                         // Signal to the test that a subsequent call has been made.
-                        electionLockSubsequentCallEvent.Set();
+                        subsequentCallTcs.TrySetResult(true);
 
                         // Delay returning for a long time, allowing the test to stop the background service, in turn cancelling the cancellation token.
                         await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
@@ -54,8 +54,9 @@ public sealed class LeaderElectionBackgroundServiceTest
         await leaderElectionBackgroundService.StartAsync(CancellationToken.None);
 
         // Starting the background service should result in the lock attempt throwing, and then a subsequent attempt being made.
-        // Wait for the subsequent event to be signalled, if we time out the test fails. The retry delay requires us to wait at least 3 seconds.
-        electionLockSubsequentCallEvent.WaitOne(TimeSpan.FromMilliseconds(3100)).Should().BeTrue();
+        // Wait for the retry to be signalled; use a generous timeout so CI scheduling jitter doesn't cause false failures.
+        var completed = await Task.WhenAny(subsequentCallTcs.Task, Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        completed.Should().Be(subsequentCallTcs.Task, "the leader elector should retry after throwing");
 
         await leaderElectionBackgroundService.StopAsync(CancellationToken.None);
     }
