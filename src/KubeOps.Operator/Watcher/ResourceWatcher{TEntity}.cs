@@ -57,7 +57,10 @@ public class ResourceWatcher<TEntity>(
     /// <see cref="IFusionCache.Clear"/> when leadership is lost to ensure stale generation
     /// data is not carried over to the next watch session.
     /// </remarks>
-    protected IFusionCache EntityCache { get; } = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
+    protected IFusionCache EntityCache { get; } = cacheProvider.GetCache(
+        settings.ReconcileStrategy == ReconcileStrategy.ByResourceVersion
+            ? CacheConstants.CacheNames.ResourceWatcherByResourceVersion
+            : CacheConstants.CacheNames.ResourceWatcher);
 
     public virtual Task StartAsync(CancellationToken cancellationToken)
     {

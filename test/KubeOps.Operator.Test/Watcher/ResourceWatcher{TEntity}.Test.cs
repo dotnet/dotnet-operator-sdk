@@ -190,6 +190,46 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
+    public void Constructor_Should_Request_ResourceWatcher_Cache_For_ByGenerationId_Strategy()
+    {
+        var mockCacheProvider = new Mock<IFusionCacheProvider>();
+        mockCacheProvider
+            .Setup(cp => cp.GetCache(It.IsAny<string>()))
+            .Returns(Mock.Of<IFusionCache>());
+
+        _ = CreateTestableWatcher(
+            cacheProvider: mockCacheProvider.Object,
+            settings: new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByGenerationId });
+
+        mockCacheProvider.Verify(
+            cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcher)),
+            Times.Once);
+        mockCacheProvider.Verify(
+            cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcherByResourceVersion)),
+            Times.Never);
+    }
+
+    [Fact]
+    public void Constructor_Should_Request_ResourceWatcherByResourceVersion_Cache_For_ByResourceVersion_Strategy()
+    {
+        var mockCacheProvider = new Mock<IFusionCacheProvider>();
+        mockCacheProvider
+            .Setup(cp => cp.GetCache(It.IsAny<string>()))
+            .Returns(Mock.Of<IFusionCache>());
+
+        _ = CreateTestableWatcher(
+            cacheProvider: mockCacheProvider.Object,
+            settings: new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion });
+
+        mockCacheProvider.Verify(
+            cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcherByResourceVersion)),
+            Times.Once);
+        mockCacheProvider.Verify(
+            cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcher)),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task OnEvent_Should_Enqueue_When_Entity_Has_DeletionTimestamp_Without_Generation_Check()
     {
         // Arrange
@@ -239,17 +279,28 @@ public sealed class ResourceWatcherTest
     private static TestableResourceWatcher CreateTestableWatcher(
         IKubernetesClient? kubernetesClient = null,
         IFusionCache? cache = null,
+        IFusionCacheProvider? cacheProvider = null,
         ITimedEntityQueue<V1OperatorIntegrationTestEntity>? queue = null,
         ILogger<ResourceWatcher<V1OperatorIntegrationTestEntity>>? logger = null,
+        OperatorSettings? settings = null,
         bool waitForCancellation = false)
     {
         var activitySource = new ActivitySource("unit-test");
-        var settings = new OperatorSettings { Namespace = "unit-test" };
+        var effectiveSettings = settings ?? new OperatorSettings { Namespace = "unit-test" };
         var kubeClient = kubernetesClient ?? Mock.Of<IKubernetesClient>();
-        var cacheProvider = Mock.Of<IFusionCacheProvider>();
         var fCache = cache ?? Mock.Of<IFusionCache>();
         var timedEntityQueue = queue ?? Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
         var labelSelector = new DefaultEntityLabelSelector<V1OperatorIntegrationTestEntity>();
+
+        // If a fully configured cacheProvider is passed, use it directly.
+        // Otherwise build a default mock that returns fCache for any cache name.
+        var effectiveCacheProvider = cacheProvider ?? Mock.Of<IFusionCacheProvider>();
+        if (cacheProvider is null)
+        {
+            Mock.Get(effectiveCacheProvider)
+                .Setup(cp => cp.GetCache(It.IsAny<string>()))
+                .Returns(() => fCache);
+        }
 
         if (waitForCancellation)
         {
@@ -258,16 +309,12 @@ public sealed class ResourceWatcherTest
                 .Returns<string?, string?, string?, bool?, CancellationToken>((_, _, _, _, cancellationToken) => WaitForCancellationAsync<(WatchEventType, V1Pod)>(cancellationToken));
         }
 
-        Mock.Get(cacheProvider)
-            .Setup(cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcher)))
-            .Returns(() => fCache);
-
         return new(
             activitySource,
             logger ?? Mock.Of<ILogger<ResourceWatcher<V1OperatorIntegrationTestEntity>>>(),
-            cacheProvider,
+            effectiveCacheProvider,
             timedEntityQueue,
-            settings,
+            effectiveSettings,
             labelSelector,
             kubeClient);
     }
