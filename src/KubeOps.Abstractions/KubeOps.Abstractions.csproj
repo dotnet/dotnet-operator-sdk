@@ -16,7 +16,7 @@
     <ItemGroup>
         <PackageReference Include="JsonPatch.Net" Version="4.0.1" />
         <PackageReference Include="KubernetesClient" Version="19.0.2" />
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.5" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.6" />
         <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.6.0" />
     </ItemGroup>
 
