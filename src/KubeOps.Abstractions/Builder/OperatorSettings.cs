@@ -86,6 +86,25 @@ public sealed partial class OperatorSettings
     public bool AutoDetachFinalizers { get; set; } = true;
 
     /// <summary>
+    /// Defines the strategy used to decide whether a watch event should trigger reconciliation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="ReconcileStrategy.ByGenerationId"/> (the default) skips watch events that do not
+    /// increase <c>metadata.generation</c>. Generation is only incremented on spec changes, so
+    /// status updates and metadata-only writes are ignored. This matches standard Kubernetes
+    /// controller behaviour.
+    /// </para>
+    /// <para>
+    /// <see cref="ReconcileStrategy.ByResourceVersion"/> triggers reconciliation whenever
+    /// <c>metadata.resourceVersion</c> changes, which occurs on every successful API server write
+    /// regardless of which field changed (spec, status, labels, annotations, finalizers).
+    /// Choose this strategy when your controller must react to changes outside the spec.
+    /// </para>
+    /// </remarks>
+    public ReconcileStrategy ReconcileStrategy { get; set; } = ReconcileStrategy.ByGenerationId;
+
+    /// <summary>
     /// Gets or sets the configuration options for parallel reconciliation processing.
     /// </summary>
     /// <value>
