@@ -29,13 +29,6 @@ namespace KubeOps.Operator.Test.Watcher;
 public sealed class ResourceWatcherTest
 {
     [Fact]
-    public void ReconcileStrategy_Should_Have_Expected_Values()
-    {
-        Assert.Equal(0, (int)ReconcileStrategy.ByGeneration);
-        Assert.Equal(1, (int)ReconcileStrategy.ByResourceVersion);
-    }
-
-    [Fact]
     public async Task Restarting_Watcher_Should_Trigger_New_Watch()
     {
         // Arrange

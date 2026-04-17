@@ -146,7 +146,8 @@ In some scenarios, you may want different operator instances to handle different
 public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<NamespacedLeaderElectionResourceWatcher<TEntity>> logger,
-    IReconciler<TEntity> reconciler,
+    IFusionCacheProvider cacheProvider,
+    ITimedEntityQueue<TEntity> entityQueue,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
     IKubernetesClient client,
@@ -154,13 +155,14 @@ public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
     : ResourceWatcher<TEntity>(
         activitySource,
         logger,
-        reconciler,
+        cacheProvider,
+        entityQueue,
         settings,
         labelSelector,
         client)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    protected override async Task<ReconciliationResult<TEntity>> OnEventAsync(
+    protected override async Task OnEventAsync(
         WatchEventType eventType,
         TEntity entity,
         CancellationToken cancellationToken)
@@ -171,11 +173,11 @@ public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
             cancellationToken))
         {
             // Skip processing - another instance handles this namespace
-            return ReconciliationResult<TEntity>.Success(entity);
+            return;
         }
 
         // Process the event
-        return await base.OnEventAsync(eventType, entity, cancellationToken);
+        await base.OnEventAsync(eventType, entity, cancellationToken);
     }
 }
 ```
