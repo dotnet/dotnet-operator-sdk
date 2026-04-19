@@ -10,9 +10,10 @@ namespace KubeOps.Abstractions.Builder;
 public enum ReconcileStrategy
 {
     /// <summary>
-    /// Reconcile only when the entity's <c>metadata.generation</c> increases,
-    /// which happens exclusively on spec changes.
-    /// Status updates, label/annotation changes, and other metadata writes are ignored.
+    /// Reconcile only when the entity's <c>metadata.generation</c> increases.
+    /// Label, annotation, and other <c>metadata</c> changes never increment generation.
+    /// Status updates do not increment generation when the CRD has a status subresource enabled;
+    /// see https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#status-subresource
     /// This is the default strategy and matches the behaviour of most Kubernetes controllers.
     /// </summary>
     ByGeneration = 0,

@@ -306,7 +306,7 @@ Every Kubernetes resource carries two version counters in `metadata`:
 
 | Field | Incremented by | When |
 |---|---|---|
-| `metadata.generation` | The API server | Only when `.spec` changes |
+| `metadata.generation` | The API server | On spec changes; never on `.metadata` changes (labels, annotations); not on status changes when a [status subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#status-subresource) is enabled |
 | `metadata.resourceVersion` | The API server | On **every** successful write (spec, status, labels, annotations, finalizers, …) |
 
 Understanding this distinction is key to choosing the right strategy.
@@ -325,8 +325,8 @@ The watcher caches the last seen `metadata.generation` for each resource. A watc
 reconciliation only when the incoming generation is **greater** than the cached one.
 
 **Consequences:**
-- Status updates do **not** trigger reconciliation.
-- Label or annotation changes do **not** trigger reconciliation.
+- Label or annotation changes do **not** trigger reconciliation (they are `.metadata` changes and never increment `generation`).
+- Status updates do **not** trigger reconciliation when the CRD has a [status subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#status-subresource) enabled.
 - Finalizer additions/removals during deletion bypass the check because `DeletionTimestamp` is set
   — deletion does not increment `generation`, so bypassing is required to handle finalizers correctly.
 

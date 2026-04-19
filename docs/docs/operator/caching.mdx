@@ -19,8 +19,9 @@ The cache stores the last observed `metadata.generation` (`long`) for each resou
 
 1. **`MODIFIED` / `ADDED` event**: the watcher reads the cached generation and compares it with
    the incoming one. If the incoming generation is not greater, the event is silently dropped.
-   Kubernetes only increments `generation` on `.spec` changes, so status updates, label changes,
-   and annotation changes are filtered out automatically.
+   Label and annotation changes never increment `generation` (they are `.metadata` changes).
+   Status updates do not increment `generation` when the CRD has a
+   [status subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#status-subresource) enabled.
 2. **`DELETED` event**: the cache entry is removed and the event is always forwarded to the
    reconciler.
 3. **Entities with `DeletionTimestamp`** (finalizer processing): the generation check is bypassed

@@ -91,9 +91,9 @@ public sealed partial class OperatorSettings
     /// <remarks>
     /// <para>
     /// <see cref="ReconcileStrategy.ByGeneration"/> (the default) skips watch events that do not
-    /// increase <c>metadata.generation</c>. Generation is only incremented on spec changes, so
-    /// status updates and metadata-only writes are ignored. This matches standard Kubernetes
-    /// controller behaviour.
+    /// increase <c>metadata.generation</c>. Label, annotation, and other metadata-only writes
+    /// never increment generation. Status updates do not increment generation when the CRD has
+    /// a status subresource enabled. This matches standard Kubernetes controller behaviour.
     /// </para>
     /// <para>
     /// <see cref="ReconcileStrategy.ByResourceVersion"/> triggers reconciliation whenever
