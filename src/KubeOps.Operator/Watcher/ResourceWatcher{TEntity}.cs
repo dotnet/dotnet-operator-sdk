@@ -211,7 +211,7 @@ public class ResourceWatcher<TEntity>(
 
             await EntityCache.SetAsync(
                 entity.Uid(),
-                entity.ResourceVersion() ?? string.Empty,
+                entity.ResourceVersion(),
                 token: cancellationToken);
         }
 
