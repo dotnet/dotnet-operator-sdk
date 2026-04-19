@@ -45,17 +45,26 @@ public class ResourceWatcher<TEntity>(
     ~ResourceWatcher() => Dispose(false);
 
     /// <summary>
-    /// Gets the fusion cache used to track the last observed generation for each entity,
-    /// enabling generation-based deduplication of watch events.
+    /// Gets the fusion cache used to store a strategy-dependent deduplication token for each
+    /// entity, preventing redundant reconciliations on duplicate watch events.
     /// </summary>
     /// <value>
-    /// The <see cref="IFusionCache"/> instance scoped to the resource watcher cache name.
+    /// The <see cref="IFusionCache"/> instance for the active reconcile strategy:
+    /// <see cref="ReconcileStrategy.ByGeneration"/> stores <c>metadata.generation</c> (<see langword="long"/>);
+    /// <see cref="ReconcileStrategy.ByResourceVersion"/> stores <c>metadata.resourceVersion</c> (<see langword="string"/>).
     /// </value>
     /// <remarks>
-    /// Subclasses may access this cache to read or invalidate cached generation values.
-    /// For example, <see cref="LeaderAwareResourceWatcher{TEntity}"/> calls
-    /// <see cref="IFusionCache.Clear"/> when leadership is lost to ensure stale generation
-    /// data is not carried over to the next watch session.
+    /// <para>
+    /// Subclasses may access this cache to read or invalidate cached tokens. For example,
+    /// <see cref="LeaderAwareResourceWatcher{TEntity}"/> calls <see cref="IFusionCache.Clear"/>
+    /// when leadership is lost to ensure stale data is not carried over to the next watch session.
+    /// </para>
+    /// <para>
+    /// Note: when an entity has a <c>DeletionTimestamp</c> set (finalizer processing), the
+    /// <see cref="ReconcileStrategy.ByGeneration"/> path bypasses the cache check and does
+    /// not update the cached token. The cache therefore reflects the last value observed
+    /// before deletion began, not the current state.
+    /// </para>
     /// </remarks>
     protected IFusionCache EntityCache { get; } = cacheProvider.GetCache(
         settings.ReconcileStrategy == ReconcileStrategy.ByResourceVersion
