@@ -102,7 +102,7 @@ public sealed partial class OperatorSettings
     /// Choose this strategy when your controller must react to changes outside the spec.
     /// </para>
     /// </remarks>
-    public ReconcileStrategy ReconcileStrategy { get; get; } = ReconcileStrategy.ByGeneration;
+    public ReconcileStrategy ReconcileStrategy { get; set; } = ReconcileStrategy.ByGeneration;
 
     /// <summary>
     /// Gets or sets the configuration options for parallel reconciliation processing.
