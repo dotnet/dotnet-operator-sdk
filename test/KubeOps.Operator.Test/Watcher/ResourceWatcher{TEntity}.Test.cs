@@ -55,7 +55,7 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
-    public async Task OnEvent_Should_Remove_From_Cache_On_Deleted_Event()
+    public async Task OnEvent_Should_Remove_From_Cache_On_Deleted_When_Strategy_Is_ByGeneration()
     {
         // Arrange
         var entity = CreateTestEntity();
@@ -87,7 +87,7 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
-    public async Task OnEvent_Should_Enqueue_When_Generation_Changed()
+    public async Task OnEvent_Should_Enqueue_When_Generation_Changed_And_Strategy_Is_ByGeneration()
     {
         // Arrange
         var entity = CreateTestEntity();
@@ -131,7 +131,70 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
-    public async Task OnEvent_Should_Skip_Enqueue_When_Generation_Not_Changed()
+    public async Task OnEvent_Should_Enqueue_When_Cache_Is_Empty_And_Strategy_Is_ByGeneration()
+    {
+        // Arrange – no cache entry (first event after start or after leader failover)
+        var entity = CreateTestEntity();
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object);
+
+        mockCache
+            .Setup(c => c.TryGetAsync<long>(
+                It.Is<string>(s => s == entity.Uid()),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MaybeValue<long>.None);
+
+        // Act
+        await watcher.InvokeOnEventAsync(WatchEventType.Modified, entity, TestContext.Current.CancellationToken);
+
+        // Assert – enqueued because cache had no entry
+        mockQueue.Verify(
+            q => q.Enqueue(
+                entity,
+                ReconciliationType.Modified,
+                ReconciliationTriggerSource.ApiServer,
+                TimeSpan.Zero,
+                0,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task OnEvent_Should_Enqueue_When_Cache_Is_Empty_And_Strategy_Is_ByResourceVersion()
+    {
+        // Arrange – no cache entry (first event after start or after leader failover)
+        var entity = CreateTestEntity();
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion };
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, settings: settings);
+
+        mockCache
+            .Setup(c => c.TryGetAsync<string>(
+                It.Is<string>(s => s == entity.Uid()),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MaybeValue<string>.None);
+
+        // Act
+        await watcher.InvokeOnEventAsync(WatchEventType.Modified, entity, TestContext.Current.CancellationToken);
+
+        // Assert – enqueued because cache had no entry
+        mockQueue.Verify(
+            q => q.Enqueue(
+                entity,
+                ReconciliationType.Modified,
+                ReconciliationTriggerSource.ApiServer,
+                TimeSpan.Zero,
+                0,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task OnEvent_Should_Skip_Enqueue_When_Generation_Unchanged_And_Strategy_Is_ByGeneration()
     {
         // Arrange
         var entity = CreateTestEntity();
@@ -223,7 +286,7 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
-    public async Task OnEvent_Should_Enqueue_When_Entity_Has_DeletionTimestamp_Without_Generation_Check()
+    public async Task OnEvent_Should_Enqueue_When_Entity_Has_DeletionTimestamp_And_Strategy_Is_ByGeneration()
     {
         // Arrange
         var entity = CreateTestEntity();
