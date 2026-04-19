@@ -361,6 +361,32 @@ for **every successful API server write**, regardless of which field changed.
 - Your controller must be **idempotent** for status-only changes, since it will be called when
   another actor updates `.status` on the same resource.
 
+:::warning Infinite reconcile loop risk
+Because **every write to the resource increments `resourceVersion`**, a reconciler that writes
+back to the resource — for example to update `.status` — will trigger a new watch event, which
+triggers another reconcile, which writes again, and so on.
+
+The official Kubernetes [level-driven controller pattern](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-api-machinery/controllers.md)
+addresses this: a controller must always work from **current observed state**, not from the event
+that triggered it. In practice: **only write when the value actually changed**.
+
+```csharp
+// Compute the desired state from the entity
+var desired = ComputeDesired(entity);
+
+// Guard: only write when the resource actually needs to change.
+// Any write increments resourceVersion, triggers a new watch event, and
+// therefore a new reconcile — omitting this guard causes an infinite loop.
+if (NeedsToBeUpdated(entity, desired))
+{
+    await ApplyUpdate(entity, desired, cancellationToken);
+}
+```
+
+Without this guard, `ByResourceVersion` will produce an infinite reconcile loop for any
+controller that writes to the resource during reconciliation.
+:::
+
 :::tip When to use `ByResourceVersion`
 Your controller needs to react to changes outside `.spec`. Common examples:
 - A controller that mirrors label or annotation values into child resources.
