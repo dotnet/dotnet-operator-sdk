@@ -160,62 +160,53 @@ public class ResourceWatcher<TEntity>(
 
     protected virtual async Task OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
     {
-        if (eventType == WatchEventType.Deleted)
+        if (eventType != WatchEventType.Deleted)
         {
-            await EntityCache.RemoveAsync(entity.Uid(), token: cancellationToken);
-        }
-        else if (settings.ReconcileStrategy == ReconcileStrategy.ByGeneration)
-        {
-            // bypass generation check for finalizer handling
-            // removal does not increase the generation
-            if (entity.Metadata.DeletionTimestamp is null)
+            switch (settings.ReconcileStrategy)
             {
-                var cachedGeneration = await EntityCache.TryGetAsync<long>(
-                    entity.Uid(),
-                    token: cancellationToken);
+                case ReconcileStrategy.ByGeneration:
+                    // bypass generation check for finalizer handling — finalizer removal does not increment generation
+                    if (entity.Metadata.DeletionTimestamp is null)
+                    {
+                        var cachedGeneration = await EntityCache.TryGetAsync<long>(
+                            entity.Uid(),
+                            token: cancellationToken);
 
-                // skip reconcile if generation did not increase.
-                if (cachedGeneration.HasValue && cachedGeneration.Value >= entity.Generation())
-                {
-                    logger
-                        .LogDebug(
-                            """Entity "{Identifier}" modification did not modify generation. Skip event.""",
-                            entity.ToIdentifierString());
+                        // skip reconcile if generation did not increase.
+                        if (cachedGeneration.HasValue && cachedGeneration.Value >= entity.Generation())
+                        {
+                            logger
+                                .LogDebug(
+                                    """Entity "{Identifier}" modification did not modify generation. Skip event.""",
+                                    entity.ToIdentifierString());
 
-                    return;
-                }
+                            return;
+                        }
+                    }
 
-                await EntityCache.SetAsync(
-                    entity.Uid(),
-                    entity.Generation() ?? 1,
-                    token: cancellationToken);
+                    break;
+                case ReconcileStrategy.ByResourceVersion:
+                    // reconcile on every change; resourceVersion changes for all mutations, including finalizer removals
+                    var cachedResourceVersion = await EntityCache.TryGetAsync<string>(
+                        entity.Uid(),
+                        token: cancellationToken);
+
+                    if (cachedResourceVersion.HasValue && cachedResourceVersion.Value == entity.ResourceVersion())
+                    {
+                        logger
+                            .LogDebug(
+                                """Entity "{Identifier}" resourceVersion unchanged. Skip event.""",
+                                entity.ToIdentifierString());
+
+                        return;
+                    }
+
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unsupported reconcile strategy: {settings.ReconcileStrategy}.");
             }
         }
-        else
-        {
-            // ByResourceVersion: reconcile on every write; resourceVersion changes for all mutations
-            // including finalizer removals, so no DeletionTimestamp bypass is required
-            var cachedResourceVersion = await EntityCache.TryGetAsync<string>(
-                entity.Uid(),
-                token: cancellationToken);
 
-            if (cachedResourceVersion.HasValue && cachedResourceVersion.Value == entity.ResourceVersion())
-            {
-                logger
-                    .LogDebug(
-                        """Entity "{Identifier}" resourceVersion unchanged. Skip event.""",
-                        entity.ToIdentifierString());
-
-                return;
-            }
-
-            await EntityCache.SetAsync(
-                entity.Uid(),
-                entity.ResourceVersion(),
-                token: cancellationToken);
-        }
-
-        // queue entity for reconciliation
         await entityQueue
             .Enqueue(
                 entity,
@@ -224,6 +215,29 @@ public class ResourceWatcher<TEntity>(
                 queueIn: TimeSpan.Zero,
                 retryCount: 0,
                 cancellationToken);
+
+        if (eventType == WatchEventType.Deleted)
+        {
+            await EntityCache.RemoveAsync(entity.Uid(), token: cancellationToken);
+        }
+        else
+        {
+            switch (settings.ReconcileStrategy)
+            {
+                case ReconcileStrategy.ByGeneration when entity.Metadata.DeletionTimestamp is null:
+                    await EntityCache.SetAsync(
+                        entity.Uid(),
+                        entity.Generation() ?? 1,
+                        token: cancellationToken);
+                    break;
+                case ReconcileStrategy.ByResourceVersion:
+                    await EntityCache.SetAsync(
+                        entity.Uid(),
+                        entity.ResourceVersion(),
+                        token: cancellationToken);
+                    break;
+            }
+        }
     }
 
     private async Task WatchClientEventsAsync(CancellationToken stoppingToken)

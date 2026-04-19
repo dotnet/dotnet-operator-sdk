@@ -87,6 +87,22 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
+    public async Task OnEvent_Should_Throw_When_ReconcileStrategy_Is_Unknown()
+    {
+        // Arrange
+        var entity = CreateTestEntity();
+        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = (ReconcileStrategy)99 };
+        var watcher = CreateTestableWatcher(settings: settings);
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            watcher.InvokeOnEventAsync(
+                WatchEventType.Modified,
+                entity,
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task OnEvent_Should_Enqueue_When_Generation_Changed_And_Strategy_Is_ByGeneration()
     {
         // Arrange
@@ -255,7 +271,7 @@ public sealed class ResourceWatcherTest
 
         _ = CreateTestableWatcher(
             cacheProvider: mockCacheProvider.Object,
-            settings: new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByGeneration });
+            settings: new() { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByGeneration });
 
         mockCacheProvider.Verify(
             cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcher)),
@@ -275,7 +291,7 @@ public sealed class ResourceWatcherTest
 
         _ = CreateTestableWatcher(
             cacheProvider: mockCacheProvider.Object,
-            settings: new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion });
+            settings: new() { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion });
 
         mockCacheProvider.Verify(
             cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcherByResourceVersion)),
