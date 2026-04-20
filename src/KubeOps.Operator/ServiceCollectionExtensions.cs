@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
     {
         var settings = new OperatorSettings();
         configure?.Invoke(settings);
+        settings.MakeImmutable();
         return new OperatorBuilder(services, settings);
     }
 }

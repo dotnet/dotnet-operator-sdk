@@ -28,6 +28,18 @@ public sealed class OperatorBuilderTest
     private readonly IOperatorBuilder _builder = new OperatorBuilder(new ServiceCollection(), new());
 
     [Fact]
+    public void AddKubernetesOperator_Settings_Should_Be_Immutable_After_Build()
+    {
+        var services = new ServiceCollection();
+        var builder = services.AddKubernetesOperator(s => s.Name = "test");
+
+        var act = () => { builder.Settings.Name = "mutated"; };
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*immutable after the operator has been built*");
+    }
+
+    [Fact]
     public void Should_Add_Default_Resources()
     {
         _builder.Services.Should().Contain(s =>
