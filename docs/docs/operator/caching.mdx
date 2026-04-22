@@ -6,25 +6,45 @@ sidebar_position: 7
 
 ## ResourceWatcher
 
-The `ResourceWatcher` uses a cache instance to store the `.metadata.generation` value of each observed resource.
-The key for the cache entry is the resource's unique ID (`metadata.uid`).
+The `ResourceWatcher` uses a [FusionCache](https://github.com/ZiggyCreatures/FusionCache/blob/main/docs/AGentleIntroduction.md)
+instance to deduplicate watch events before forwarding them to the reconciler.
+The cache key is always the resource's `metadata.uid`.
 
-The primary purpose of the cache is to skip reconciliation cycles for events that do not represent an actual change to a resource's specification (`.spec`).
+Which value is cached — and therefore which events are skipped — depends on the configured
+[Reconcile Strategy](./advanced-configuration.mdx#reconcile-strategy).
 
-1. **`MODIFIED` Event Type**:
-    - Kubernetes only increments the `.metadata.generation` value of a resource when its specification (`.spec`) changes.
-      Updates to status fields (`.status`), while also triggering a `MODIFIED` event, do not increase the `generation`.
-    - When a `MODIFIED` event arrives, the `ResourceWatcher` compares the `generation` of the incoming resource with the value stored in the cache.
-    - If the new `generation` is not greater than the cached one, the reconciliation is skipped.
-      This is a critical optimization, as status updates can occur very frequently (e.g., from other controllers) and typically do not require action from your operator.
-    - Only when the `generation` has increased is the resource forwarded for reconciliation, and the new `generation` value is stored in the cache.
+### `ByGeneration` (Default)
 
-2. **`ADDED` Event Type**:
-    - On an `ADDED` event, the watcher checks if the resource is already present in the cache.
-    - This prevents resources that the operator already knows about (e.g., after a watcher restart) from being incorrectly treated as "new" and reconciled again.
+The cache stores the last observed `metadata.generation` (`long`) for each resource.
 
-3. **`DELETED` Event Type**:
-    - When a resource is deleted, the watcher removes the corresponding entry from the cache to keep the memory clean.
+1. **`MODIFIED` / `ADDED` event**: the watcher reads the cached generation and compares it with
+   the incoming one. If the incoming generation is not greater, the event is silently dropped.
+   Label and annotation changes never increment `generation` (they are `.metadata` changes).
+   Status updates do not increment `generation` when the CRD has a
+   [status subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#status-subresource) enabled.
+2. **`DELETED` event**: the cache entry is removed and the event is always forwarded to the
+   reconciler.
+3. **Entities with `DeletionTimestamp`** (finalizer processing): the generation check is bypassed
+   because finalizer removals do **not** increment `generation`. Without this bypass, the
+   finalizer would never be called.
+
+### `ByResourceVersion`
+
+The cache stores the last observed `metadata.resourceVersion` (`string`) for each resource.
+
+1. **`MODIFIED` / `ADDED` event**: the watcher compares the cached `resourceVersion` with the
+   incoming one. If they are equal (identical write already seen), the event is dropped. Because
+   every API server write — spec, status, labels, annotations, finalizers — produces a new
+   `resourceVersion`, this strategy triggers reconciliation for **all** changes.
+2. **`DELETED` event**: same as `ByGeneration` — the cache entry is removed and the event is
+   always forwarded.
+3. **Entities with `DeletionTimestamp`**: no special bypass is needed. Each finalizer removal is
+   a real API write, so the `resourceVersion` changes naturally and reconciliation fires.
+
+:::note
+Each strategy uses its own named FusionCache instance (see table below), so their L1/L2
+configurations are fully independent.
+:::
 
 ### Default Configuration: In-Memory (L1) Cache
 
@@ -35,39 +55,69 @@ By default, and without any extra configuration, `KubeOps` uses a simple in-memo
     - Very fast, as all data is held in the operator pod's memory.
 
 - **Disadvantages**:
-    - The cache is volatile. If the pod restarts, all stored `generation` values are lost, leading to a full reconciliation of all observed resources.
+    - The cache is volatile. If the pod restarts, all stored values are lost, leading to a full
+      reconciliation of all observed resources on the next watch list.
 
 ### Advanced Configuration: Distributed (L2) Cache
 
-For robust use in production or HA environments, it could be essential to extend cache with a distributed L2 cache and a backplane.
-This ensures that all operator instances share a consistent state.
-A common setup for this involves using [**Redis**](https://github.com/redis/redis).
+For robust use in production or HA environments, it could be essential to extend the cache with a
+distributed L2 cache and a backplane. This ensures that all operator instances share a consistent
+state. A common setup for this involves using [**Redis**](https://github.com/redis/redis).
 
-### FusionCache
+### FusionCache and Named Cache Instances
 
-KubeOps utilizes [`FusionCache`](https://github.com/ZiggyCreatures/FusionCache/blob/main/docs/AGentleIntroduction.md) for seamless support of an L1/L2 cache.
-Via `OperatorSettings.ConfigureResourceWatcherEntityCache`, an `Action` is provided that allows extending the standard configuration or
-overwriting it with a customized version.
+KubeOps uses two named FusionCache instances — one per reconcile strategy:
 
-Here is an example of what a customized configuration with an L2 cache could look like:
+| Strategy | Cache name constant | Value |
+|---|---|---|
+| `ByGeneration` | `CacheConstants.CacheNames.ResourceWatcher` | `"ResourceWatcher"` |
+| `ByResourceVersion` | `CacheConstants.CacheNames.ResourceWatcherByResourceVersion` | `"ResourceWatcher.ByResourceVersion"` |
+
+Only the cache corresponding to the configured strategy is used at runtime. Having separate named
+instances allows you to configure them independently — for example, applying a Redis L2 backend
+only to the `ByResourceVersion` cache, or using different entry TTLs.
+
+Via `OperatorSettings.ConfigureResourceWatcherEntityCache`, an `Action<IFusionCacheBuilder>` is
+provided that configures the **active** cache (whichever strategy is selected). To configure both
+caches individually, register named FusionCache instances directly on the DI container using the
+FusionCache builder API.
+
+**Example: L2 cache for the default `ByGeneration` strategy**
 
 ```csharp
 builder
     .Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.Name = OperatorName;
-        settings.ConfigureResourceWatcherEntityCache =
-            cacheBuilder =>
-                cacheBuilder
-                    .WithCacheKeyPrefix($"{CacheConstants.CacheNames.ResourceWatcher}:")
-                    .WithSerializer(_ => new FusionCacheSystemTextJsonSerializer())
-                    .WithRegisteredDistributedCache()
-                    .WithDefaultEntryOptions(options =>
-                        options.Duration = TimeSpan.MaxValue);
-    })
+    .AddKubernetesOperator(settings => settings
+        .WithName(OperatorName)
+        .WithResourceWatcherEntityCaching(cacheBuilder =>
+            cacheBuilder
+                .WithCacheKeyPrefix($"{CacheConstants.CacheNames.ResourceWatcher}:")
+                .WithSerializer(_ => new FusionCacheSystemTextJsonSerializer())
+                .WithRegisteredDistributedCache()
+                .WithDefaultEntryOptions(options =>
+                    options.Duration = TimeSpan.MaxValue)));
 ```
 
-For an overview of all of FusionCache's features, we refer you to the corresponding documentation:
+**Example: Independent L2 configuration for `ByResourceVersion`**
+
+When using `ReconcileStrategy.ByResourceVersion`, configure the `"ResourceWatcher.ByResourceVersion"`
+named cache. Because `resourceVersion` values are short-lived strings, you may prefer a shorter TTL
+or an in-memory-only setup here:
+
+```csharp
+builder
+    .Services
+    .AddKubernetesOperator(settings => settings
+        .WithName(OperatorName)
+        .WithReconcileStrategy(ReconcileStrategy.ByResourceVersion));
+        // Keep the ByResourceVersion cache in-memory only (default) —
+        // no WithResourceWatcherEntityCaching needed.
+
+// Optionally configure the named cache directly for advanced scenarios:
+builder.Services.AddFusionCache(CacheConstants.CacheNames.ResourceWatcherByResourceVersion)
+    .WithDefaultEntryOptions(options => options.Duration = TimeSpan.FromMinutes(30));
+```
+
+For an overview of all FusionCache features, refer to the corresponding documentation:
 
 https://github.com/ZiggyCreatures/FusionCache/blob/main/docs/CacheLevels.md

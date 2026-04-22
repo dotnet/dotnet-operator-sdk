@@ -25,7 +25,7 @@ namespace KubeOps.Operator.Test.Builder;
 
 public sealed class OperatorBuilderTest
 {
-    private readonly IOperatorBuilder _builder = new OperatorBuilder(new ServiceCollection(), new());
+    private readonly IOperatorBuilder _builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder().Build());
 
     [Fact]
     public void Should_Add_Default_Resources()
@@ -121,7 +121,7 @@ public sealed class OperatorBuilderTest
     [Fact]
     public void Should_Add_Leader_Elector()
     {
-        var builder = new OperatorBuilder(new ServiceCollection(), new() { LeaderElectionType = LeaderElectionType.Single });
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Single }.Build());
         builder.Services.Should().Contain(s =>
             s.ServiceType == typeof(k8s.LeaderElection.LeaderElector) &&
             s.Lifetime == ServiceLifetime.Singleton);
@@ -130,7 +130,7 @@ public sealed class OperatorBuilderTest
     [Fact]
     public void Should_Add_LeaderAwareResourceWatcher()
     {
-        var builder = new OperatorBuilder(new ServiceCollection(), new() { LeaderElectionType = LeaderElectionType.Single });
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Single }.Build());
         builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
 
         builder.Services.Should().Contain(s =>

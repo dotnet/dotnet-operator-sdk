@@ -8,6 +8,20 @@ sidebar_position: 8
 
 This guide covers advanced configuration options for KubeOps operators, including finalizer management, custom leader election, and durable requeue mechanisms.
 
+## Configuring the Operator
+
+Pass a configuration callback to `AddKubernetesOperator` to customise the operator before it starts.
+Every option has a sensible default, so you only need to configure what you want to change:
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithNamespace("my-namespace")
+        .WithLeaderElection(LeaderElectionType.Single));
+```
+
+Each `With*` method corresponds to one of the options described in the sections below.
+
 ## Finalizer Management
 
 KubeOps provides automatic finalizer attachment and detachment to ensure proper resource cleanup. These features can be configured through `OperatorSettings`.
@@ -16,15 +30,6 @@ KubeOps provides automatic finalizer attachment and detachment to ensure proper 
 
 By default, KubeOps automatically attaches finalizers to entities during reconciliation. This ensures that cleanup operations are performed before resources are deleted.
 
-```csharp
-builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        // Enable automatic finalizer attachment (default: true)
-        settings.AutoAttachFinalizers = true;
-    });
-```
-
 When `AutoAttachFinalizers` is enabled:
 - Finalizers are automatically added to entities during reconciliation
 - You don't need to manually call the `EntityFinalizerAttacher` delegate
@@ -32,7 +37,8 @@ When `AutoAttachFinalizers` is enabled:
 
 When disabled:
 ```csharp
-settings.AutoAttachFinalizers = false;
+builder.Services
+    .AddKubernetesOperator(settings => settings.WithAutoAttachFinalizers(false));
 ```
 
 You must manually attach finalizers in your controller:
@@ -66,23 +72,15 @@ public class V1DemoEntityController(
 
 ### Auto-Detach Finalizers
 
-KubeOps automatically removes finalizers after successful finalization. This can also be configured:
-
-```csharp
-builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        // Enable automatic finalizer removal (default: true)
-        settings.AutoDetachFinalizers = true;
-    });
-```
+KubeOps automatically removes finalizers after successful finalization. This can also be configured.
 
 When `AutoDetachFinalizers` is enabled:
 - Finalizers are automatically removed when `FinalizeAsync` returns success
 
 When disabled:
 ```csharp
-settings.AutoDetachFinalizers = false;
+builder.Services
+    .AddKubernetesOperator(settings => settings.WithAutoDetachFinalizers(false));
 ```
 
 You must manually manage finalizer removal, which is typically not recommended unless you have specific requirements.
@@ -123,13 +121,12 @@ public enum LeaderElectionType
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.LeaderElectionType = LeaderElectionType.Single;
-        settings.LeaderElectionLeaseDuration = TimeSpan.FromSeconds(15);
-        settings.LeaderElectionRenewDeadline = TimeSpan.FromSeconds(10);
-        settings.LeaderElectionRetryPeriod = TimeSpan.FromSeconds(2);
-    });
+    .AddKubernetesOperator(settings => settings
+        .WithLeaderElection(LeaderElectionType.Single)
+        .WithLeaderElectionTimings(
+            leaseDuration: TimeSpan.FromSeconds(15),
+            renewDeadline: TimeSpan.FromSeconds(10),
+            retryPeriod: TimeSpan.FromSeconds(2)));
 ```
 
 ### Custom Leader Election
@@ -146,7 +143,8 @@ In some scenarios, you may want different operator instances to handle different
 public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<NamespacedLeaderElectionResourceWatcher<TEntity>> logger,
-    IReconciler<TEntity> reconciler,
+    IFusionCacheProvider cacheProvider,
+    ITimedEntityQueue<TEntity> entityQueue,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
     IKubernetesClient client,
@@ -154,13 +152,14 @@ public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
     : ResourceWatcher<TEntity>(
         activitySource,
         logger,
-        reconciler,
+        cacheProvider,
+        entityQueue,
         settings,
         labelSelector,
         client)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    protected override async Task<ReconciliationResult<TEntity>> OnEventAsync(
+    protected override async Task OnEventAsync(
         WatchEventType eventType,
         TEntity entity,
         CancellationToken cancellationToken)
@@ -171,11 +170,11 @@ public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
             cancellationToken))
         {
             // Skip processing - another instance handles this namespace
-            return ReconciliationResult<TEntity>.Success(entity);
+            return;
         }
 
         // Process the event
-        return await base.OnEventAsync(eventType, entity, cancellationToken);
+        await base.OnEventAsync(eventType, entity, cancellationToken);
     }
 }
 ```
@@ -227,10 +226,8 @@ public class NamespaceLeadershipManager : INamespaceLeadershipManager
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.LeaderElectionType = LeaderElectionType.Custom;
-    })
+    .AddKubernetesOperator(settings => settings
+        .WithLeaderElection(LeaderElectionType.Custom))
     .AddSingleton<INamespaceLeadershipManager, NamespaceLeadershipManager>()
     .AddHostedService<NamespacedLeaderElectionResourceWatcher<V1DemoEntity>>();
 ```
@@ -272,10 +269,7 @@ and `EntityQueueBackgroundService<TEntity>`. You supply both implementations you
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.QueueStrategy = QueueStrategy.Custom;
-    });
+    .AddKubernetesOperator(settings => settings.WithQueueStrategy(QueueStrategy.Custom));
 
 // Register one ITimedEntityQueue<TEntity> per entity type
 builder.Services.AddSingleton<ITimedEntityQueue<V1DemoEntity>, MyCustomEntityQueue<V1DemoEntity>>();
@@ -292,6 +286,107 @@ for each entity type that should use the custom queue.
 Use this strategy when you need scheduling behaviour that differs from the built-in timer-based
 queue — for example, priority queues or implementations that integrate with your own observability
 stack.
+
+## Reconcile Strategy
+
+The reconcile strategy controls which watch events actually trigger a reconciliation cycle.
+It is set via `OperatorSettings.ReconcileStrategy` and defaults to `ByGeneration`.
+
+### Background: Generation vs. ResourceVersion
+
+Every Kubernetes resource carries two version counters in `metadata`:
+
+| Field | Incremented by | When |
+|---|---|---|
+| `metadata.generation` | The API server | On spec changes; never on `.metadata` changes (labels, annotations); not on status changes when a [status subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#status-subresource) is enabled |
+| `metadata.resourceVersion` | The API server | On **every** successful write (spec, status, labels, annotations, finalizers, …) |
+
+Understanding this distinction is key to choosing the right strategy.
+
+### `ByGeneration` (Default)
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithReconcileStrategy(ReconcileStrategy.ByGeneration));
+```
+
+The watcher caches the last seen `metadata.generation` for each resource. A watch event triggers
+reconciliation only when the incoming generation is **greater** than the cached one.
+
+**Consequences:**
+- Label or annotation changes do **not** trigger reconciliation (they are `.metadata` changes and never increment `generation`).
+- Status updates do **not** trigger reconciliation when the CRD has a [status subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#status-subresource) enabled.
+- Finalizer additions/removals during deletion bypass the check because `DeletionTimestamp` is set
+  — deletion does not increment `generation`, so bypassing is required to handle finalizers correctly.
+
+This matches the pattern used by most Kubernetes controllers (e.g., `kube-controller-manager`)
+and is the correct default for the majority of operators.
+
+:::tip When to use `ByGeneration`
+Your controller only reacts to `.spec` changes. Status writes, label updates, and annotation
+changes are either performed by your own controller (and should not re-trigger it), or performed
+by other actors and are irrelevant to your business logic.
+:::
+
+### `ByResourceVersion`
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithReconcileStrategy(ReconcileStrategy.ByResourceVersion));
+```
+
+The watcher caches the last seen `metadata.resourceVersion` (a string). A watch event triggers
+reconciliation whenever the incoming `resourceVersion` differs from the cached one — which is true
+for **every successful API server write**, regardless of which field changed.
+
+**Consequences:**
+- Status updates **do** trigger reconciliation.
+- Label or annotation changes **do** trigger reconciliation.
+- Finalizer removals during deletion trigger reconciliation naturally without any special bypass,
+  because each finalizer removal is a real API write that increments `resourceVersion`.
+- Your controller must be **idempotent** for status-only changes, since it will be called when
+  another actor updates `.status` on the same resource.
+
+:::warning Infinite reconcile loop risk
+Because **every write to the resource increments `resourceVersion`**, a reconciler that writes
+back to the resource — for example to update `.status` — will trigger a new watch event, which
+triggers another reconcile, which writes again, and so on.
+
+The official Kubernetes [level-driven controller pattern](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-api-machinery/controllers.md)
+addresses this: a controller must always work from **current observed state**, not from the event
+that triggered it. In practice: **only write when the value actually changed**.
+
+```csharp
+// Compute the desired state from the entity
+var desired = ComputeDesired(entity);
+
+// Guard: only write when the resource actually needs to change.
+// Any write increments resourceVersion, triggers a new watch event, and
+// therefore a new reconcile — omitting this guard causes an infinite loop.
+if (NeedsToBeUpdated(entity, desired))
+{
+    await ApplyUpdate(entity, desired, cancellationToken);
+}
+```
+
+Without this guard, `ByResourceVersion` will produce an infinite reconcile loop for any
+controller that writes to the resource during reconciliation.
+:::
+
+:::tip When to use `ByResourceVersion`
+Your controller needs to react to changes outside `.spec`. Common examples:
+- A controller that mirrors label or annotation values into child resources.
+- A controller that acts on status conditions written by another controller.
+- A controller that must respond to ownership or finalizer changes made by external actors.
+:::
+
+:::caution Performance consideration
+`ByResourceVersion` can significantly increase the number of reconciliation calls, especially for
+resources whose `.status` is updated frequently. Size `MaxParallelReconciliations` and the error
+backoff settings accordingly and ensure your controller logic is fast for status-only no-op cases.
+:::
 
 ## Triggering Reconciliation from External Sources
 
@@ -468,13 +563,8 @@ entity types. The default is `Environment.ProcessorCount * 2`.
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.ParallelReconciliationOptions = new()
-        {
-            MaxParallelReconciliations = 16,
-        };
-    });
+    .AddKubernetesOperator(settings => settings
+        .WithParallelReconciliation(new() { MaxParallelReconciliations = 16 }));
 ```
 
 A global `SemaphoreSlim` is acquired **before** an entry is dequeued, which means the queue acts as
@@ -494,15 +584,13 @@ When a second reconciliation event arrives for an entity that is already being r
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.ParallelReconciliationOptions = new()
+    .AddKubernetesOperator(settings => settings
+        .WithParallelReconciliation(new()
         {
             MaxParallelReconciliations = 8,
             ConflictStrategy = ParallelReconciliationConflictStrategy.RequeueAfterDelay,
             RequeueDelay = TimeSpan.FromSeconds(3),
-        };
-    });
+        }));
 ```
 
 :::note

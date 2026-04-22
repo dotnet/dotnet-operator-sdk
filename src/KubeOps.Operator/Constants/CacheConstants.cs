@@ -19,5 +19,13 @@ public static class CacheConstants
         /// in the operator's caching mechanisms.
         /// </summary>
         public const string ResourceWatcher = "ResourceWatcher";
+
+        /// <summary>
+        /// Cache name used by ResourceWatcher&lt;TEntity&gt; when
+        /// <see cref="KubeOps.Abstractions.Builder.ReconcileStrategy.ByResourceVersion"/> is configured.
+        /// Having a separate named cache allows independent FusionCache L1/L2 configuration
+        /// (e.g. different TTL, distributed backend, or size limits) from the generation-based cache.
+        /// </summary>
+        public const string ResourceWatcherByResourceVersion = "ResourceWatcher.ByResourceVersion";
     }
 }

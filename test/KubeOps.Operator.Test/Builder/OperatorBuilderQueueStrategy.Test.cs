@@ -22,7 +22,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     [Fact]
     public void Should_Register_TimedEntityQueue_And_BackgroundService_For_InMemory_Strategy()
     {
-        var builder = new OperatorBuilder(new ServiceCollection(), new() { QueueStrategy = QueueStrategy.InMemory });
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { QueueStrategy = QueueStrategy.InMemory }.Build());
         builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
 
         builder.Services.Should().Contain(s =>
@@ -36,7 +36,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     [Fact]
     public void Should_Not_Register_TimedEntityQueue_Or_BackgroundService_For_Custom_Strategy()
     {
-        var builder = new OperatorBuilder(new ServiceCollection(), new() { QueueStrategy = QueueStrategy.Custom });
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { QueueStrategy = QueueStrategy.Custom }.Build());
         builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
 
         builder.Services.Should().NotContain(s =>
@@ -49,7 +49,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     [Fact]
     public void Should_Always_Register_EntityQueue_Delegate_Regardless_Of_Strategy()
     {
-        var builder = new OperatorBuilder(new ServiceCollection(), new() { QueueStrategy = QueueStrategy.Custom });
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { QueueStrategy = QueueStrategy.Custom }.Build());
         builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
 
         builder.Services.Should().Contain(s =>
