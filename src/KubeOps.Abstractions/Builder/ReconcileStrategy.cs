@@ -16,7 +16,7 @@ public enum ReconcileStrategy
     /// see https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#status-subresource
     /// This is the default strategy and matches the behaviour of most Kubernetes controllers.
     /// </summary>
-    ByGeneration = 0,
+    ByGeneration,
 
     /// <summary>
     /// Reconcile whenever the entity's <c>metadata.resourceVersion</c> changes,
@@ -24,5 +24,5 @@ public enum ReconcileStrategy
     /// (spec, status, labels, annotations, finalizers, etc.).
     /// Choose this strategy when your controller must react to changes outside the spec.
     /// </summary>
-    ByResourceVersion = 1,
+    ByResourceVersion,
 }
