@@ -82,7 +82,7 @@ public sealed class EntityQueueBackgroundServiceTest
         V1ConfigMap? entity,
         OperatorSettings? settings = null)
     {
-        var effectiveSettings = settings ?? new OperatorSettings();
+        var effectiveSettings = settings ?? new OperatorSettingsBuilder().Build();
 
         clientMock
             .Setup(c => c.GetAsync<V1ConfigMap>(
@@ -225,14 +225,14 @@ public sealed class EntityQueueBackgroundServiceTest
                 return ReconciliationResult<V1ConfigMap>.Success(entity);
             });
 
-        var settings = new OperatorSettings
+        var settings = new OperatorSettingsBuilder
         {
             ParallelReconciliationOptions = new()
             {
                 MaxParallelReconciliations = 4,
                 ConflictStrategy = ParallelReconciliationConflictStrategy.Discard,
             },
-        };
+        }.Build();
 
         await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings);
         await service.StartAsync(TestContext.Current.CancellationToken);
@@ -282,7 +282,7 @@ public sealed class EntityQueueBackgroundServiceTest
                 return ReconciliationResult<V1ConfigMap>.Success(entity);
             });
 
-        var settings = new OperatorSettings
+        var settings = new OperatorSettingsBuilder
         {
             ParallelReconciliationOptions = new()
             {
@@ -290,7 +290,7 @@ public sealed class EntityQueueBackgroundServiceTest
                 ConflictStrategy = ParallelReconciliationConflictStrategy.RequeueAfterDelay,
                 RequeueDelay = TimeSpan.FromMilliseconds(50),
             },
-        };
+        }.Build();
 
         await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings);
         await service.StartAsync(TestContext.Current.CancellationToken);
@@ -323,7 +323,7 @@ public sealed class EntityQueueBackgroundServiceTest
             .Setup(r => r.Reconcile(It.IsAny<ReconciliationContext<V1ConfigMap>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("transient error"));
 
-        var settings = new OperatorSettings
+        var settings = new OperatorSettingsBuilder
         {
             ParallelReconciliationOptions = new()
             {
@@ -331,7 +331,7 @@ public sealed class EntityQueueBackgroundServiceTest
                 MaxErrorRetries = 3,
                 ErrorBackoffBase = TimeSpan.FromMilliseconds(10),
             },
-        };
+        }.Build();
 
         await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings);
         await service.StartAsync(TestContext.Current.CancellationToken);
@@ -366,7 +366,7 @@ public sealed class EntityQueueBackgroundServiceTest
             .ThrowsAsync(new InvalidOperationException("persistent error"));
 
         const int maxRetries = 2;
-        var settings = new OperatorSettings
+        var settings = new OperatorSettingsBuilder
         {
             ParallelReconciliationOptions = new()
             {
@@ -374,7 +374,7 @@ public sealed class EntityQueueBackgroundServiceTest
                 MaxErrorRetries = maxRetries,
                 ErrorBackoffBase = TimeSpan.FromMilliseconds(10),
             },
-        };
+        }.Build();
 
         await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings);
         await service.StartAsync(TestContext.Current.CancellationToken);
@@ -405,14 +405,14 @@ public sealed class EntityQueueBackgroundServiceTest
             .Setup(r => r.Reconcile(It.IsAny<ReconciliationContext<V1ConfigMap>>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("error with retries disabled"));
 
-        var settings = new OperatorSettings
+        var settings = new OperatorSettingsBuilder
         {
             ParallelReconciliationOptions = new()
             {
                 MaxParallelReconciliations = 2,
                 MaxErrorRetries = 0,
             },
-        };
+        }.Build();
 
         await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings);
         await service.StartAsync(TestContext.Current.CancellationToken);

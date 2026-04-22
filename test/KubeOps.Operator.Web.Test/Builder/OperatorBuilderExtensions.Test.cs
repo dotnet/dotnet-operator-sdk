@@ -19,9 +19,9 @@ namespace KubeOps.Operator.Web.Test.Builder;
 
 #pragma warning disable CA2252 // Opt in to preview features before using them
 
-public class OperatorBuilderExtensionsTest : IDisposable
+public sealed class OperatorBuilderExtensionsTest : IDisposable
 {
-    private readonly IOperatorBuilder _builder = new OperatorBuilder(new ServiceCollection(), new());
+    private readonly OperatorBuilder _builder = new(new ServiceCollection(), new OperatorSettingsBuilder().Build());
     private readonly CertificateGenerator _certProvider = new(Environment.MachineName);
 
     [Fact]

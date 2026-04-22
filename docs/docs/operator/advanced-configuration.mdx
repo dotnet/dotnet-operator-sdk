@@ -8,6 +8,20 @@ sidebar_position: 8
 
 This guide covers advanced configuration options for KubeOps operators, including finalizer management, custom leader election, and durable requeue mechanisms.
 
+## Configuring the Operator
+
+Pass a configuration callback to `AddKubernetesOperator` to customise the operator before it starts.
+Every option has a sensible default, so you only need to configure what you want to change:
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithNamespace("my-namespace")
+        .WithLeaderElection(LeaderElectionType.Single));
+```
+
+Each `With*` method corresponds to one of the options described in the sections below.
+
 ## Finalizer Management
 
 KubeOps provides automatic finalizer attachment and detachment to ensure proper resource cleanup. These features can be configured through `OperatorSettings`.
@@ -16,15 +30,6 @@ KubeOps provides automatic finalizer attachment and detachment to ensure proper 
 
 By default, KubeOps automatically attaches finalizers to entities during reconciliation. This ensures that cleanup operations are performed before resources are deleted.
 
-```csharp
-builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        // Enable automatic finalizer attachment (default: true)
-        settings.AutoAttachFinalizers = true;
-    });
-```
-
 When `AutoAttachFinalizers` is enabled:
 - Finalizers are automatically added to entities during reconciliation
 - You don't need to manually call the `EntityFinalizerAttacher` delegate
@@ -32,7 +37,8 @@ When `AutoAttachFinalizers` is enabled:
 
 When disabled:
 ```csharp
-settings.AutoAttachFinalizers = false;
+builder.Services
+    .AddKubernetesOperator(settings => settings.WithAutoAttachFinalizers(false));
 ```
 
 You must manually attach finalizers in your controller:
@@ -66,23 +72,15 @@ public class V1DemoEntityController(
 
 ### Auto-Detach Finalizers
 
-KubeOps automatically removes finalizers after successful finalization. This can also be configured:
-
-```csharp
-builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        // Enable automatic finalizer removal (default: true)
-        settings.AutoDetachFinalizers = true;
-    });
-```
+KubeOps automatically removes finalizers after successful finalization. This can also be configured.
 
 When `AutoDetachFinalizers` is enabled:
 - Finalizers are automatically removed when `FinalizeAsync` returns success
 
 When disabled:
 ```csharp
-settings.AutoDetachFinalizers = false;
+builder.Services
+    .AddKubernetesOperator(settings => settings.WithAutoDetachFinalizers(false));
 ```
 
 You must manually manage finalizer removal, which is typically not recommended unless you have specific requirements.
@@ -123,13 +121,12 @@ public enum LeaderElectionType
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.LeaderElectionType = LeaderElectionType.Single;
-        settings.LeaderElectionLeaseDuration = TimeSpan.FromSeconds(15);
-        settings.LeaderElectionRenewDeadline = TimeSpan.FromSeconds(10);
-        settings.LeaderElectionRetryPeriod = TimeSpan.FromSeconds(2);
-    });
+    .AddKubernetesOperator(settings => settings
+        .WithLeaderElection(LeaderElectionType.Single)
+        .WithLeaderElectionTimings(
+            leaseDuration: TimeSpan.FromSeconds(15),
+            renewDeadline: TimeSpan.FromSeconds(10),
+            retryPeriod: TimeSpan.FromSeconds(2)));
 ```
 
 ### Custom Leader Election
@@ -229,10 +226,8 @@ public class NamespaceLeadershipManager : INamespaceLeadershipManager
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.LeaderElectionType = LeaderElectionType.Custom;
-    })
+    .AddKubernetesOperator(settings => settings
+        .WithLeaderElection(LeaderElectionType.Custom))
     .AddSingleton<INamespaceLeadershipManager, NamespaceLeadershipManager>()
     .AddHostedService<NamespacedLeaderElectionResourceWatcher<V1DemoEntity>>();
 ```
@@ -274,10 +269,7 @@ and `EntityQueueBackgroundService<TEntity>`. You supply both implementations you
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.QueueStrategy = QueueStrategy.Custom;
-    });
+    .AddKubernetesOperator(settings => settings.WithQueueStrategy(QueueStrategy.Custom));
 
 // Register one ITimedEntityQueue<TEntity> per entity type
 builder.Services.AddSingleton<ITimedEntityQueue<V1DemoEntity>, MyCustomEntityQueue<V1DemoEntity>>();
@@ -315,10 +307,8 @@ Understanding this distinction is key to choosing the right strategy.
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.ReconcileStrategy = ReconcileStrategy.ByGeneration; // default
-    });
+    .AddKubernetesOperator(settings => settings
+        .WithReconcileStrategy(ReconcileStrategy.ByGeneration));
 ```
 
 The watcher caches the last seen `metadata.generation` for each resource. A watch event triggers
@@ -343,10 +333,8 @@ by other actors and are irrelevant to your business logic.
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.ReconcileStrategy = ReconcileStrategy.ByResourceVersion;
-    });
+    .AddKubernetesOperator(settings => settings
+        .WithReconcileStrategy(ReconcileStrategy.ByResourceVersion));
 ```
 
 The watcher caches the last seen `metadata.resourceVersion` (a string). A watch event triggers
@@ -575,13 +563,8 @@ entity types. The default is `Environment.ProcessorCount * 2`.
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.ParallelReconciliationOptions = new()
-        {
-            MaxParallelReconciliations = 16,
-        };
-    });
+    .AddKubernetesOperator(settings => settings
+        .WithParallelReconciliation(new() { MaxParallelReconciliations = 16 }));
 ```
 
 A global `SemaphoreSlim` is acquired **before** an entry is dequeued, which means the queue acts as
@@ -601,15 +584,13 @@ When a second reconciliation event arrives for an entity that is already being r
 
 ```csharp
 builder.Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.ParallelReconciliationOptions = new()
+    .AddKubernetesOperator(settings => settings
+        .WithParallelReconciliation(new()
         {
             MaxParallelReconciliations = 8,
             ConflictStrategy = ParallelReconciliationConflictStrategy.RequeueAfterDelay,
             RequeueDelay = TimeSpan.FromSeconds(3),
-        };
-    });
+        }));
 ```
 
 :::note

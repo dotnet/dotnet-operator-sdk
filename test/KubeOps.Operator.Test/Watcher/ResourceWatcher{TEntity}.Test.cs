@@ -91,7 +91,7 @@ public sealed class ResourceWatcherTest
     {
         // Arrange
         var entity = CreateTestEntity();
-        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = (ReconcileStrategy)99 };
+        var settings = new OperatorSettingsBuilder { Namespace = "unit-test", ReconcileStrategy = (ReconcileStrategy)99 }.Build();
         var watcher = CreateTestableWatcher(settings: settings);
 
         // Act & Assert
@@ -184,7 +184,7 @@ public sealed class ResourceWatcherTest
         var entity = CreateTestEntity();
         var mockCache = new Mock<IFusionCache>();
         var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
-        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion };
+        var settings = new OperatorSettingsBuilder { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion }.Build();
         var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, settings: settings);
 
         mockCache
@@ -271,7 +271,7 @@ public sealed class ResourceWatcherTest
 
         _ = CreateTestableWatcher(
             cacheProvider: mockCacheProvider.Object,
-            settings: new() { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByGeneration });
+            settings: new OperatorSettingsBuilder { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByGeneration }.Build());
 
         mockCacheProvider.Verify(
             cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcher)),
@@ -291,7 +291,7 @@ public sealed class ResourceWatcherTest
 
         _ = CreateTestableWatcher(
             cacheProvider: mockCacheProvider.Object,
-            settings: new() { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion });
+            settings: new OperatorSettingsBuilder { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion }.Build());
 
         mockCacheProvider.Verify(
             cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcherByResourceVersion)),
@@ -343,7 +343,7 @@ public sealed class ResourceWatcherTest
         var entity = CreateTestEntity(resourceVersion: "2");
         var mockCache = new Mock<IFusionCache>();
         var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
-        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion };
+        var settings = new OperatorSettingsBuilder { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion }.Build();
         var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, settings: settings);
 
         mockCache
@@ -378,7 +378,7 @@ public sealed class ResourceWatcherTest
         var mockCache = new Mock<IFusionCache>();
         var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
         var mockLogger = new Mock<ILogger<ResourceWatcher<V1OperatorIntegrationTestEntity>>>();
-        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion };
+        var settings = new OperatorSettingsBuilder { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion }.Build();
         var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, logger: mockLogger.Object, settings: settings);
 
         mockCache
@@ -417,7 +417,7 @@ public sealed class ResourceWatcherTest
         entity.Metadata.DeletionTimestamp = DateTime.UtcNow;
         var mockCache = new Mock<IFusionCache>();
         var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
-        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion };
+        var settings = new OperatorSettingsBuilder { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion }.Build();
         var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, settings: settings);
 
         mockCache
@@ -443,7 +443,7 @@ public sealed class ResourceWatcherTest
         var entity = CreateTestEntity(resourceVersion: "7");
         var mockCache = new Mock<IFusionCache>();
         var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
-        var settings = new OperatorSettings { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion };
+        var settings = new OperatorSettingsBuilder { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion }.Build();
         var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, settings: settings);
 
         // Act
@@ -484,7 +484,7 @@ public sealed class ResourceWatcherTest
         bool waitForCancellation = false)
     {
         var activitySource = new ActivitySource("unit-test");
-        var effectiveSettings = settings ?? new OperatorSettings { Namespace = "unit-test" };
+        var effectiveSettings = settings ?? new OperatorSettingsBuilder { Namespace = "unit-test" }.Build();
         var kubeClient = kubernetesClient ?? Mock.Of<IKubernetesClient>();
         var fCache = cache ?? Mock.Of<IFusionCache>();
         var timedEntityQueue = queue ?? Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();

@@ -30,7 +30,7 @@ public sealed class ReconcilerTest
     private readonly Mock<IKeyedServiceProvider> _mockServiceProvider;
     private readonly Mock<IKubernetesClient> _mockClient;
     private readonly Mock<ITimedEntityQueue<V1ConfigMap>> _mockQueue;
-    private readonly OperatorSettings _settings;
+    private OperatorSettings _settings;
 
     public ReconcilerTest()
     {
@@ -39,7 +39,7 @@ public sealed class ReconcilerTest
         _mockServiceProvider = new();
         _mockClient = new();
         _mockQueue = new();
-        _settings = new() { AutoAttachFinalizers = false, AutoDetachFinalizers = false };
+        _settings = new OperatorSettingsBuilder { AutoAttachFinalizers = false, AutoDetachFinalizers = false }.Build();
     }
 
     [Fact]
@@ -271,7 +271,7 @@ public sealed class ReconcilerTest
     [Fact]
     public async Task Reconcile_When_Auto_Attach_Finalizers_Is_Enabled_Should_Attach_Finalizer()
     {
-        _settings.AutoAttachFinalizers = true;
+        _settings = _settings with { AutoAttachFinalizers = true };
 
         var entity = CreateTestEntity();
         var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
@@ -307,7 +307,7 @@ public sealed class ReconcilerTest
     [Fact]
     public async Task Reconcile_When_Auto_Attach_Finalizers_Is_Enabled_But_No_Finalizer_Is_Defined_Should_Not_Update()
     {
-        _settings.AutoAttachFinalizers = true;
+        _settings = _settings with { AutoAttachFinalizers = true };
 
         var entity = CreateTestEntity();
         var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
@@ -338,7 +338,7 @@ public sealed class ReconcilerTest
     [Fact]
     public async Task Reconcile_When_Auto_Detach_Finalizers_Is_Enabled_Should_Detach_Finalizer()
     {
-        _settings.AutoDetachFinalizers = true;
+        _settings = _settings with { AutoDetachFinalizers = true };
 
         const string finalizerName = "test-finalizer";
         var entity = CreateTestEntityForFinalization(deletionTimestamp: DateTime.UtcNow, finalizer: finalizerName);
@@ -369,7 +369,7 @@ public sealed class ReconcilerTest
     [Fact]
     public async Task Reconcile_Should_Update_Entity_With_CancellationToken_None_After_Finalization()
     {
-        _settings.AutoDetachFinalizers = true;
+        _settings = _settings with { AutoDetachFinalizers = true };
 
         const string finalizerName = "test-finalizer";
         var entity = CreateTestEntityForFinalization(deletionTimestamp: DateTime.UtcNow, finalizer: finalizerName);

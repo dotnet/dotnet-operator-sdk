@@ -87,18 +87,15 @@ FusionCache builder API.
 ```csharp
 builder
     .Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.Name = OperatorName;
-        settings.ConfigureResourceWatcherEntityCache =
-            cacheBuilder =>
-                cacheBuilder
-                    .WithCacheKeyPrefix($"{CacheConstants.CacheNames.ResourceWatcher}:")
-                    .WithSerializer(_ => new FusionCacheSystemTextJsonSerializer())
-                    .WithRegisteredDistributedCache()
-                    .WithDefaultEntryOptions(options =>
-                        options.Duration = TimeSpan.MaxValue);
-    });
+    .AddKubernetesOperator(settings => settings
+        .WithName(OperatorName)
+        .WithResourceWatcherEntityCaching(cacheBuilder =>
+            cacheBuilder
+                .WithCacheKeyPrefix($"{CacheConstants.CacheNames.ResourceWatcher}:")
+                .WithSerializer(_ => new FusionCacheSystemTextJsonSerializer())
+                .WithRegisteredDistributedCache()
+                .WithDefaultEntryOptions(options =>
+                    options.Duration = TimeSpan.MaxValue)));
 ```
 
 **Example: Independent L2 configuration for `ByResourceVersion`**
@@ -110,13 +107,11 @@ or an in-memory-only setup here:
 ```csharp
 builder
     .Services
-    .AddKubernetesOperator(settings =>
-    {
-        settings.Name = OperatorName;
-        settings.ReconcileStrategy = ReconcileStrategy.ByResourceVersion;
+    .AddKubernetesOperator(settings => settings
+        .WithName(OperatorName)
+        .WithReconcileStrategy(ReconcileStrategy.ByResourceVersion));
         // Keep the ByResourceVersion cache in-memory only (default) —
-        // no ConfigureResourceWatcherEntityCache needed.
-    });
+        // no WithResourceWatcherEntityCaching needed.
 
 // Optionally configure the named cache directly for advanced scenarios:
 builder.Services.AddFusionCache(CacheConstants.CacheNames.ResourceWatcherByResourceVersion)

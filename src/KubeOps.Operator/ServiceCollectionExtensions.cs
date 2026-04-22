@@ -18,15 +18,16 @@ public static class ServiceCollectionExtensions
     /// Add the Kubernetes operator to the dependency injection.
     /// </summary>
     /// <param name="services"><see cref="IServiceCollection"/>.</param>
-    /// <param name="configure">An optional configure action for adjusting settings in the operator.</param>
+    /// <param name="configure">
+    /// An optional action to configure the operator settings via <see cref="OperatorSettingsBuilder"/>.
+    /// </param>
     /// <returns>An <see cref="IOperatorBuilder"/> for further configuration and chaining.</returns>
     public static IOperatorBuilder AddKubernetesOperator(
         this IServiceCollection services,
-        Action<OperatorSettings>? configure = null)
+        Action<OperatorSettingsBuilder>? configure = null)
     {
-        var settings = new OperatorSettings();
-        configure?.Invoke(settings);
-        settings.MakeImmutable();
-        return new OperatorBuilder(services, settings);
+        var builder = new OperatorSettingsBuilder();
+        configure?.Invoke(builder);
+        return new OperatorBuilder(services, builder.Build());
     }
 }

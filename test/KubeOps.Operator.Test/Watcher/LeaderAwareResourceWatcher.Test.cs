@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Constants;
@@ -84,7 +85,7 @@ public sealed class LeaderAwareResourceWatcherTest
                 logger,
                 cacheProvider,
                 queue,
-                new() { Namespace = "unit-test" },
+                new OperatorSettingsBuilder { Namespace = "unit-test" }.Build(),
                 new DefaultEntityLabelSelector<V1OperatorIntegrationTestEntity>(),
                 client,
                 lifetime,

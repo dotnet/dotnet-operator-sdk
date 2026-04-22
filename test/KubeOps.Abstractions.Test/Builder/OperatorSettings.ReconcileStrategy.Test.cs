@@ -13,7 +13,7 @@ public sealed class OperatorSettingsReconcileStrategyTest
     [Fact]
     public void ReconcileStrategy_Should_Default_To_ByGeneration()
     {
-        var settings = new OperatorSettings();
+        var settings = new OperatorSettingsBuilder().Build();
         settings.ReconcileStrategy.Should().Be(ReconcileStrategy.ByGeneration);
     }
 
@@ -22,7 +22,7 @@ public sealed class OperatorSettingsReconcileStrategyTest
     [InlineData(ReconcileStrategy.ByResourceVersion)]
     public void ReconcileStrategy_Should_Be_Settable(ReconcileStrategy strategy)
     {
-        var settings = new OperatorSettings { ReconcileStrategy = strategy };
+        var settings = new OperatorSettingsBuilder { ReconcileStrategy = strategy }.Build();
         settings.ReconcileStrategy.Should().Be(strategy);
     }
 }

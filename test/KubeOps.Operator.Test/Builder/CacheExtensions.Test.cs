@@ -24,7 +24,7 @@ public sealed class CacheExtensionsTest
         string expectedCacheName)
     {
         var services = new ServiceCollection();
-        services.WithResourceWatcherEntityCaching(new() { ReconcileStrategy = strategy });
+        services.WithResourceWatcherEntityCaching(new OperatorSettingsBuilder { ReconcileStrategy = strategy }.Build());
         var provider = services.BuildServiceProvider();
 
         var cacheProvider = provider.GetRequiredService<IFusionCacheProvider>();
@@ -37,10 +37,10 @@ public sealed class CacheExtensionsTest
     public void WithResourceWatcherEntityCaching_Should_Invoke_Custom_Cache_Configurator_When_Provided()
     {
         var configuratorInvoked = false;
-        var settings = new OperatorSettings
+        var settings = new OperatorSettingsBuilder
         {
             ConfigureResourceWatcherEntityCache = _ => configuratorInvoked = true,
-        };
+        }.Build();
 
         new ServiceCollection().WithResourceWatcherEntityCaching(settings);
 
