@@ -7,9 +7,9 @@ using k8s.Models;
 
 namespace KubeOps.Abstractions.Entities;
 
-public sealed class DefaultEntityLabelSelector<TEntity> : IEntityLabelSelector<TEntity>
+public sealed class DefaultEntityFieldSelector<TEntity> : IEntityFieldSelector<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    public ValueTask<string?> GetLabelSelectorAsync(CancellationToken cancellationToken) =>
+    public ValueTask<string?> GetFieldSelectorAsync(CancellationToken cancellationToken) =>
         ValueTask.FromResult<string?>(null);
 }

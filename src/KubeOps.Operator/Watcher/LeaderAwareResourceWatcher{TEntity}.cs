@@ -27,6 +27,7 @@ public class LeaderAwareResourceWatcher<TEntity>(
     ITimedEntityQueue<TEntity> entityQueue,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
+    IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     IHostApplicationLifetime hostApplicationLifetime,
     LeaderElector elector)
@@ -37,6 +38,7 @@ public class LeaderAwareResourceWatcher<TEntity>(
         entityQueue,
         settings,
         labelSelector,
+        fieldSelector,
         client)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {

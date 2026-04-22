@@ -87,6 +87,7 @@ public sealed class LeaderAwareResourceWatcherTest
                 queue,
                 new OperatorSettingsBuilder { Namespace = "unit-test" }.Build(),
                 new DefaultEntityLabelSelector<V1OperatorIntegrationTestEntity>(),
+                new DefaultEntityFieldSelector<V1OperatorIntegrationTestEntity>(),
                 client,
                 lifetime,
                 elector)

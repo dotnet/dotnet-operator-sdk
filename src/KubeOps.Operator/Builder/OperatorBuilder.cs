@@ -74,13 +74,24 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         return this;
     }
 
-    public IOperatorBuilder AddController<TImplementation, TEntity, TLabelSelector>()
+    public IOperatorBuilder AddControllerWithLabelSelector<TImplementation, TEntity, TLabelSelector>()
         where TImplementation : class, IEntityController<TEntity>
         where TEntity : IKubernetesObject<V1ObjectMeta>
         where TLabelSelector : class, IEntityLabelSelector<TEntity>
     {
         AddController<TImplementation, TEntity>();
         Services.TryAddSingleton<IEntityLabelSelector<TEntity>, TLabelSelector>();
+
+        return this;
+    }
+
+    public IOperatorBuilder AddControllerWithFieldSelector<TImplementation, TEntity, TFieldSelector>()
+        where TImplementation : class, IEntityController<TEntity>
+        where TEntity : IKubernetesObject<V1ObjectMeta>
+        where TFieldSelector : class, IEntityFieldSelector<TEntity>
+    {
+        AddController<TImplementation, TEntity>();
+        Services.TryAddSingleton<IEntityFieldSelector<TEntity>, TFieldSelector>();
 
         return this;
     }
@@ -136,6 +147,7 @@ internal sealed class OperatorBuilder : IOperatorBuilder
             services.GetRequiredService<IEventPublisherFactory>().Create());
 
         Services.AddSingleton(typeof(IEntityLabelSelector<>), typeof(DefaultEntityLabelSelector<>));
+        Services.AddSingleton(typeof(IEntityFieldSelector<>), typeof(DefaultEntityFieldSelector<>));
 
         if (Settings.LeaderElectionType == LeaderElectionType.Single)
         {
