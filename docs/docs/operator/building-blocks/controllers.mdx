@@ -98,7 +98,7 @@ public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
 
 ### DeletedAsync
 
-:::warning Important
+:::warning[Important]
 The `DeletedAsync` method is informational only and executes asynchronously without guarantees. While it is called when a resource is deleted, it cannot ensure proper cleanup. For reliable resource cleanup, use [finalizers](./finalizer).
 :::
 
@@ -204,7 +204,7 @@ public class V1DemoEntityController(
 }
 ```
 
-:::info Durable Queue
+:::info[Durable Queue]
 By default, queue entries are held in memory and lost on operator restart. To back the queue with an external system, see [Advanced Configuration — Queue Strategy](../advanced-configuration#queue-strategy).
 :::
 

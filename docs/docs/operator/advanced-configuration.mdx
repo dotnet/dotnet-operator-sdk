@@ -323,7 +323,7 @@ reconciliation only when the incoming generation is **greater** than the cached 
 This matches the pattern used by most Kubernetes controllers (e.g., `kube-controller-manager`)
 and is the correct default for the majority of operators.
 
-:::tip When to use `ByGeneration`
+:::tip[When to use `ByGeneration`]
 Your controller only reacts to `.spec` changes. Status writes, label updates, and annotation
 changes are either performed by your own controller (and should not re-trigger it), or performed
 by other actors and are irrelevant to your business logic.
@@ -349,7 +349,7 @@ for **every successful API server write**, regardless of which field changed.
 - Your controller must be **idempotent** for status-only changes, since it will be called when
   another actor updates `.status` on the same resource.
 
-:::warning Infinite reconcile loop risk
+:::warning[Infinite reconcile loop risk]
 Because **every write to the resource increments `resourceVersion`**, a reconciler that writes
 back to the resource — for example to update `.status` — will trigger a new watch event, which
 triggers another reconcile, which writes again, and so on.
@@ -375,14 +375,14 @@ Without this guard, `ByResourceVersion` will produce an infinite reconcile loop 
 controller that writes to the resource during reconciliation.
 :::
 
-:::tip When to use `ByResourceVersion`
+:::tip[When to use `ByResourceVersion`]
 Your controller needs to react to changes outside `.spec`. Common examples:
 - A controller that mirrors label or annotation values into child resources.
 - A controller that acts on status conditions written by another controller.
 - A controller that must respond to ownership or finalizer changes made by external actors.
 :::
 
-:::caution Performance consideration
+:::caution[Performance consideration]
 `ByResourceVersion` can significantly increase the number of reconciliation calls, especially for
 resources whose `.status` is updated frequently. Size `MaxParallelReconciliations` and the error
 backoff settings accordingly and ensure your controller logic is fast for status-only no-op cases.

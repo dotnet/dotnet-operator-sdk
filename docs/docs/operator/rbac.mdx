@@ -21,7 +21,7 @@ Kubernetes RBAC works through four main resources:
 
 When you generate installation files for your operator, KubeOps automatically creates the necessary RBAC configurations for the operator's service account. These configurations define what resources and operations your operator is allowed to perform.
 
-:::note Local Development
+:::note[Local Development]
 During local development, you typically use an admin account that has full cluster access. Therefore, RBAC restrictions don't apply, and you don't need to worry about permissions. However, it's still good practice to define the required RBAC rules for production use.
 :::
 
