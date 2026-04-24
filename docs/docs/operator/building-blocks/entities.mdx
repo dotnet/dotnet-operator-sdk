@@ -154,3 +154,63 @@ public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec
     }
 }
 ```
+
+## Scale Subresource
+
+The `[ScaleSubresource]` attribute enables the Kubernetes [scale subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource) on a CRD. This allows [HorizontalPodAutoscalers (HPAs)](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) to manage the replica count of your custom resource.
+
+The attribute accepts two required parameters and one optional parameter — all JSON paths into the resource object:
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `specReplicasPath` | Yes | JSON path to desired replicas in spec, e.g. `.spec.replicas` |
+| `statusReplicasPath` | Yes | JSON path to observed replicas in status, e.g. `.status.replicas` |
+| `labelSelectorPath` | No | JSON path to the label selector string, e.g. `.status.selector` |
+
+### Example — spec-only entity
+
+```csharp
+[KubernetesEntity(Group = "demo.kubeops.dev", ApiVersion = "v1", Kind = "DemoEntity")]
+[ScaleSubresource(".spec.replicas", ".status.replicas")]
+public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec>
+{
+    public class V1DemoEntitySpec
+    {
+        public int Replicas { get; set; } = 1;
+    }
+}
+```
+
+### Example — entity with both spec and status
+
+```csharp
+[KubernetesEntity(Group = "demo.kubeops.dev", ApiVersion = "v1", Kind = "DemoEntity")]
+[ScaleSubresource(".spec.replicas", ".status.replicas", ".status.selector")]
+public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec, V1DemoEntity.V1DemoEntityStatus>
+{
+    public class V1DemoEntitySpec
+    {
+        public int Replicas { get; set; } = 1;
+    }
+
+    public class V1DemoEntityStatus
+    {
+        public int Replicas { get; set; }
+        public string Selector { get; set; } = string.Empty;
+    }
+}
+```
+
+The generated CRD will contain:
+
+```yaml
+subresources:
+  scale:
+    specReplicasPath: .spec.replicas
+    statusReplicasPath: .status.replicas
+    labelSelectorPath: .status.selector  # only if provided
+```
+
+:::note
+The scale subresource is independent of the status subresource. You can use `[ScaleSubresource]` on an entity that has no `Status` property, and the status subresource will not be added. Conversely, a `Status` property always activates the status subresource regardless of whether `[ScaleSubresource]` is present.
+:::

@@ -68,14 +68,22 @@ public static class Crds
         }
 
         var version = new V1CustomResourceDefinitionVersion { Name = meta.Version, Served = true, Storage = true };
-        if
-            (type.GetProperty("Status") != null
-             || type.GetProperty("status") != null)
+        var hasStatus = type.GetProperty("status", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) != null;
+        var scaleAttr = type.GetCustomAttributeData<ScaleSubresourceAttribute>();
+
+        if (hasStatus || scaleAttr != null)
         {
             version.Subresources = new()
             {
-                Scale = null,
-                Status = new(),
+                Status = hasStatus ? new() : null,
+                Scale = scaleAttr != null
+                    ? new V1CustomResourceSubresourceScale
+                    {
+                        SpecReplicasPath = scaleAttr.GetCustomAttributeCtorArg<string>(context, 0)!,
+                        StatusReplicasPath = scaleAttr.GetCustomAttributeCtorArg<string>(context, 1)!,
+                        LabelSelectorPath = scaleAttr.GetCustomAttributeCtorArg<string>(context, 2),
+                    }
+                    : null,
             };
         }
 
