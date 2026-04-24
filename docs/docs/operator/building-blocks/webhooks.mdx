@@ -12,7 +12,7 @@ Webhooks in Kubernetes allow you to intercept and modify requests to the API ser
 - Mutation Webhooks: Modify resources before they are stored
 - Conversion Webhooks: Convert between different versions of your custom resources
 
-:::warning Web Version Required
+:::warning[Web Version Required]
 Webhooks require the web version of KubeOps (`KubeOps.Operator.Web`) as they need to expose HTTP endpoints. This introduces additional dependencies on ASP.NET Core.
 :::
 
@@ -64,7 +64,7 @@ For local development, your operator must be accessible from the Kubernetes clus
    - Telepresence
    - Custom reverse proxy solutions
 
-:::danger LocalTunnel Deprecated
+:::danger[LocalTunnel `Deprecated`]
 The LocalTunnel option is deprecated due to stability issues. It's recommended to use the certificate provider or other more reliable solutions.
 :::
 
@@ -172,7 +172,7 @@ public class DemoMutationWebhook : MutationWebhook<V1DemoEntity>
 
 ## Conversion Webhooks
 
-:::warning Preview Feature
+:::warning[Preview Feature]
 Conversion webhooks are currently in preview. The API is not stable and may change in future versions.
 :::
 
