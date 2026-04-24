@@ -23,7 +23,7 @@ dotnet new tool-manifest
 dotnet tool install --local KubeOps.Cli
 ```
 
-:::note Command syntax
+:::note[Command syntax]
 Examples below use the global `kubeops` command. If you installed the tool locally, replace `kubeops ...` with `dotnet tool run kubeops ...`.
 :::
 
@@ -45,7 +45,7 @@ This command:
 - Generates the necessary CRDs
 - Installs them into your current Kubernetes context
 
-:::warning Production Usage
+:::warning[Production Usage]
 The `install` and `uninstall` commands are primarily intended for development purposes. In production, you should use the generated Kubernetes manifests and your preferred deployment method (e.g., Helm, Kustomize, or GitOps).
 :::
 
@@ -80,7 +80,7 @@ This generates:
 - Namespace configuration
 - Kustomization files
 
-:::note Build Integration
+:::note[Build Integration]
 The resource generation is automatically included in the build process. You don't need to run the generate command manually unless you want to customize the output location or format. See [Build Customization](./build-customization) for details on configuring the build process.
 :::
 
