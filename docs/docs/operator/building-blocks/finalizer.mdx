@@ -229,7 +229,7 @@ To fix stuck resources:
    kubectl patch <resource> <name> -p '{"metadata":{"finalizers":[]}}' --type=merge
    ```
 
-:::warning Manual Finalizer Removal
+:::warning[Manual Finalizer Removal]
 Only remove finalizers manually as a last resort. This can lead to orphaned resources and inconsistent cluster state.
 :::
 

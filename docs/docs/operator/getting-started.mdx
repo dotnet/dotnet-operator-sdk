@@ -15,7 +15,7 @@ Before you begin, ensure you have the following installed:
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
 - A local Kubernetes cluster (like [kind](https://kind.sigs.k8s.io/) or [minikube](https://minikube.sigs.k8s.io/))
 
-:::warning Development Environment
+:::warning[Development Environment]
 For local development, we recommend using `kind` or Docker Desktop, which provide lightweight Kubernetes clusters ideal for operator development. Ensure your cluster is running before proceeding with the installation steps.
 :::
 
@@ -70,7 +70,7 @@ dotnet tool install --local KubeOps.Cli
 
 The CLI provides several useful commands:
 
-:::note Command syntax
+:::note[Command syntax]
 Examples below use the global `kubeops` command. If you installed the tool locally, replace `kubeops ...` with `dotnet tool run kubeops ...`.
 :::
 
@@ -82,7 +82,7 @@ Generate all necessary Kubernetes resources for your operator:
 kubeops generate operator MyOperator ./MyFirstOperator.csproj
 ```
 
-:::note Automatic Generation
+:::note[Automatic Generation]
 The resource generation is automatically included in the build process. You don't need to run the generate command manually unless you want to customize the output location or format.
 :::
 
@@ -95,7 +95,7 @@ This command generates:
 - Namespace configuration
 - Kustomization files
 
-:::warning Webhook Support
+:::warning[Webhook Support]
 If your operator includes webhooks, additional resources are generated:
 
 - CA and Server certificates
@@ -189,7 +189,7 @@ public class DemoFinalizer : IEntityFinalizer<V1DemoEntity>
 }
 ```
 
-:::info Next Steps
+:::info[Next Steps]
 The following sections will dive deeper into:
 
 - [CLI Usage](./cli) - Detailed CLI commands and options
@@ -202,6 +202,6 @@ The following sections will dive deeper into:
 Make sure to read these sections before deploying your operator to production.
 :::
 
-:::tip Learning Path
+:::tip[Learning Path]
 Take your time to understand each concept. Building operators is a complex task, but KubeOps makes it more approachable for .NET developers.
 :::
