@@ -91,6 +91,18 @@ public static class Crds
                                 && p.GetCustomAttributeData<IgnoreAttribute>() == null)
                     .Select(p => (Name: p.GetPropertyName(context), Schema: context.Map(p)))
                     .ToDictionary(t => t.Name, t => t.Schema),
+                Required = type.GetProperties()
+                    .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
+                                && p.GetCustomAttributeData<IgnoreAttribute>() == null
+                                && (p.PropertyType.GetCustomAttributeData<RequiredAttribute>() != null
+                                    || (p.Name.Equals("spec", StringComparison.OrdinalIgnoreCase)
+                                        && HasRequiredSubProperties(p.PropertyType))))
+                    .Select(p => p.GetPropertyName(context))
+                    .ToList() switch
+                {
+                    { Count: > 0 } list => list,
+                    _ => null,
+                },
             },
         };
 
@@ -518,4 +530,38 @@ public static class Crds
 
     private static ArgumentException InvalidType(Type type) =>
         new($"The given type {type.FullName} is not a valid Kubernetes entity.");
+
+    private static bool HasRequiredSubProperties(Type type, HashSet<Type>? visited = null)
+    {
+        visited ??= [];
+        if (!visited.Add(type))
+        {
+            return false;
+        }
+
+        return type.GetProperties().Any(p =>
+            p.GetCustomAttributeData<IgnoreAttribute>() == null
+            && (p.GetCustomAttributeData<RequiredAttribute>() != null
+                || (p.PropertyType.IsClass
+                    && p.PropertyType.FullName != typeof(string).FullName
+                    && HasRequiredSubProperties(ResolveElementType(p.PropertyType), visited))));
+    }
+
+    // For generic collection types (e.g. List<T>, IEnumerable<T>), returns the item type T
+    // so that HasRequiredSubProperties can recurse into the element type rather than the collection itself.
+    private static Type ResolveElementType(Type type)
+    {
+        if (!type.IsGenericType)
+        {
+            return type;
+        }
+
+        var enumerableArg = type.GetInterfaces()
+            .Where(i => i.IsGenericType
+                        && i.GetGenericTypeDefinition().FullName == typeof(IEnumerable<>).FullName)
+            .Select(i => i.GenericTypeArguments[0])
+            .FirstOrDefault();
+
+        return enumerableArg ?? type;
+    }
 }

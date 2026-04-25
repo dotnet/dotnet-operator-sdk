@@ -69,6 +69,8 @@ public class V1DemoEntitySpec
 }
 ```
 
+Because `Username` is marked `[Required]`, the Transpiler will automatically add `spec` to the top-level `required` array in the generated CRD. This means Kubernetes will reject any resource where `spec:` is omitted or null — not just resources where `username` is missing inside spec.
+
 ### Status
 
 The `Status` property (optional) contains the current state of your resource:
@@ -94,7 +96,26 @@ KubeOps provides various attributes to customize and validate your entities:
 
 ### Validation Attributes
 
-- `[Required]`: Marks a property as required
+- `[Required]`: Marks a property as required. When applied to a property inside `EntitySpec`, that field becomes required within the spec schema. Additionally:
+  - **Auto-inference**: if any property inside `EntitySpec` is marked `[Required]`, the Transpiler automatically marks `spec` itself as required at the top-level CRD schema — ensuring Kubernetes rejects resources where `spec:` is omitted or null.
+  - **Explicit class-level**: apply `[Required]` directly to the `EntitySpec` class to mark `spec` as required at the top level even when no individual sub-property carries `[Required]`.
+
+```csharp
+// Auto-inference: spec is required because Username is required
+public class EntitySpec
+{
+    [Required]
+    public string Username { get; set; } = null!;
+}
+
+// Explicit class-level: spec is required regardless of sub-properties
+[Required]
+public class EntitySpec
+{
+    public string Username { get; set; } = string.Empty;
+}
+```
+
 - `[Pattern]`: Defines a regex pattern for string validation
 - `[Length]`: Specifies minimum and maximum length for strings or arrays
 - `[RangeMinimum]` and `[RangeMaximum]`: Defines numeric value ranges
