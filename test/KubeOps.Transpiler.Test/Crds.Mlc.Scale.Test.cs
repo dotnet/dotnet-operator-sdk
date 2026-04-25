@@ -32,7 +32,7 @@ public sealed partial class CrdsMlcTest
         var subresources = crd.Spec.Versions[0].Subresources;
         subresources.Should().NotBeNull();
         subresources.Scale.Should().NotBeNull();
-        subresources.Scale!.SpecReplicasPath.Should().Be(".spec.replicas");
+        subresources.Scale.SpecReplicasPath.Should().Be(".spec.replicas");
         subresources.Scale.StatusReplicasPath.Should().Be(".status.replicas");
         subresources.Scale.LabelSelectorPath.Should().BeNull();
     }
@@ -55,7 +55,7 @@ public sealed partial class CrdsMlcTest
         var subresources = crd.Spec.Versions[0].Subresources;
         subresources.Should().NotBeNull();
         subresources.Scale.Should().NotBeNull();
-        subresources.Scale!.SpecReplicasPath.Should().Be(".spec.replicas");
+        subresources.Scale.SpecReplicasPath.Should().Be(".spec.replicas");
         subresources.Scale.StatusReplicasPath.Should().Be(".status.replicas");
         subresources.Scale.LabelSelectorPath.Should().Be(".status.selector");
     }
@@ -68,7 +68,7 @@ public sealed partial class CrdsMlcTest
         var subresources = crd.Spec.Versions[0].Subresources;
         subresources.Should().NotBeNull();
         subresources.Scale.Should().NotBeNull();
-        subresources.Scale!.SpecReplicasPath.Should().Be(".spec.replicas");
+        subresources.Scale.SpecReplicasPath.Should().Be(".spec.replicas");
         subresources.Scale.StatusReplicasPath.Should().Be(".status.replicas");
         subresources.Status.Should().NotBeNull();
     }
