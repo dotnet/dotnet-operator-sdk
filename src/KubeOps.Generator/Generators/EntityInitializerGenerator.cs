@@ -35,7 +35,9 @@ internal sealed class EntityInitializerGenerator : ISourceGenerator
         // for each partial defined entity, create a partial class that
         // introduces a default constructor that initializes the ApiVersion and Kind.
         // But only, if there is no default constructor defined.
-        foreach (var entity in receiver.Entities.Where(e => e.ClassDeclaration is { IsFromReferencedAssembly: false, IsPartial: true, HasParameterlessConstructor: false }))
+        foreach (var entity in receiver.Entities
+            .Where(e => e.ClassDeclaration is { IsFromReferencedAssembly: false, IsPartial: true, HasParameterlessConstructor: false })
+            .OrderBy(e => e.ClassDeclaration.FullyQualifiedName, StringComparer.Ordinal))
         {
             var ns = new List<MemberDeclarationSyntax>();
             if (!string.IsNullOrEmpty(entity.ClassDeclaration.Namespace))
@@ -98,6 +100,7 @@ internal sealed class EntityInitializerGenerator : ISourceGenerator
                     Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)))
                 .WithMembers(List<MemberDeclarationSyntax>(receiver.Entities
                     .Where(e => e.ClassDeclaration.IsFromReferencedAssembly || !e.ClassDeclaration.IsPartial || e.ClassDeclaration.HasParameterlessConstructor)
+                    .OrderBy(e => e.ClassDeclaration.FullyQualifiedName, StringComparer.Ordinal)
                     .Select(e => (Entity: e, ClassIdentifier: e.ClassDeclaration.FullyQualifiedName))
                     .Select(e => MethodDeclaration(
                             IdentifierName(e.ClassIdentifier),
