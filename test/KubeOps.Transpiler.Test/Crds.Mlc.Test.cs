@@ -342,12 +342,11 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     }
 
     [Fact]
-    public void Should_Set_Spec_As_Required_Via_Auto_Inference_When_Nested_Type_Has_Required_Properties()
+    public void Should_Not_Set_Spec_As_Required_When_Required_Property_Is_Under_Optional_Parent()
     {
         var crd = _mlc.Transpile(typeof(RequiredNestedPropertyEntity));
 
-        var topLevel = crd.Spec.Versions.First().Schema.OpenAPIV3Schema;
-        topLevel.Required.Should().Contain("spec");
+        crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().BeNullOrEmpty();
     }
 
     [Fact]
@@ -355,17 +354,23 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     {
         var crd = _mlc.Transpile(typeof(RequiredSpecExplicitEntity));
 
-        var topLevel = crd.Spec.Versions.First().Schema.OpenAPIV3Schema;
-        topLevel.Required.Should().Contain("spec");
+        crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().Contain("spec");
     }
 
     [Fact]
-    public void Should_Set_Spec_As_Required_Via_Auto_Inference_When_Collection_Item_Type_Has_Required_Properties()
+    public void Should_Not_Set_Spec_As_Required_When_Required_Property_Is_Inside_Optional_Collection()
     {
         var crd = _mlc.Transpile(typeof(RequiredCollectionItemPropertyEntity));
 
-        var topLevel = crd.Spec.Versions.First().Schema.OpenAPIV3Schema;
-        topLevel.Required.Should().Contain("spec");
+        crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Should_Set_Spec_As_Required_When_Direct_Property_Is_Required()
+    {
+        var crd = _mlc.Transpile(typeof(RequiredDirectPropertyEntity));
+
+        crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().Contain("spec");
     }
 
     [Fact]
@@ -1060,6 +1065,22 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     {
         public class EntitySpec
         {
+            public NestedSpec Nested { get; set; } = new();
+
+            public class NestedSpec
+            {
+                [Required]
+                public string Property { get; set; } = null!;
+            }
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class RequiredDirectPropertyEntity : CustomKubernetesEntity<RequiredDirectPropertyEntity.EntitySpec>
+    {
+        public class EntitySpec
+        {
+            [Required]
             public NestedSpec Nested { get; set; } = new();
 
             public class NestedSpec

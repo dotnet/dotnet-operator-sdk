@@ -69,7 +69,7 @@ public class V1DemoEntitySpec
 }
 ```
 
-Because `Username` is marked `[Required]`, the Transpiler will automatically add `spec` to the top-level `required` array in the generated CRD. This means Kubernetes will reject any resource where `spec:` is omitted or null — not just resources where `username` is missing inside spec.
+Because `Username` is a direct `[Required]` property of `EntitySpec`, the Transpiler automatically adds `spec` to the top-level `required` array in the generated CRD. This means Kubernetes will reject any resource where `spec:` is omitted or null — not just resources where `username` is missing inside spec.
 
 ### Status
 
@@ -97,11 +97,11 @@ KubeOps provides various attributes to customize and validate your entities:
 ### Validation Attributes
 
 - `[Required]`: Marks a property as required. When applied to a property inside `EntitySpec`, that field becomes required within the spec schema. Additionally:
-  - **Auto-inference**: if any property inside `EntitySpec` is marked `[Required]`, the Transpiler automatically marks `spec` itself as required at the top-level CRD schema — ensuring Kubernetes rejects resources where `spec:` is omitted or null.
-  - **Explicit class-level**: apply `[Required]` directly to the `EntitySpec` class to mark `spec` as required at the top level even when no individual sub-property carries `[Required]`.
+  - **Auto-inference**: if any **direct** property of `EntitySpec` is marked `[Required]`, the Transpiler automatically marks `spec` itself as required at the top-level CRD schema. A `[Required]` property that is nested under an optional parent does **not** trigger this — Kubernetes only validates `required` constraints when the parent object is present, so each level of the hierarchy must be annotated explicitly.
+  - **Explicit class-level**: apply `[Required]` directly to the `EntitySpec` class to mark `spec` as required at the top level even when no sub-property carries `[Required]`.
 
 ```csharp
-// Auto-inference: spec is required because Username is required
+// Auto-inference: spec is required because Username is a direct required property
 public class EntitySpec
 {
     [Required]
@@ -113,6 +113,18 @@ public class EntitySpec
 public class EntitySpec
 {
     public string Username { get; set; } = string.Empty;
+}
+
+// Does NOT make spec required — [Required] is on the 2nd level under an optional parent:
+public class EntitySpec
+{
+    public NestedSpec Nested { get; set; } = new();  // optional
+
+    public class NestedSpec
+    {
+        [Required]           // only validated when Nested is present; spec stays optional
+        public string Name { get; set; } = null!;
+    }
 }
 ```
 
