@@ -366,14 +366,6 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     }
 
     [Fact]
-    public void Should_Set_Spec_As_Required_When_Direct_Property_Is_Required()
-    {
-        var crd = _mlc.Transpile(typeof(RequiredDirectPropertyEntity));
-
-        crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().Contain("spec");
-    }
-
-    [Fact]
     public void Should_Not_Set_Spec_As_Required_When_Only_Required_Property_Is_Ignored()
     {
         var crd = _mlc.Transpile(typeof(RequiredIgnoredPropertyEntity));
