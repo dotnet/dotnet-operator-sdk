@@ -33,6 +33,7 @@ public class ResourceWatcher<TEntity>(
     ITimedEntityQueue<TEntity> entityQueue,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
+    IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client)
     : IHostedService, IAsyncDisposable, IDisposable
     where TEntity : IKubernetesObject<V1ObjectMeta>
@@ -252,6 +253,7 @@ public class ResourceWatcher<TEntity>(
                                    settings.Namespace,
                                    resourceVersion: currentVersion,
                                    labelSelector: await labelSelector.GetLabelSelectorAsync(stoppingToken),
+                                   fieldSelector: await fieldSelector.GetFieldSelectorAsync(stoppingToken),
                                    allowWatchBookmarks: true,
                                    cancellationToken: stoppingToken))
                 {

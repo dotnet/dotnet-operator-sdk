@@ -361,6 +361,66 @@ public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
 - Avoid long-running operations in the reconciliation loop
 - Use background tasks for time-consuming operations
 
+## Filtering Watched Resources
+
+By default, a controller's resource watcher observes all resources of the given entity type
+cluster-wide. If `OperatorSettings.Namespace` is configured, the watcher is automatically
+scoped to that namespace instead.
+You can further restrict the watched set using **label selectors** and **field selectors**.
+
+### Label Selectors
+
+Implement `IEntityLabelSelector<TEntity>` to filter resources by label expressions.
+See the [Kubernetes Label Selectors documentation](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors) for the full syntax reference.
+Register it when adding the controller:
+
+```csharp
+public class MyDemoEntityLabelSelector : IEntityLabelSelector<V1DemoEntity>
+{
+    public ValueTask<string?> GetLabelSelectorAsync(CancellationToken cancellationToken) =>
+        ValueTask.FromResult<string?>(new EqualsLabelSelector("app", "my-operator"));
+}
+
+// Registration
+builder.Services.AddKubernetesOperator()
+    .AddControllerWithLabelSelector<V1DemoEntityController, V1DemoEntity, MyDemoEntityLabelSelector>();
+```
+
+When no label selector is needed, the built-in `DefaultEntityLabelSelector<TEntity>` returns `null`
+(no filtering).
+
+### Field Selectors
+
+Kubernetes field selectors filter by resource fields (e.g. `metadata.name`, `metadata.namespace`).
+They support `=` / `==` (equality) and `!=` (inequality) operators, and only a small subset of
+fields per resource type.
+See the [Kubernetes Field Selectors documentation](https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/) for the full syntax reference.
+
+Implement `IEntityFieldSelector<TEntity>` and register it when adding the controller:
+
+```csharp
+public class MyDemoEntityFieldSelector : IEntityFieldSelector<V1DemoEntity>
+{
+    public ValueTask<string?> GetFieldSelectorAsync(CancellationToken cancellationToken) =>
+        ValueTask.FromResult<string?>(new EqualsFieldSelector("metadata.name", "my-demo-entity"));
+}
+
+// Registration
+builder.Services.AddKubernetesOperator()
+    .AddControllerWithFieldSelector<V1DemoEntityController, V1DemoEntity, MyDemoEntityFieldSelector>();
+```
+
+When no field selector is needed, the built-in `DefaultEntityFieldSelector<TEntity>` returns `null`
+(no filtering).
+
+### Summary of Registration Methods
+
+| Method | Label Selector | Field Selector |
+|---|---|---|
+| `AddController<TImpl, TEntity>()` | Default (none) | Default (none) |
+| `AddControllerWithLabelSelector<TImpl, TEntity, TLabel>()` | Custom | Default (none) |
+| `AddControllerWithFieldSelector<TImpl, TEntity, TField>()` | Default (none) | Custom |
+
 ## Common Pitfalls
 
 1. **Infinite Loops**: Avoid creating reconciliation loops that trigger themselves

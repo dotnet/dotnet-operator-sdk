@@ -10,7 +10,7 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Entities;
-using KubeOps.KubernetesClient.LabelSelectors;
+using KubeOps.KubernetesClient.Selectors;
 
 namespace KubeOps.KubernetesClient;
 
@@ -740,6 +740,7 @@ public interface IKubernetesClient : IDisposable
     /// Defaults to changes from the beginning of history.
     /// </param>
     /// <param name="labelSelector">A string, representing an optional label selector for filtering watched objects.</param>
+    /// <param name="fieldSelector">A string, representing an optional field selector for filtering watched objects.</param>
     /// <param name="allowWatchBookmarks">
     /// Parameter to tell the server to send BOOKMARK events. However, if the server has no implementation or
     /// configuration for bookmarks, this flag is ignored.
@@ -751,6 +752,7 @@ public interface IKubernetesClient : IDisposable
         string? @namespace = null,
         string? resourceVersion = null,
         string? labelSelector = null,
+        string? fieldSelector = null,
         bool? allowWatchBookmarks = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>;

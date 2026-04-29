@@ -41,17 +41,32 @@ public interface IOperatorBuilder
         where TEntity : IKubernetesObject<V1ObjectMeta>;
 
     /// <summary>
-    /// Add a controller implementation for a specific entity to the operator.
+    /// Add a controller implementation for a specific entity to the operator,
+    /// with a custom label selector.
     /// The metadata for the entity must be added as well.
     /// </summary>
     /// <typeparam name="TImplementation">Implementation type of the controller.</typeparam>
     /// <typeparam name="TEntity">Entity type.</typeparam>
     /// <typeparam name="TLabelSelector">Label Selector type.</typeparam>
     /// <returns>The builder for chaining.</returns>
-    IOperatorBuilder AddController<TImplementation, TEntity, TLabelSelector>()
+    IOperatorBuilder AddControllerWithLabelSelector<TImplementation, TEntity, TLabelSelector>()
         where TImplementation : class, IEntityController<TEntity>
         where TEntity : IKubernetesObject<V1ObjectMeta>
         where TLabelSelector : class, IEntityLabelSelector<TEntity>;
+
+    /// <summary>
+    /// Add a controller implementation for a specific entity to the operator,
+    /// with a custom field selector.
+    /// The metadata for the entity must be added as well.
+    /// </summary>
+    /// <typeparam name="TImplementation">Implementation type of the controller.</typeparam>
+    /// <typeparam name="TEntity">Entity type.</typeparam>
+    /// <typeparam name="TFieldSelector">Field Selector type.</typeparam>
+    /// <returns>The builder for chaining.</returns>
+    IOperatorBuilder AddControllerWithFieldSelector<TImplementation, TEntity, TFieldSelector>()
+        where TImplementation : class, IEntityController<TEntity>
+        where TEntity : IKubernetesObject<V1ObjectMeta>
+        where TFieldSelector : class, IEntityFieldSelector<TEntity>;
 
     /// <summary>
     /// Add a finalizer implementation for a specific entity.

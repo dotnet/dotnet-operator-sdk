@@ -11,7 +11,7 @@ using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.Abstractions.Reconciliation.Queue;
-using KubeOps.KubernetesClient.LabelSelectors;
+using KubeOps.KubernetesClient.Selectors;
 using KubeOps.Operator.Builder;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
@@ -39,6 +39,10 @@ public sealed class OperatorBuilderTest
         _builder.Services.Should().Contain(s =>
             s.ServiceType == typeof(IEntityLabelSelector<>) &&
             s.ImplementationType == typeof(DefaultEntityLabelSelector<>) &&
+            s.Lifetime == ServiceLifetime.Singleton);
+        _builder.Services.Should().Contain(s =>
+            s.ServiceType == typeof(IEntityFieldSelector<>) &&
+            s.ImplementationType == typeof(DefaultEntityFieldSelector<>) &&
             s.Lifetime == ServiceLifetime.Singleton);
     }
 
@@ -82,7 +86,7 @@ public sealed class OperatorBuilderTest
     [Fact]
     public void Should_Add_Controller_Resources_With_Label_Selector()
     {
-        _builder.AddController<TestController, V1OperatorIntegrationTestEntity, TestLabelSelector>();
+        _builder.AddControllerWithLabelSelector<TestController, V1OperatorIntegrationTestEntity, TestLabelSelector>();
 
         _builder.Services.Should().Contain(s =>
             s.ServiceType == typeof(IEntityController<V1OperatorIntegrationTestEntity>) &&
@@ -116,6 +120,21 @@ public sealed class OperatorBuilderTest
         _builder.Services.Should().Contain(s =>
             s.ServiceType == typeof(EntityFinalizerAttacher<TestFinalizer, V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Transient);
+    }
+
+    [Fact]
+    public void Should_Add_Controller_Resources_With_Field_Selector()
+    {
+        _builder.AddControllerWithFieldSelector<TestController, V1OperatorIntegrationTestEntity, TestFieldSelector>();
+
+        _builder.Services.Should().Contain(s =>
+            s.ServiceType == typeof(IEntityController<V1OperatorIntegrationTestEntity>) &&
+            s.ImplementationType == typeof(TestController) &&
+            s.Lifetime == ServiceLifetime.Scoped);
+        _builder.Services.Should().Contain(s =>
+            s.ServiceType == typeof(IEntityFieldSelector<V1OperatorIntegrationTestEntity>) &&
+            s.ImplementationType == typeof(TestFieldSelector) &&
+            s.Lifetime == ServiceLifetime.Singleton);
     }
 
     [Fact]
@@ -164,10 +183,16 @@ public sealed class OperatorBuilderTest
         {
             var labelSelectors = new LabelSelector[]
             {
-                new EqualsSelector("label", "value")
+                new EqualsLabelSelector("label", "value")
             };
 
             return ValueTask.FromResult<string?>(labelSelectors.ToExpression());
         }
+    }
+
+    private sealed class TestFieldSelector : IEntityFieldSelector<V1OperatorIntegrationTestEntity>
+    {
+        public ValueTask<string?> GetFieldSelectorAsync(CancellationToken cancellationToken) =>
+            ValueTask.FromResult<string?>("metadata.name=my-resource");
     }
 }
