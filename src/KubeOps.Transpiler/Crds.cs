@@ -91,6 +91,20 @@ public static class Crds
                                 && p.GetCustomAttributeData<IgnoreAttribute>() == null)
                     .Select(p => (Name: p.GetPropertyName(context), Schema: context.Map(p)))
                     .ToDictionary(t => t.Name, t => t.Schema),
+                Required = type.GetProperties()
+                    .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
+                                && p.GetCustomAttributeData<IgnoreAttribute>() == null
+                                && (p.PropertyType.GetCustomAttributeData<RequiredAttribute>() != null
+                                    || (p.Name.Equals("spec", StringComparison.OrdinalIgnoreCase)
+                                        && p.PropertyType.GetProperties()
+                                           .Any(sp => sp.GetCustomAttributeData<RequiredAttribute>() != null
+                                                      && sp.GetCustomAttributeData<IgnoreAttribute>() == null))))
+                    .Select(p => p.GetPropertyName(context))
+                    .ToList() switch
+                {
+                    { Count: > 0 } list => list,
+                    _ => null,
+                },
             },
         };
 

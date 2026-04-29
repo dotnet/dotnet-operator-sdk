@@ -333,6 +333,66 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     }
 
     [Fact]
+    public void Should_Set_Spec_As_Required_Via_Auto_Inference_When_Spec_Has_Required_Properties()
+    {
+        var crd = _mlc.Transpile(typeof(RequiredAttrEntity));
+
+        var topLevel = crd.Spec.Versions.First().Schema.OpenAPIV3Schema;
+        topLevel.Required.Should().Contain("spec");
+    }
+
+    [Fact]
+    public void Should_Not_Set_Spec_As_Required_When_Required_Property_Is_Under_Optional_Parent()
+    {
+        var crd = _mlc.Transpile(typeof(RequiredNestedPropertyEntity));
+
+        crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Should_Set_Spec_As_Required_Via_Explicit_Class_Attribute()
+    {
+        var crd = _mlc.Transpile(typeof(RequiredSpecExplicitEntity));
+
+        crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().Contain("spec");
+    }
+
+    [Fact]
+    public void Should_Not_Set_Spec_As_Required_When_Required_Property_Is_Inside_Optional_Collection()
+    {
+        var crd = _mlc.Transpile(typeof(RequiredCollectionItemPropertyEntity));
+
+        crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Should_Not_Set_Spec_As_Required_When_Only_Required_Property_Is_Ignored()
+    {
+        var crd = _mlc.Transpile(typeof(RequiredIgnoredPropertyEntity));
+
+        var topLevel = crd.Spec.Versions.First().Schema.OpenAPIV3Schema;
+        topLevel.Required.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Should_Not_Set_Spec_As_Required_Without_Required_Properties_Or_Attribute()
+    {
+        var crd = _mlc.Transpile(typeof(ClassDescriptionAttrEntity));
+
+        var topLevel = crd.Spec.Versions.First().Schema.OpenAPIV3Schema;
+        topLevel.Required.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Should_Not_Set_Status_As_Required_Via_Auto_Inference_Even_When_Status_Has_Required_Properties()
+    {
+        var crd = _mlc.Transpile(typeof(RequiredStatusPropertyEntity));
+
+        var topLevel = crd.Spec.Versions.First().Schema.OpenAPIV3Schema;
+        topLevel.Required.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
     public void Should_Not_Contain_Ignored_Property()
     {
         var crd = _mlc.Transpile(typeof(IgnoreAttrEntity));
@@ -989,6 +1049,90 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         {
             [Required]
             public string Property { get; set; } = null!;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class RequiredNestedPropertyEntity : CustomKubernetesEntity<RequiredNestedPropertyEntity.EntitySpec>
+    {
+        public class EntitySpec
+        {
+            public NestedSpec Nested { get; set; } = new();
+
+            public class NestedSpec
+            {
+                [Required]
+                public string Property { get; set; } = null!;
+            }
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class RequiredDirectPropertyEntity : CustomKubernetesEntity<RequiredDirectPropertyEntity.EntitySpec>
+    {
+        public class EntitySpec
+        {
+            [Required]
+            public NestedSpec Nested { get; set; } = new();
+
+            public class NestedSpec
+            {
+                [Required]
+                public string Property { get; set; } = null!;
+            }
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class RequiredSpecExplicitEntity : CustomKubernetesEntity<RequiredSpecExplicitEntity.EntitySpec>
+    {
+        [Required]
+        public class EntitySpec
+        {
+            public string Property { get; set; } = string.Empty;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class RequiredCollectionItemPropertyEntity
+        : CustomKubernetesEntity<RequiredCollectionItemPropertyEntity.EntitySpec>
+    {
+        public class EntitySpec
+        {
+            public List<ItemSpec> Items { get; set; } = [];
+
+            public class ItemSpec
+            {
+                [Required]
+                public string Property { get; set; } = null!;
+            }
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class RequiredIgnoredPropertyEntity : CustomKubernetesEntity<RequiredIgnoredPropertyEntity.EntitySpec>
+    {
+        public class EntitySpec
+        {
+            [Required]
+            [Ignore]
+            public string Property { get; set; } = null!;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class RequiredStatusPropertyEntity
+        : CustomKubernetesEntity<RequiredStatusPropertyEntity.EntitySpec, RequiredStatusPropertyEntity.EntityStatus>
+    {
+        public class EntitySpec
+        {
+            public string Property { get; set; } = string.Empty;
+        }
+
+        public class EntityStatus
+        {
+            [Required]
+            public string State { get; set; } = string.Empty;
         }
     }
 
