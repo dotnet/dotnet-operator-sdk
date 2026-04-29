@@ -38,6 +38,7 @@ internal sealed class FinalizerRegistrationGenerator : ISourceGenerator
         var finalizers = _finalizerReceiver.Finalizer
             .Where(c => _entityReceiver.Entities.Exists(e =>
                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))
+            .OrderBy(c => c.FullyQualifiedEntityName, StringComparer.Ordinal)
             .Select(c => (c.Finalizer, Entity: _entityReceiver.Entities.First(e =>
                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))).ToList();
 

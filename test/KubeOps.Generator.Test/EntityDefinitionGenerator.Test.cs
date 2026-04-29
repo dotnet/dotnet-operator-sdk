@@ -77,8 +77,8 @@ public sealed partial class EntityDefinitionGeneratorTest
 
                      public static class EntityDefinitions
                      {
-                         public static readonly EntityMetadata V1TestEntity = new("TestEntity", "v1", "testing.dev", null);
                          public static readonly EntityMetadata V1AnotherEntity = new("AnotherEntity", "v1", "testing.dev", null);
+                         public static readonly EntityMetadata V1TestEntity = new("TestEntity", "v1", "testing.dev", null);
                      }
                      """,
         TestDisplayName = "Test multiple entities")]

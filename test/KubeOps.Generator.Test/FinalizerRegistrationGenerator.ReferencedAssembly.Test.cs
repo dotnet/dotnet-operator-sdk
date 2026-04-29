@@ -244,12 +244,12 @@ public sealed partial class FinalizerRegistrationGeneratorTest
 
                      public static class FinalizerRegistrations
                      {
-                         public const string V1TestEntityFinalizerIdentifier = "testing.dev/v1testentityfinalizer";
                          public const string V1TestEntityFinalizer2Identifier = "testing.dev/v1testentityfinalizer2finalizer";
+                         public const string V1TestEntityFinalizerIdentifier = "testing.dev/v1testentityfinalizer";
                          public static IOperatorBuilder RegisterFinalizers(this IOperatorBuilder builder)
                          {
-                             builder.AddFinalizer<global::V1TestEntityFinalizer, global::V1TestEntity>(V1TestEntityFinalizerIdentifier);
                              builder.AddFinalizer<global::V1TestEntityFinalizer2, global::KubeOps.Generator.Test.Entities.V1TestEntity>(V1TestEntityFinalizer2Identifier);
+                             builder.AddFinalizer<global::V1TestEntityFinalizer, global::V1TestEntity>(V1TestEntityFinalizerIdentifier);
                              return builder;
                          }
                      }

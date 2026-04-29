@@ -43,7 +43,9 @@ internal sealed class EntityDefinitionGenerator : ISourceGenerator
                 .WithModifiers(TokenList(
                     Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)))
                 .WithMembers(
-                    List<MemberDeclarationSyntax>(receiver.Entities.Select(e => FieldDeclaration(
+                    List<MemberDeclarationSyntax>(receiver.Entities
+                        .OrderBy(e => e.ClassDeclaration.FullyQualifiedName, StringComparer.Ordinal)
+                        .Select(e => FieldDeclaration(
                             VariableDeclaration(
                                     IdentifierName("EntityMetadata"))
                                 .WithVariables(
