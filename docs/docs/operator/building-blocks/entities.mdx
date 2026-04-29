@@ -154,3 +154,77 @@ public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec
     }
 }
 ```
+
+## Scale Subresource
+
+The `[ScaleSubresource]` attribute enables the Kubernetes [scale subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource) on a CRD. This allows [HorizontalPodAutoscalers (HPAs)](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) to manage the replica count of your custom resource.
+
+The attribute accepts two required parameters and one optional parameter — all JSON paths into the resource object:
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `specReplicasPath` | Yes | JSON path to desired replicas in spec, e.g. `.spec.replicas` |
+| `statusReplicasPath` | Yes | JSON path to observed replicas in status, e.g. `.status.replicas` |
+| `labelSelectorPath` | No | JSON path to the serialized label selector, e.g. `.status.selector` |
+
+### Example — scale without status subresource
+
+When the entity has no `Status` property only the `scale` subresource is emitted. The `status` subresource is **not** added automatically.
+
+```csharp
+[KubernetesEntity(Group = "demo.kubeops.dev", ApiVersion = "v1", Kind = "DemoEntity")]
+[ScaleSubresource(".spec.replicas", ".status.replicas")]
+public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec>
+{
+    public class V1DemoEntitySpec
+    {
+        public int Replicas { get; set; } = 1;
+    }
+}
+```
+
+Generated CRD:
+
+```yaml
+subresources:
+  scale:
+    specReplicasPath: .spec.replicas
+    statusReplicasPath: .status.replicas
+```
+
+### Example — scale and status subresources together
+
+When the entity inherits from `CustomKubernetesEntity<TSpec, TStatus>`, both `status` and `scale` subresources are emitted. `labelSelectorPath` is optional and maps the serialized label selector that HPAs use for targeted scaling.
+
+```csharp
+[KubernetesEntity(Group = "demo.kubeops.dev", ApiVersion = "v1", Kind = "DemoEntity")]
+[ScaleSubresource(".spec.replicas", ".status.replicas", ".status.selector")]
+public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec, V1DemoEntity.V1DemoEntityStatus>
+{
+    public class V1DemoEntitySpec
+    {
+        public int Replicas { get; set; } = 1;
+    }
+
+    public class V1DemoEntityStatus
+    {
+        public int Replicas { get; set; }
+        public required string Selector { get; init; }
+    }
+}
+```
+
+Generated CRD:
+
+```yaml
+subresources:
+  status: {}
+  scale:
+    specReplicasPath: .spec.replicas
+    statusReplicasPath: .status.replicas
+    labelSelectorPath: .status.selector
+```
+
+:::note
+`[ScaleSubresource]` and the status subresource are controlled independently. A `Status` property activates `status: {}` regardless of `[ScaleSubresource]`, and `[ScaleSubresource]` adds `scale:` regardless of whether a `Status` property exists.
+:::
