@@ -1,5 +1,6 @@
 # Code of Conduct
 
-This project adheres to the .NET Foundation's Code of Conduct.
-For more details, please see the full text at:
-https://dotnetfoundation.org/about/policies/code-of-conduct
+This project has adopted the code of conduct defined by the Contributor Covenant
+to clarify expected behavior in our community.
+
+For more information, see the [.NET Foundation Code of Conduct](https://dotnetfoundation.org/code-of-conduct).
