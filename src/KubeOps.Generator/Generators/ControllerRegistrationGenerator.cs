@@ -60,6 +60,7 @@ internal sealed class ControllerRegistrationGenerator : ISourceGenerator
                         _ctrlReceiver.Controllers
                             .Where(c => _entityReceiver.Entities.Exists(e =>
                                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))
+                            .OrderBy(c => c.FullyQualifiedEntityName, StringComparer.Ordinal)
                             .Select(c => (c.Controller, Entity: _entityReceiver.Entities.First(e =>
                                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName)))
                             .Select(e => ExpressionStatement(
