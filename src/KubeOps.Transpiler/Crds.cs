@@ -90,6 +90,7 @@ public static class Crds
                     .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
                                 && p.GetCustomAttributeData<IgnoreAttribute>() == null)
                     .Select(p => (Name: p.GetPropertyName(context), Schema: context.Map(p)))
+                    .OrderBy(t => t.Name, StringComparer.Ordinal)
                     .ToDictionary(t => t.Name, t => t.Schema),
                 Required = type.GetProperties()
                     .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
@@ -470,11 +471,13 @@ public static class Crds
                         .GetProperties()
                         .Where(p => p.GetCustomAttributeData<IgnoreAttribute>() == null)
                         .Select(p => (Name: p.GetPropertyName(context), Schema: context.Map(p)))
+                        .OrderBy(t => t.Name, StringComparer.Ordinal)
                         .ToDictionary(t => t.Name, t => t.Schema),
                     Required = type.GetProperties()
                             .Where(p => p.GetCustomAttributeData<RequiredAttribute>() != null
                                         && p.GetCustomAttributeData<IgnoreAttribute>() == null)
                             .Select(p => p.GetPropertyName(context))
+                            .OrderBy(name => name, StringComparer.Ordinal)
                             .ToList() switch
                     {
                         { Count: > 0 } p => p,

@@ -25,7 +25,13 @@ internal sealed class RbacGenerator(
             .Concat(parser.GetContextType<DefaultRbacAttributes>().GetCustomAttributesData<EntityRbacAttribute>())
             .ToList();
 
-        var role = new V1ClusterRole { Rules = parser.Transpile(attributes).ToList() }.Initialize();
+        var role = new V1ClusterRole
+        {
+            Rules = parser.Transpile(attributes)
+                .OrderBy(r => r.ApiGroups?.FirstOrDefault() ?? string.Empty, StringComparer.Ordinal)
+                .ThenBy(r => r.Resources?.FirstOrDefault() ?? r.NonResourceURLs?.FirstOrDefault() ?? string.Empty, StringComparer.Ordinal)
+                .ToList(),
+        }.Initialize();
         role.Metadata.Name = "operator-role";
         output.Add($"operator-role.{outputFormat.GetFileExtension()}", role);
 
