@@ -393,6 +393,15 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     }
 
     [Fact]
+    public void Should_Not_Set_Status_As_Required_Via_Explicit_Class_Attribute()
+    {
+        var crd = _mlc.Transpile(typeof(RequiredStatusExplicitEntity));
+
+        var topLevel = crd.Spec.Versions.First().Schema.OpenAPIV3Schema;
+        topLevel.Required.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
     public void Should_Not_Contain_Ignored_Property()
     {
         var crd = _mlc.Transpile(typeof(IgnoreAttrEntity));
@@ -1132,6 +1141,22 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         public class EntityStatus
         {
             [Required]
+            public string State { get; set; } = string.Empty;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class RequiredStatusExplicitEntity
+        : CustomKubernetesEntity<RequiredStatusExplicitEntity.EntitySpec, RequiredStatusExplicitEntity.EntityStatus>
+    {
+        public class EntitySpec
+        {
+            public string Property { get; set; } = string.Empty;
+        }
+
+        [Required]
+        public class EntityStatus
+        {
             public string State { get; set; } = string.Empty;
         }
     }

@@ -94,11 +94,7 @@ public static class Crds
                 Required = type.GetProperties()
                     .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
                                 && p.GetCustomAttributeData<IgnoreAttribute>() == null
-                                && (p.PropertyType.GetCustomAttributeData<RequiredAttribute>() != null
-                                    || (p.Name.Equals("spec", StringComparison.OrdinalIgnoreCase)
-                                        && p.PropertyType.GetProperties()
-                                           .Any(sp => sp.GetCustomAttributeData<RequiredAttribute>() != null
-                                                      && sp.GetCustomAttributeData<IgnoreAttribute>() == null))))
+                                && IsRequiredSpecProperty(p))
                     .Select(p => p.GetPropertyName(context))
                     .ToList() switch
                 {
@@ -529,6 +525,13 @@ public static class Crds
             "System.DateTimeOffset" => new() { Type = String, Format = DateTime },
             _ => throw InvalidType(type),
         };
+
+    private static bool IsRequiredSpecProperty(PropertyInfo prop) =>
+        prop.Name.Equals("spec", StringComparison.OrdinalIgnoreCase)
+        && (prop.PropertyType.GetCustomAttributeData<RequiredAttribute>() != null
+            || prop.PropertyType.GetProperties()
+                .Any(sp => sp.GetCustomAttributeData<RequiredAttribute>() != null
+                           && sp.GetCustomAttributeData<IgnoreAttribute>() == null));
 
     private static ArgumentException InvalidType(Type type) =>
         new($"The given type {type.FullName} is not a valid Kubernetes entity.");
