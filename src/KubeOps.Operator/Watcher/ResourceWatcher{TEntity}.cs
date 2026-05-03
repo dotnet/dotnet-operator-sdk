@@ -18,6 +18,7 @@ using KubeOps.Operator.Constants;
 using KubeOps.Operator.Logging;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Reconciliation;
+using KubeOps.Operator.Retry;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -339,9 +340,7 @@ public class ResourceWatcher<TEntity>(
         logger.LogError(e, """There was an error while watching the resource "{Resource}".""", typeof(TEntity));
         _watcherReconnectRetries++;
 
-        var delay = TimeSpan
-            .FromSeconds(Math.Pow(2, Math.Clamp(_watcherReconnectRetries, 0, 5)))
-            .Add(TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1000)));
+        var delay = ExponentialRetryBackoff.GetDelayWithJitter(_watcherReconnectRetries);
         logger.LogWarning(
             "There were {Retries} errors / retries in the watcher. Wait {Seconds}s before next attempt to connect.",
             _watcherReconnectRetries,
