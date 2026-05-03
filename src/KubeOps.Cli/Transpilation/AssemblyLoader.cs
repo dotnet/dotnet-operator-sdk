@@ -185,7 +185,8 @@ internal static partial class AssemblyLoader
     private static IEnumerable<TypeInfo> GetTypesToInspect(this MetadataLoadContext context) => context
         .GetAssemblies()
         .SelectMany(a => a.DefinedTypes)
-        .Where(t => !t.IsInterface && !t.IsAbstract && !t.IsGenericType);
+        .Where(t => !t.IsInterface && !t.IsAbstract && !t.IsGenericType)
+        .OrderBy(t => t.FullName, StringComparer.Ordinal);
 
     [GeneratedRegex(".*")]
     private static partial Regex DefaultRegex();

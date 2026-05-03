@@ -57,7 +57,8 @@ public static class Rbac
                 group => new V1PolicyRule
                 {
                     ApiGroups = [group.Key.Group],
-                    Resources = group.Select(crd => crd.Crd.Metadata.PluralName).Distinct().ToList(),
+                    Resources = group.Select(crd => crd.Crd.Metadata.PluralName).Distinct()
+                        .OrderBy(name => name, StringComparer.Ordinal).ToList(),
                     Verbs = ConvertToStrings(group.Key.Verbs),
                 });
 
@@ -80,7 +81,9 @@ public static class Rbac
                     Verbs = ConvertToStrings(RbacVerb.Get | RbacVerb.Patch | RbacVerb.Update),
                 });
 
-        return generic.Concat(entities).Concat(entityStatus);
+        return generic.Concat(entities).Concat(entityStatus)
+            .OrderBy(r => r.ApiGroups?.FirstOrDefault() ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(r => r.Resources?.FirstOrDefault() ?? r.NonResourceURLs?.FirstOrDefault() ?? string.Empty, StringComparer.Ordinal);
     }
 
     private static string[] ConvertToStrings(RbacVerb verbs) => verbs switch
