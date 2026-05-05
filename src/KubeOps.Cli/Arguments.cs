@@ -24,10 +24,17 @@ internal static class Arguments
                         "*.sln")
                     .Select(f => new FileInfo(f))
                     .FirstOrDefault();
-            var file = (projectFile, slnFile) switch
+            var slnxFile
+                = Directory.EnumerateFiles(
+                        Directory.GetCurrentDirectory(),
+                        "*.slnx")
+                    .Select(f => new FileInfo(f))
+                    .FirstOrDefault();
+            var file = (projectFile, slnFile, slnxFile) switch
             {
-                ({ } prj, _) => prj,
-                (_, { } sln) => sln,
+                ({ } prj, _, _) => prj,
+                (_, { } sln, _) => sln,
+                (_, _, { } slnx) => slnx,
                 _ => null,
             };
 
@@ -40,8 +47,8 @@ internal static class Arguments
             return new FileInfo("not-found");
         },
         Description = "A solution or project file where entities are located. " +
-                      "If omitted, the current directory is searched for a *.csproj or *.sln file. " +
-                      "If an *.sln file is used, all projects in the solution (with the newest framework) will be searched for entities. " +
+                      "If omitted, the current directory is searched for a *.csproj, *.sln, or *.slnx file. " +
+                      "If an *.sln or *.slnx file is used, all projects in the solution (with the newest framework) will be searched for entities. " +
                       "This behaviour can be filtered by using the --project and --target-framework option.",
     };
 

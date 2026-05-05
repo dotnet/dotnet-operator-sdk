@@ -45,6 +45,10 @@ This command:
 - Generates the necessary CRDs
 - Installs them into your current Kubernetes context
 
+:::tip[Solution files]
+Instead of a `.csproj` file, you can pass a `.sln` or `.slnx` solution file. The CLI will compile all projects in the solution and search them for custom resources. Use `--project` (regex) and `--target-framework` to narrow the scope.
+:::
+
 :::warning[Production Usage]
 The `install` and `uninstall` commands are primarily intended for development purposes. In production, you should use the generated Kubernetes manifests and your preferred deployment method (e.g., Helm, Kustomize, or GitOps).
 :::

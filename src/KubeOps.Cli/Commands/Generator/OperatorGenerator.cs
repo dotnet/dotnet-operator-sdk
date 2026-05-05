@@ -68,13 +68,13 @@ internal static class OperatorGenerator
         var parser = file switch
         {
             { Extension: ".csproj", Exists: true } => await AssemblyLoader.ForProject(console, file),
-            { Extension: ".sln", Exists: true } => await AssemblyLoader.ForSolution(
+            { Extension: ".sln" or ".slnx", Exists: true } => await AssemblyLoader.ForSolution(
                 console,
                 file,
                 parseResult.GetValue(Options.SolutionProjectRegex),
                 parseResult.GetValue(Options.TargetFramework)),
             { Exists: false } => throw new FileNotFoundException($"The file {file.Name} does not exist."),
-            _ => throw new NotSupportedException("Only *.csproj and *.sln files are supported."),
+            _ => throw new NotSupportedException("Only *.csproj, *.sln, and *.slnx files are supported."),
         };
 
         var mutators = parser.GetMutatedEntities().ToList();
