@@ -69,10 +69,9 @@ internal static partial class AssemblyLoader
 
             console.MarkupLine("[green]Compilation successful.[/]");
             console.WriteLine();
-            var mlc = ContextCreator.Create(
-                project.MetadataReferences.Select(m => m.Display ?? string.Empty)
-                    .Concat(new[] { typeof(object).Assembly.Location }),
-                coreAssemblyName: typeof(object).Assembly.GetName().Name);
+            var mlc = new MetadataLoadContext(
+                new PathAssemblyResolver(project.MetadataReferences.Select(m => m.Display ?? string.Empty)
+                    .Concat(new[] { typeof(object).Assembly.Location })));
             mlc.LoadFromByteArray(assemblyStream.ToArray());
 
             return mlc;
@@ -146,11 +145,9 @@ internal static partial class AssemblyLoader
                 }));
 
             console.WriteLine();
-            var mlc = ContextCreator.Create(
-                assemblies.SelectMany(a => a.Refs)
-                    .Concat(new[] { typeof(object).Assembly.Location })
-                    .Distinct(),
-                coreAssemblyName: typeof(object).Assembly.GetName().Name);
+            var mlc = new MetadataLoadContext(
+                new PathAssemblyResolver(assemblies.SelectMany(a => a.Refs)
+                    .Concat(new[] { typeof(object).Assembly.Location }).Distinct()));
             foreach (var assembly in assemblies)
             {
                 mlc.LoadFromByteArray(assembly.Assembly);
