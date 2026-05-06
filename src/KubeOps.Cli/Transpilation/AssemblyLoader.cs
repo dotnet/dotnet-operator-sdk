@@ -69,9 +69,10 @@ internal static partial class AssemblyLoader
 
             console.MarkupLine("[green]Compilation successful.[/]");
             console.WriteLine();
-            var mlc = new MetadataLoadContext(
-                new PathAssemblyResolver(project.MetadataReferences.Select(m => m.Display ?? string.Empty)
-                    .Concat(new[] { typeof(object).Assembly.Location })));
+            var mlc = ContextCreator.Create(
+                project.MetadataReferences.Select(m => m.Display ?? string.Empty)
+                    .Concat(new[] { typeof(object).Assembly.Location }),
+                coreAssemblyName: typeof(object).Assembly.GetName().Name);
             mlc.LoadFromByteArray(assemblyStream.ToArray());
 
             return mlc;
@@ -116,7 +117,10 @@ internal static partial class AssemblyLoader
                 .Select(async p =>
                 {
                     console.MarkupLineInterpolated(
-                        $"Load compilation context for [aqua]{p.name}[/]{(p.tfm.Length > 0 ? $" [grey]{p.tfm}[/]" : string.Empty)}.");
+                        p.tfm.Length > 0
+                            ? (FormattableString)$"Load compilation context for [aqua]{p.name}[/] [grey]{p.tfm}[/]."
+                            : (FormattableString)$"Load compilation context for [aqua]{p.name}[/].");
+
                     var compilation = await p.project.GetCompilationAsync();
                     console.MarkupLineInterpolated($"[green]Compilation context loaded for {p.name}.[/]");
                     if (compilation is null)
@@ -124,9 +128,11 @@ internal static partial class AssemblyLoader
                         throw new AggregateException("Compilation could not be found.");
                     }
 
-                    using var assemblyStream = new MemoryStream();
+                    await using var assemblyStream = new MemoryStream();
                     console.MarkupLineInterpolated(
-                        $"Start compilation for [aqua]{p.name}[/]{(p.tfm.Length > 0 ? $" [grey]{p.tfm}[/]" : string.Empty)}.");
+                        p.tfm.Length > 0
+                            ? (FormattableString)$"Start compilation for [aqua]{p.name}[/] [grey]{p.tfm}[/]."
+                            : (FormattableString)$"Start compilation for [aqua]{p.name}[/].");
                     switch (compilation.Emit(assemblyStream))
                     {
                         case { Success: false, Diagnostics: var diag }:
@@ -140,9 +146,11 @@ internal static partial class AssemblyLoader
                 }));
 
             console.WriteLine();
-            var mlc = new MetadataLoadContext(
-                new PathAssemblyResolver(assemblies.SelectMany(a => a.Refs)
-                    .Concat(new[] { typeof(object).Assembly.Location }).Distinct()));
+            var mlc = ContextCreator.Create(
+                assemblies.SelectMany(a => a.Refs)
+                    .Concat(new[] { typeof(object).Assembly.Location })
+                    .Distinct(),
+                coreAssemblyName: typeof(object).Assembly.GetName().Name);
             foreach (var assembly in assemblies)
             {
                 mlc.LoadFromByteArray(assembly.Assembly);

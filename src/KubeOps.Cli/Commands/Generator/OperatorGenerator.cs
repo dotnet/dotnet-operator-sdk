@@ -175,11 +175,11 @@ internal static class OperatorGenerator
                 }
                 catch (Exception e)
                 {
-                    console.MarkupLine($"[red]Could not clear output path: {e.Message}[/]");
+                    console.MarkupLineInterpolated($"[red]Could not clear output path: {e.Message}[/]");
                 }
             }
 
-            console.MarkupLine($"[green]Write output to {outPath}.[/]");
+            console.MarkupLineInterpolated($"[green]Write output to {outPath}.[/]");
             await result.Write(outPath);
         }
         else

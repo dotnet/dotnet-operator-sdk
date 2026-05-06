@@ -8,7 +8,7 @@ namespace KubeOps.Cli;
 
 internal static class Arguments
 {
-    public static readonly Argument<FileInfo> SolutionOrProjectFile = new("sln/csproj file")
+    public static readonly Argument<FileInfo> SolutionOrProjectFile = new("sln/slnx/csproj file")
     {
         DefaultValueFactory = result =>
         {

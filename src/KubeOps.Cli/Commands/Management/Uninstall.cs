@@ -100,13 +100,13 @@ internal static class Uninstall
             }
             catch (HttpOperationException)
             {
-                console.WriteLine(
+                console.MarkupLineInterpolated(
                     $"""[red]There was a http (api) error while uninstalling "{crd.Spec.Group}/{crd.Spec.Names.Kind}".[/]""");
                 throw;
             }
             catch (Exception)
             {
-                console.WriteLine(
+                console.MarkupLineInterpolated(
                     $"""[red]There was an error while uninstalling "{crd.Spec.Group}/{crd.Spec.Names.Kind}".[/]""");
                 throw;
             }
