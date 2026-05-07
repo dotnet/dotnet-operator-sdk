@@ -92,17 +92,17 @@ public sealed record OperatorSettings
     public required ReconcileStrategy ReconcileStrategy { get; init; }
 
     /// <summary>
-    /// Gets the configuration options for parallel reconciliation processing.
+    /// Gets the settings for parallel reconciliation processing.
     /// </summary>
     /// <value>
-    /// The configuration options that control how reconciliation requests are processed in parallel,
+    /// The settings that control how reconciliation requests are processed in parallel,
     /// including the maximum concurrency level and the strategy for handling conflicts when the same
     /// entity is being reconciled multiple times.
     /// </value>
     /// <remarks>
     /// <para>
-    /// These options enable fine-grained control over the reconciliation loop's parallelism and
-    /// concurrency behavior. The settings affect how the operator balances throughput (processing
+    /// These settings enable fine-grained control over the reconciliation loop's parallelism and
+    /// concurrency behavior. They affect how the operator balances throughput (processing
     /// multiple entities simultaneously) with consistency (preventing race conditions on individual entities).
     /// </para>
     /// <para>
@@ -114,7 +114,7 @@ public sealed record OperatorSettings
     /// and cluster resource constraints.
     /// </para>
     /// </remarks>
-    /// <seealso cref="ParallelReconciliationOptions"/>
+    /// <seealso cref="ParallelReconciliationSettings"/>
     /// <seealso cref="ParallelReconciliationConflictStrategy"/>
-    public required ParallelReconciliationOptions ParallelReconciliationOptions { get; init; }
+    public required ParallelReconciliationSettings ParallelReconciliation { get; init; }
 }

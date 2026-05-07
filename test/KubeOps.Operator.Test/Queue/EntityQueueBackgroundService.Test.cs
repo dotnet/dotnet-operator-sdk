@@ -227,7 +227,7 @@ public sealed class EntityQueueBackgroundServiceTest
 
         var settings = new OperatorSettingsBuilder
         {
-            ParallelReconciliationOptions = new()
+            ParallelReconciliation = new()
             {
                 MaxParallelReconciliations = 4,
                 ConflictStrategy = ParallelReconciliationConflictStrategy.Discard,
@@ -284,7 +284,7 @@ public sealed class EntityQueueBackgroundServiceTest
 
         var settings = new OperatorSettingsBuilder
         {
-            ParallelReconciliationOptions = new()
+            ParallelReconciliation = new()
             {
                 MaxParallelReconciliations = 4,
                 ConflictStrategy = ParallelReconciliationConflictStrategy.RequeueAfterDelay,
@@ -325,7 +325,7 @@ public sealed class EntityQueueBackgroundServiceTest
 
         var settings = new OperatorSettingsBuilder
         {
-            ParallelReconciliationOptions = new()
+            ParallelReconciliation = new()
             {
                 MaxParallelReconciliations = 2,
                 MaxErrorRetries = 3,
@@ -368,7 +368,7 @@ public sealed class EntityQueueBackgroundServiceTest
         const int maxRetries = 2;
         var settings = new OperatorSettingsBuilder
         {
-            ParallelReconciliationOptions = new()
+            ParallelReconciliation = new()
             {
                 MaxParallelReconciliations = 1,
                 MaxErrorRetries = maxRetries,
@@ -407,7 +407,7 @@ public sealed class EntityQueueBackgroundServiceTest
 
         var settings = new OperatorSettingsBuilder
         {
-            ParallelReconciliationOptions = new()
+            ParallelReconciliation = new()
             {
                 MaxParallelReconciliations = 2,
                 MaxErrorRetries = 0,

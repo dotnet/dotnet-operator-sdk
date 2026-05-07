@@ -33,7 +33,7 @@ namespace KubeOps.Operator.Queue;
 /// <item>
 /// <description>
 /// Global semaphore (<c>_parallelismSemaphore</c>) limits the total number of concurrent reconciliations
-/// based on <see cref="ParallelReconciliationOptions.MaxParallelReconciliations"/>. This semaphore is acquired
+/// based on <see cref="ParallelReconciliationSettings.MaxParallelReconciliations"/>. This semaphore is acquired
 /// <strong>before</strong> reading from the queue, implementing true back-pressure to prevent unbounded memory growth.
 /// </description>
 /// </item>
@@ -71,8 +71,8 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, UidEntry> _uidEntries = new();
     private readonly SemaphoreSlim _parallelismSemaphore = new(
-        operatorSettings.ParallelReconciliationOptions.MaxParallelReconciliations,
-        operatorSettings.ParallelReconciliationOptions.MaxParallelReconciliations);
+        operatorSettings.ParallelReconciliation.MaxParallelReconciliations,
+        operatorSettings.ParallelReconciliation.MaxParallelReconciliations);
 
     private volatile bool _disposed;
 
@@ -189,7 +189,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
     private async Task WatchAsync(CancellationToken cancellationToken)
     {
-        var tasks = new List<Task>(operatorSettings.ParallelReconciliationOptions.MaxParallelReconciliations);
+        var tasks = new List<Task>(operatorSettings.ParallelReconciliation.MaxParallelReconciliations);
 
         try
         {
@@ -201,7 +201,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                 tasks.Add(task);
 
                 // Periodic cleanup of completed tasks
-                if (tasks.Count >= operatorSettings.ParallelReconciliationOptions.MaxParallelReconciliations)
+                if (tasks.Count >= operatorSettings.ParallelReconciliation.MaxParallelReconciliations)
                 {
                     tasks.RemoveAll(t => t.IsCompleted);
                 }
@@ -250,11 +250,11 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
         try
         {
-            var canAcquireLock = operatorSettings.ParallelReconciliationOptions.ConflictStrategy switch
+            var canAcquireLock = operatorSettings.ParallelReconciliation.ConflictStrategy switch
             {
                 ParallelReconciliationConflictStrategy.Discard or ParallelReconciliationConflictStrategy.RequeueAfterDelay => await uidEntry.Semaphore.WaitAsync(0, cancellationToken),
                 ParallelReconciliationConflictStrategy.WaitForCompletion => true,
-                _ => throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliationOptions.ConflictStrategy} is not supported."),
+                _ => throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliation.ConflictStrategy} is not supported."),
             };
 
             if (!canAcquireLock)
@@ -263,7 +263,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                 return;
             }
 
-            if (operatorSettings.ParallelReconciliationOptions.ConflictStrategy is ParallelReconciliationConflictStrategy.WaitForCompletion)
+            if (operatorSettings.ParallelReconciliation.ConflictStrategy is ParallelReconciliationConflictStrategy.WaitForCompletion)
             {
                 logger
                     .LogDebug(
@@ -312,11 +312,11 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
             // a non-transient error cannot cause an infinite retry loop.
             // See: https://github.com/dotnet/dotnet-operator-sdk/issues/554
             var nextRetryCount = entry.RetryCount + 1;
-            var maxRetries = operatorSettings.ParallelReconciliationOptions.MaxErrorRetries;
+            var maxRetries = operatorSettings.ParallelReconciliation.MaxErrorRetries;
 
             if (maxRetries > 0 && nextRetryCount <= maxRetries)
             {
-                var delay = operatorSettings.ParallelReconciliationOptions.GetErrorBackoffDelay(nextRetryCount);
+                var delay = operatorSettings.ParallelReconciliation.GetErrorBackoffDelay(nextRetryCount);
                 logger.LogWarning(
                     """Requeueing "{Identifier}" for error-retry {RetryCount}/{MaxRetries} in {Delay}s.""",
                     entry.Entity.ToIdentifierString(),
@@ -358,7 +358,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
     private async Task HandleLockingConflictAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
-        switch (operatorSettings.ParallelReconciliationOptions.ConflictStrategy)
+        switch (operatorSettings.ParallelReconciliation.ConflictStrategy)
         {
             case ParallelReconciliationConflictStrategy.Discard:
                 logger
@@ -368,7 +368,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                 break;
 
             case ParallelReconciliationConflictStrategy.RequeueAfterDelay:
-                var requeueDelay = operatorSettings.ParallelReconciliationOptions.GetEffectiveRequeueDelay();
+                var requeueDelay = operatorSettings.ParallelReconciliation.GetEffectiveRequeueDelay();
 
                 logger.LogDebug(
                     """Entity "{Identifier}" is already being reconciled. Requeueing after {Delay}s.""",
@@ -385,7 +385,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                 break;
 
             default:
-                throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliationOptions.ConflictStrategy} is not supported in HandleUidConflictAsync.");
+                throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliation.ConflictStrategy} is not supported in HandleUidConflictAsync.");
         }
     }
 

@@ -28,14 +28,14 @@ public sealed class OperatorSettingsBuilderTest
         settings.AutoAttachFinalizers.Should().BeTrue();
         settings.AutoDetachFinalizers.Should().BeTrue();
         settings.ReconcileStrategy.Should().Be(ReconcileStrategy.ByGeneration);
-        settings.ParallelReconciliationOptions.Should().NotBeNull();
+        settings.ParallelReconciliation.Should().NotBeNull();
     }
 
     [Fact]
     public void Builder_Accepts_All_Property_Setters_And_Passes_Them_Through_Build()
     {
         Action<IFusionCacheBuilder> cacheConfigurator = _ => { };
-        var parallelOptions = new ParallelReconciliationOptions { MaxParallelReconciliations = 8 };
+        var parallelBuilder = new ParallelReconciliationSettingsBuilder { MaxParallelReconciliations = 8 };
 
         var settings = new OperatorSettingsBuilder
         {
@@ -50,7 +50,7 @@ public sealed class OperatorSettingsBuilderTest
             AutoAttachFinalizers = false,
             AutoDetachFinalizers = false,
             ReconcileStrategy = ReconcileStrategy.ByResourceVersion,
-            ParallelReconciliationOptions = parallelOptions,
+            ParallelReconciliation = parallelBuilder,
         }.Build();
 
         settings.Name.Should().Be("my-op");
@@ -64,14 +64,13 @@ public sealed class OperatorSettingsBuilderTest
         settings.AutoAttachFinalizers.Should().BeFalse();
         settings.AutoDetachFinalizers.Should().BeFalse();
         settings.ReconcileStrategy.Should().Be(ReconcileStrategy.ByResourceVersion);
-        settings.ParallelReconciliationOptions.Should().BeSameAs(parallelOptions);
+        settings.ParallelReconciliation.MaxParallelReconciliations.Should().Be(8);
     }
 
     [Fact]
     public void Fluent_Api_Sets_All_Properties_And_Builds_Correctly()
     {
         Action<IFusionCacheBuilder> cacheConfigurator = _ => { };
-        var parallelOptions = new ParallelReconciliationOptions { MaxParallelReconciliations = 4 };
 
         var settings = new OperatorSettingsBuilder()
             .WithName("fluent-op")
@@ -86,7 +85,7 @@ public sealed class OperatorSettingsBuilderTest
             .WithAutoAttachFinalizers(false)
             .WithAutoDetachFinalizers(false)
             .WithReconcileStrategy(ReconcileStrategy.ByResourceVersion)
-            .WithParallelReconciliation(parallelOptions)
+            .WithParallelReconciliation(p => p.WithMaxParallelReconciliations(4))
             .Build();
 
         settings.Name.Should().Be("fluent-op");
@@ -100,6 +99,6 @@ public sealed class OperatorSettingsBuilderTest
         settings.AutoAttachFinalizers.Should().BeFalse();
         settings.AutoDetachFinalizers.Should().BeFalse();
         settings.ReconcileStrategy.Should().Be(ReconcileStrategy.ByResourceVersion);
-        settings.ParallelReconciliationOptions.Should().BeSameAs(parallelOptions);
+        settings.ParallelReconciliation.MaxParallelReconciliations.Should().Be(4);
     }
 }
