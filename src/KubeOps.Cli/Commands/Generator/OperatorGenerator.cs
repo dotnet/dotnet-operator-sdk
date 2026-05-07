@@ -40,6 +40,7 @@ internal static class OperatorGenerator
                     Options.AccessibleDockerImage,
                     Options.AccessibleDockerTag,
                     Options.NoAnsi,
+                    Options.OperatorNamespace,
                     Arguments.OperatorName,
                     Arguments.SolutionOrProjectFile,
                 };
@@ -60,6 +61,8 @@ internal static class OperatorGenerator
         var format = parseResult.GetValue(Options.OutputFormat);
         var dockerImage = parseResult.GetValue(Options.AccessibleDockerImage)!;
         var dockerImageTag = parseResult.GetValue(Options.AccessibleDockerTag)!;
+        var operatorNamespace = parseResult.GetValue(Options.OperatorNamespace);
+        var effectiveNamespace = operatorNamespace ?? $"{name}-system";
 
         var result = new ResultOutput(console, format);
         console.WriteLine("Generate operator resources.");
@@ -82,7 +85,7 @@ internal static class OperatorGenerator
         var hasWebhooks = mutators.Count > 0 || validators.Count > 0 || parser.GetConvertedEntities().Any();
 
         console.MarkupLine("[green]Generate RBAC rules.[/]");
-        new RbacGenerator(parser, format).Generate(result);
+        new RbacGenerator(parser, format, effectiveNamespace).Generate(result);
 
         console.MarkupLine("[green]Generate Dockerfile.[/]");
         new DockerfileGenerator(hasWebhooks).Generate(result);
@@ -93,7 +96,7 @@ internal static class OperatorGenerator
                 "[yellow]The operator contains webhooks of some sort, generating webhook operator specific resources.[/]");
 
             console.MarkupLine("[green]Generate CA and Server certificates.[/]");
-            new CertificateGenerator(name, $"{name}-system").Generate(result);
+            new CertificateGenerator(name, effectiveNamespace).Generate(result);
 
             console.MarkupLine("[green]Generate Deployment and Service.[/]");
             new WebhookDeploymentGenerator(format).Generate(result);
@@ -118,16 +121,19 @@ internal static class OperatorGenerator
             new CrdGenerator(parser, [], format).Generate(result);
         }
 
-        result.Add(
-            $"namespace.{format.GetFileExtension()}",
-            new V1Namespace { Metadata = new() { Name = "system" } }.Initialize());
+        if (operatorNamespace is null)
+        {
+            result.Add(
+                $"namespace.{format.GetFileExtension()}",
+                new V1Namespace { Metadata = new() { Name = "system" } }.Initialize());
+        }
 
         result.Add(
             $"kustomization.{format.GetFileExtension()}",
             new KustomizationConfig
             {
                 NamePrefix = $"{name}-",
-                Namespace = $"{name}-system",
+                Namespace = effectiveNamespace,
                 Labels = [new(new Dictionary<string, string> { { OperatorName, name }, })],
                 Resources = result.DefaultFormatFiles.ToList(),
                 Images =

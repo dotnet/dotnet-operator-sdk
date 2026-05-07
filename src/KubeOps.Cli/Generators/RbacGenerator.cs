@@ -16,7 +16,8 @@ namespace KubeOps.Cli.Generators;
 
 internal sealed class RbacGenerator(
     MetadataLoadContext parser,
-    OutputFormat outputFormat) : IConfigGenerator
+    OutputFormat outputFormat,
+    string subjectNamespace) : IConfigGenerator
 {
     public void Generate(ResultOutput output)
     {
@@ -49,7 +50,7 @@ internal sealed class RbacGenerator(
                 {
                     Kind = V1ServiceAccount.KubeKind,
                     Name = "default",
-                    NamespaceProperty = "system",
+                    NamespaceProperty = subjectNamespace,
                 },
             },
         }
