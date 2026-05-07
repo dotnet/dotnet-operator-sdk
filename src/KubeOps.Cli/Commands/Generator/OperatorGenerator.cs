@@ -85,7 +85,7 @@ internal static class OperatorGenerator
         var hasWebhooks = mutators.Count > 0 || validators.Count > 0 || parser.GetConvertedEntities().Any();
 
         console.MarkupLine("[green]Generate RBAC rules.[/]");
-        new RbacGenerator(parser, format, operatorNamespace ?? "system").Generate(result);
+        new RbacGenerator(parser, format, effectiveNamespace).Generate(result);
 
         console.MarkupLine("[green]Generate Dockerfile.[/]");
         new DockerfileGenerator(hasWebhooks).Generate(result);
