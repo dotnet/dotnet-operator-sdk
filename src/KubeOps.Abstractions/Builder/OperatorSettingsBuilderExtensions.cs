@@ -150,14 +150,14 @@ public static class OperatorSettingsBuilderExtensions
         return builder;
     }
 
-    /// <summary>Sets the parallel reconciliation options.</summary>
+    /// <summary>Configures parallel reconciliation settings inline via a delegate.</summary>
     /// <param name="builder">The builder to configure.</param>
-    /// <param name="options">The parallel reconciliation options.</param>
+    /// <param name="configure">An action that configures the <see cref="ParallelReconciliationSettingsBuilder"/>.</param>
     /// <returns>The same <paramref name="builder"/> instance for chaining.</returns>
     public static OperatorSettingsBuilder WithParallelReconciliation(
-        this OperatorSettingsBuilder builder, ParallelReconciliationOptions options)
+        this OperatorSettingsBuilder builder, Action<ParallelReconciliationSettingsBuilder> configure)
     {
-        builder.ParallelReconciliationOptions = options;
+        configure(builder.ParallelReconciliation);
         return builder;
     }
 }
