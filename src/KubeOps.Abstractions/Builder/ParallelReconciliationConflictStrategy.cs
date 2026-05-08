@@ -19,7 +19,7 @@ namespace KubeOps.Abstractions.Builder;
 /// frequency, and acceptable latency.
 /// </para>
 /// </remarks>
-/// <seealso cref="ParallelReconciliationOptions"/>
+/// <seealso cref="ParallelReconciliationSettings"/>
 public enum ParallelReconciliationConflictStrategy
 {
     /// <summary>
@@ -46,7 +46,7 @@ public enum ParallelReconciliationConflictStrategy
     /// <para>
     /// This strategy ensures that no reconciliation requests are lost by placing the entity back into
     /// the reconciliation queue with a time delay. The delay is configured via
-    /// <see cref="ParallelReconciliationOptions.RequeueDelay"/>. This approach balances between
+    /// <see cref="ParallelReconciliationSettings.RequeueDelay"/>. This approach balances between
     /// ensuring all state changes are eventually processed while avoiding immediate re-conflicts.
     /// </para>
     /// <para>

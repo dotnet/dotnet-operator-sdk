@@ -98,26 +98,13 @@ public sealed partial class OperatorSettingsBuilder
     public ReconcileStrategy ReconcileStrategy { get; set; } = ReconcileStrategy.ByGeneration;
 
     /// <summary>
-    /// Gets or sets the configuration options for parallel reconciliation processing.
+    /// Gets or sets the builder for parallel reconciliation settings.
+    /// Configure individual properties directly or via the fluent
+    /// <see cref="ParallelReconciliationSettingsBuilderExtensions"/> methods.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// These options enable fine-grained control over the reconciliation loop's parallelism and
-    /// concurrency behavior. The settings affect how the operator balances throughput (processing
-    /// multiple entities simultaneously) with consistency (preventing race conditions on individual entities).
-    /// </para>
-    /// <para>
-    /// By default, the operator uses <see cref="ParallelReconciliationConflictStrategy.WaitForCompletion"/>
-    /// and allows up to <c>Environment.ProcessorCount * 2</c> concurrent reconciliations.
-    /// The <c>WaitForCompletion</c> strategy ensures that no reconciliation requests are lost by waiting
-    /// for any in-progress reconciliation to complete before processing the next request for the same entity.
-    /// Adjust these values based on your reconciliation logic complexity, external API rate limits,
-    /// and cluster resource constraints.
-    /// </para>
-    /// </remarks>
-    /// <seealso cref="ParallelReconciliationOptions"/>
+    /// <seealso cref="ParallelReconciliationSettingsBuilder"/>
     /// <seealso cref="ParallelReconciliationConflictStrategy"/>
-    public ParallelReconciliationOptions ParallelReconciliationOptions { get; set; } = new();
+    public ParallelReconciliationSettingsBuilder ParallelReconciliation { get; set; } = new();
 
     /// <summary>
     /// Produces an immutable <see cref="OperatorSettings"/> record from the current configuration.
@@ -136,7 +123,7 @@ public sealed partial class OperatorSettingsBuilder
         AutoAttachFinalizers = AutoAttachFinalizers,
         AutoDetachFinalizers = AutoDetachFinalizers,
         ReconcileStrategy = ReconcileStrategy,
-        ParallelReconciliationOptions = ParallelReconciliationOptions,
+        ParallelReconciliation = ParallelReconciliation.Build(),
     };
 
     [GeneratedRegex(@"(\W|_)", RegexOptions.CultureInvariant)]

@@ -271,7 +271,7 @@ controller only sees events for which the spec has actually changed, or for whic
 
 `EntityQueueBackgroundService` enforces two levels of concurrency control before calling your controller:
 
-1. A global `SemaphoreSlim` limits total concurrent reconciliations to `ParallelReconciliationOptions.MaxParallelReconciliations` (default: `Environment.ProcessorCount * 2`).
+1. A global `SemaphoreSlim` limits total concurrent reconciliations to `ParallelReconciliationSettings.MaxParallelReconciliations` (default: `Environment.ProcessorCount * 2`).
 2. A per-UID `SemaphoreSlim` prevents two reconciliations for the same entity from running simultaneously.
 
 When a second event for the same UID arrives while a reconciliation is in progress, the configured
