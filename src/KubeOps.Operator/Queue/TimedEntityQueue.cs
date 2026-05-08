@@ -159,15 +159,17 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
     public Task Remove(TEntity entity, CancellationToken cancellationToken)
     {
         var key = this.GetKey(entity);
-        if (key is null)
+
+        if (key is null || !_management.Remove(key, out var entry))
         {
             return Task.CompletedTask;
         }
 
-        if (_management.Remove(key, out var entry))
-        {
-            entry.Cancel();
-        }
+        entry.Cancel();
+        _logger
+            .LogTrace(
+                """Removed schedule to reconcile for entity "{Identifier}".""",
+                entity.ToIdentifierString());
 
         return Task.CompletedTask;
     }
