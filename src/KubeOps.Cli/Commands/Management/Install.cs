@@ -52,13 +52,13 @@ internal static class Install
         var parser = file switch
         {
             { Extension: ".csproj", Exists: true } => await AssemblyLoader.ForProject(console, file),
-            { Extension: ".sln", Exists: true } => await AssemblyLoader.ForSolution(
+            { Extension: ".sln" or ".slnx", Exists: true } => await AssemblyLoader.ForSolution(
                 console,
                 file,
                 parseResult.GetValue(Options.SolutionProjectRegex),
                 parseResult.GetValue(Options.TargetFramework)),
             { Exists: false } => throw new FileNotFoundException($"The file {file.Name} does not exist."),
-            _ => throw new NotSupportedException("Only *.csproj and *.sln files are supported."),
+            _ => throw new NotSupportedException("Only *.csproj, *.sln, and *.slnx files are supported."),
         };
 
         console.WriteLine($"Install CRDs from {file.Name}.");
@@ -103,13 +103,13 @@ internal static class Install
             }
             catch (HttpOperationException)
             {
-                console.WriteLine(
+                console.MarkupLineInterpolated(
                     $"""[red]There was a http (api) error while installing "{crd.Spec.Group}/{crd.Spec.Names.Kind}".[/]""");
                 throw;
             }
             catch (Exception)
             {
-                console.WriteLine(
+                console.MarkupLineInterpolated(
                     $"""[red]There was an error while installing "{crd.Spec.Group}/{crd.Spec.Names.Kind}".[/]""");
                 throw;
             }

@@ -68,4 +68,11 @@ internal static class Options
         Description = "Disable ANSI output.",
         DefaultValueFactory = _ => false,
     };
+
+    public static readonly Option<string?> OperatorNamespace = new("--namespace", "-n")
+    {
+        Description = "The Kubernetes namespace for the operator deployment. " +
+                      "If omitted, a namespace resource for the operator deployment is generated using the default system namespace naming. " +
+                      "If specified, the namespace is not generated and must already exist in the cluster.",
+    };
 }
