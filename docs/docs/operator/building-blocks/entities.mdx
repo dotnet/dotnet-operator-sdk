@@ -83,10 +83,6 @@ public class V1DemoEntityStatus
 }
 ```
 
-The CRD transpiler maps common CLR scalar types to OpenAPI schema types. For example, `Guid` is emitted as
-`type: string` with `format: uuid`, and `DateTime` / `DateTimeOffset` are emitted as `type: string` with
-`format: date-time`.
-
 ## Entity Attributes
 
 KubeOps provides various attributes to customize and validate your entities:

@@ -36,8 +36,6 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     [InlineData(typeof(NullableDateTimeTestEntity), "string", "date-time", true)]
     [InlineData(typeof(DateTimeOffsetTestEntity), "string", "date-time", null)]
     [InlineData(typeof(NullableDateTimeOffsetTestEntity), "string", "date-time", true)]
-    [InlineData(typeof(GuidTestEntity), "string", "uuid", null)]
-    [InlineData(typeof(NullableGuidTestEntity), "string", "uuid", true)]
     [InlineData(typeof(V1ObjectMetaTestEntity), "object", null, null)]
     [InlineData(typeof(ResourceQuantityTestEntity), "string", null, null)]
     [InlineData(typeof(StringArrayEntity), "array", null, null)]
@@ -717,18 +715,6 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
     private sealed class NullableDateTimeOffsetTestEntity : CustomKubernetesEntity
     {
         public DateTimeOffset? Property { get; set; }
-    }
-
-    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
-    private sealed class GuidTestEntity : CustomKubernetesEntity
-    {
-        public Guid Property { get; set; }
-    }
-
-    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
-    private sealed class NullableGuidTestEntity : CustomKubernetesEntity
-    {
-        public Guid? Property { get; set; }
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]

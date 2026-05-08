@@ -34,7 +34,6 @@ public static class Crds
     private const string Double = "double";
     private const string Decimal = "decimal";
     private const string DateTime = "date-time";
-    private const string Uuid = "uuid";
 
     private static readonly string[] IgnoredToplevelProperties = ["metadata", "apiversion", "kind"];
 
@@ -312,7 +311,7 @@ public static class Crds
         if (prop.GetCustomAttributesData<ValidationRuleAttribute>().ToArray() is { Length: > 0 } validations)
         {
             props.XKubernetesValidations = validations
-                .Select(validation => new V1ValidationRule
+                .Select(validation => new V1ValidationRule()
                 {
                     Rule = validation.GetCustomAttributeCtorArg<string>(context, 0),
                     FieldPath = validation.GetCustomAttributeCtorArg<string?>(context, 1),
@@ -361,7 +360,7 @@ public static class Crds
                             && i.GetGenericTypeDefinition().FullName == typeof(IDictionary<,>).FullName);
 
             var additionalProperties = context.Map(dictionaryImpl.GenericTypeArguments[1]);
-            return new() { Type = Object, AdditionalProperties = additionalProperties };
+            return new() { Type = Object, AdditionalProperties = additionalProperties, };
         }
 
         if (interfaceNames.Contains(typeof(IDictionary).FullName))
@@ -406,7 +405,7 @@ public static class Crds
         {
             "System.Object" => context.MapObjectType(type),
             "System.ValueType" => context.MapValueType(type),
-            "System.Enum" => new() { Type = String, EnumProperty = context.GetEnumNames(type) },
+            "System.Enum" => new() { Type = String, EnumProperty = GetEnumNames(context, type), },
             _ => throw InvalidType(type),
         };
     }
@@ -425,11 +424,21 @@ public static class Crds
             }
         }
 
-        return Enum
-            .GetNames(type)
-            .Select(value => attributeNameByFieldName.GetValueOrDefault(value, value))
-            .Cast<object>()
-            .ToList();
+        var enumNames = new List<object>();
+
+        foreach (var value in Enum.GetNames(type))
+        {
+            if (attributeNameByFieldName.TryGetValue(value, out var name))
+            {
+                enumNames.Add(name);
+            }
+            else
+            {
+                enumNames.Add(value);
+            }
+        }
+
+        return enumNames;
 #else
         return Enum.GetNames(type);
 #endif
@@ -507,7 +516,7 @@ public static class Crds
         if (listType.IsGenericType && listType.GetGenericTypeDefinition().FullName == typeof(KeyValuePair<,>).FullName)
         {
             var additionalProperties = context.Map(listType.GenericTypeArguments[1]);
-            return new() { Type = Object, AdditionalProperties = additionalProperties };
+            return new() { Type = Object, AdditionalProperties = additionalProperties, };
         }
 
         var items = context.Map(listType);
@@ -523,8 +532,8 @@ public static class Crds
             "System.Double" => new() { Type = Number, Format = Double },
             "System.Decimal" => new() { Type = Number, Format = Decimal },
             "System.Boolean" => new() { Type = Boolean },
-            "System.DateTime" or "System.DateTimeOffset" => new() { Type = String, Format = DateTime },
-            "System.Guid" => new() { Type = String, Format = Uuid },
+            "System.DateTime" => new() { Type = String, Format = DateTime },
+            "System.DateTimeOffset" => new() { Type = String, Format = DateTime },
             _ => throw InvalidType(type),
         };
 
