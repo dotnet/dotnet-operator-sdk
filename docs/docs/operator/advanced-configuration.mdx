@@ -554,7 +554,9 @@ of truth for all custom resource data.
 
 `EntityQueueBackgroundService` controls how many entities are reconciled simultaneously and what
 happens when two events for the same entity UID arrive at the same time.
-Both settings live on `OperatorSettings.ParallelReconciliationOptions`.
+Both settings live on `OperatorSettings.ParallelReconciliation` and are configured through
+`OperatorSettingsBuilder.ParallelReconciliation` or via
+the `WithParallelReconciliation` fluent method.
 
 ### Maximum Concurrency
 
@@ -564,7 +566,7 @@ entity types. The default is `Environment.ProcessorCount * 2`.
 ```csharp
 builder.Services
     .AddKubernetesOperator(settings => settings
-        .WithParallelReconciliation(new() { MaxParallelReconciliations = 16 }));
+        .WithParallelReconciliation(p => p.WithMaxParallelReconciliations(16)));
 ```
 
 A global `SemaphoreSlim` is acquired **before** an entry is dequeued, which means the queue acts as
@@ -585,12 +587,10 @@ When a second reconciliation event arrives for an entity that is already being r
 ```csharp
 builder.Services
     .AddKubernetesOperator(settings => settings
-        .WithParallelReconciliation(new()
-        {
-            MaxParallelReconciliations = 8,
-            ConflictStrategy = ParallelReconciliationConflictStrategy.RequeueAfterDelay,
-            RequeueDelay = TimeSpan.FromSeconds(3),
-        }));
+        .WithParallelReconciliation(p => p
+            .WithMaxParallelReconciliations(8)
+            .WithConflictStrategy(ParallelReconciliationConflictStrategy.RequeueAfterDelay)
+            .WithRequeueDelay(TimeSpan.FromSeconds(3))));
 ```
 
 :::note
