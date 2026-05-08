@@ -23,7 +23,7 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
     private readonly TestNamespaceProvider _ns = new();
 
     [Fact(Timeout = 30_000)]
-    public async Task Should_Cancel_Requeue_If_Entity_Is_Deleted()
+    public async Task Should_Supersede_Scheduled_Requeue_If_Entity_Is_Deleted()
     {
         // Arrange
         var waitTask = _observer

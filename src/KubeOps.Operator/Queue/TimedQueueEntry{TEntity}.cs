@@ -2,7 +2,11 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using k8s;
+using k8s.Models;
+
 using KubeOps.Abstractions.Reconciliation;
+using KubeOps.Operator.Logging;
 
 namespace KubeOps.Operator.Queue;
 
@@ -16,6 +20,7 @@ namespace KubeOps.Operator.Queue;
 /// memory overhead when many entities are scheduled with long delays.
 /// </remarks>
 internal sealed record TimedQueueEntry<TEntity>
+    where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private readonly TEntity _entity;
     private readonly ReconciliationTriggerSource _reconciliationTriggerSource;
@@ -67,4 +72,11 @@ internal sealed record TimedQueueEntry<TEntity>
     /// <returns>A queue entry ready for reconciliation processing.</returns>
     internal QueueEntry<TEntity> ToQueueEntry()
         => new(_entity, ReconciliationType, _reconciliationTriggerSource, _retryCount);
+
+    /// <summary>
+    /// Retrieves the identifier string for the queued entity.
+    /// </summary>
+    /// <returns>The identifier string for the entity.</returns>
+    internal string GetEntityIdentifierString()
+        => _entity.ToIdentifierString();
 }

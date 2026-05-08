@@ -16,17 +16,17 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.Controller;
 
-public sealed class CancelEntityRequeueIntegrationTest : IntegrationTestBase
+public sealed class ReplaceEntityRequeueIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
     private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
     private readonly TestNamespaceProvider _ns = new();
 
     [Fact]
-    public async Task Should_Cancel_Requeue_If_New_Event_Fires()
+    public async Task Should_Replace_Scheduled_Requeue_If_New_Event_Fires()
     {
         // This test fires the reconcile, which in turn requeues the entity.
-        // then immediately fires a new event, which should cancel the requeue.
+        // Then it immediately fires a new event, which should replace the scheduled requeue.
 
         _mock.TargetInvocationCount = 2;
         var e = await _client.CreateAsync(

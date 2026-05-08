@@ -19,8 +19,9 @@ namespace KubeOps.Operator.Queue;
 /// <para>
 /// This interface provides a priority queue implementation that schedules entities for processing
 /// after a configurable delay. Entities can be enqueued with a <see cref="TimeSpan"/> that determines
-/// when they become eligible for reconciliation. The queue also supports removal of scheduled entities
-/// and implements <see cref="IAsyncEnumerable{T}"/> for consuming ready entries.
+/// when they become eligible for reconciliation. If the same entity is enqueued multiple times before
+/// it becomes ready, the queue keeps the entry scheduled to run first and implements
+/// <see cref="IAsyncEnumerable{T}"/> for consuming ready entries.
 /// </para>
 /// <para>
 /// The queue is typically used by the operator framework to manage reconciliation timing for both
@@ -64,21 +65,4 @@ public interface ITimedEntityQueue<TEntity> : IDisposable, IAsyncEnumerable<Queu
     /// If an entity with the same key is already queued, the entry scheduled to run earliest is kept.
     /// </remarks>
     Task Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Removes the specified entity from the queue if it is currently scheduled.
-    /// </summary>
-    /// <param name="entity">The Kubernetes entity to be removed from the queue.</param>
-    /// <param name="cancellationToken">
-    /// A token to monitor for cancellation requests during the asynchronous operation.
-    /// </param>
-    /// <returns>
-    /// A task that represents the asynchronous remove operation.
-    /// </returns>
-    /// <remarks>
-    /// If the entity is not found in the queue, this method completes successfully without error.
-    /// This method is typically called when an entity is deleted or when a scheduled operation
-    /// is no longer needed.
-    /// </remarks>
-    Task Remove(TEntity entity, CancellationToken cancellationToken);
 }

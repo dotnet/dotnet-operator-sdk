@@ -257,6 +257,11 @@ With `InMemory`, KubeOps registers `TimedEntityQueue<TEntity>` as `ITimedEntityQ
 starts `EntityQueueBackgroundService<TEntity>` as a hosted service. All scheduling state lives in
 the operator pod's heap.
 
+When the same entity is scheduled multiple times before it becomes ready, the in-memory queue keeps
+one entry per namespace/name key. The entry scheduled to run earliest is kept, and later enqueue calls
+can update the reconciliation metadata for that scheduled entry. Scheduled entries are not removed by
+the reconciler while processing an API-server event.
+
 - **Advantages**: Zero configuration. Minimal latency between watch event and reconciliation call.
 - **Disadvantages**: Pending requeue timers are lost when the pod restarts. In practice this is
   rarely critical because the Kubernetes watch list provides a full snapshot of existing resources
@@ -282,6 +287,10 @@ builder.Services.AddHostedService<MyCustomQueueBackgroundService<V1DemoEntity>>(
 Register one `ITimedEntityQueue<TEntity>` implementation and one corresponding background service
 for each entity type that should use the custom queue.
 :::
+
+Custom queues should follow the same de-duplication contract as the built-in implementation: keep at
+most one pending entry per namespace/name key, preserve the earliest scheduled execution time, and do
+not expose cancellation/removal as part of `ITimedEntityQueue<TEntity>`.
 
 Use this strategy when you need scheduling behaviour that differs from the built-in timer-based
 queue — for example, priority queues or implementations that integrate with your own observability
