@@ -3,21 +3,19 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Reflection;
-using System.Runtime.InteropServices;
 
 using k8s.Models;
 
 using KubeOps.Abstractions.Crds;
 using KubeOps.Abstractions.Entities.Attributes;
 using KubeOps.KubernetesClient;
-using KubeOps.Transpiler;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Crds;
 
-internal class CrdInstaller(ILogger<CrdInstaller> logger, CrdInstallerSettings settings, IKubernetesClient client)
+internal class CrdInstaller(ILogger<CrdInstaller> logger, CrdInstallerSettings settings, IKubernetesClient client, ICrdResourceFactory crdResourceFactory)
     : IHostedService
 {
     private List<V1CustomResourceDefinition> _crds = [];
@@ -25,7 +23,9 @@ internal class CrdInstaller(ILogger<CrdInstaller> logger, CrdInstallerSettings s
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("Execute CRD installer with overwrite: {Overwrite}", settings.OverwriteExisting);
+
         var assembly = Assembly.GetEntryAssembly();
+
         if (assembly is null)
         {
             logger.LogError("No entry assembly found, cannot install CRDs.");
@@ -38,21 +38,16 @@ internal class CrdInstaller(ILogger<CrdInstaller> logger, CrdInstallerSettings s
             .Select(t => (t, attrs: CustomAttributeData.GetCustomAttributes(t)))
             .Where(e => e.attrs.Any(a => a.AttributeType.Name == nameof(KubernetesEntityAttribute)) &&
                         e.attrs.All(a => a.AttributeType.Name != nameof(IgnoreAttribute)))
-            .Select(e => e.t);
+            .Select(e => e.t)
+            .ToList();
 
-        using var mlc = ContextCreator.Create(
-            Directory
-                .GetFiles(RuntimeEnvironment.GetRuntimeDirectory(), "*.dll")
-                .Concat(
-                    Directory.GetFiles(Path.GetDirectoryName(assembly.Location)!, "*.dll"))
-                .Distinct(),
-            coreAssemblyName: typeof(object).Assembly.GetName().Name);
-        _crds = mlc.Transpile(entities).ToList();
+        _crds = crdResourceFactory.CreateCustomResourceDefinitions(entities).ToList();
 
         foreach (var crd in _crds)
         {
             var existing =
                 await client.GetAsync<V1CustomResourceDefinition>(crd.Name(), cancellationToken: cancellationToken);
+
             if (existing is not null && !settings.OverwriteExisting)
             {
                 logger.LogDebug("CRD {Name} already exists, skipping installation.", crd.Name());

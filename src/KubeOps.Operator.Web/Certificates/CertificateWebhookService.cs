@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using KubeOps.Abstractions.Certificates;
+using KubeOps.Abstractions.Webhooks;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Web.Webhooks;
 
@@ -11,8 +12,8 @@ using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Web.Certificates;
 
-internal class CertificateWebhookService(ILogger<CertificateWebhookService> logger, IKubernetesClient client, WebhookLoader loader, WebhookConfig config, ICertificateProvider provider)
-    : WebhookServiceBase(client, loader, config), IHostedService
+internal class CertificateWebhookService(ILogger<CertificateWebhookService> logger, IKubernetesClient client, WebhookLoader loader, WebhookConfig config, ICertificateProvider provider, IWebhookConfigurationFactory webhookConfigurationFactory)
+    : WebhookServiceBase(client, loader, config, webhookConfigurationFactory), IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {

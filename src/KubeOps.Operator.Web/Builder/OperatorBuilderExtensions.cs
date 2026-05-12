@@ -7,11 +7,13 @@ using System.Runtime.Versioning;
 
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Certificates;
+using KubeOps.Abstractions.Webhooks;
 using KubeOps.Operator.Web.Certificates;
 using KubeOps.Operator.Web.LocalTunnel;
 using KubeOps.Operator.Web.Webhooks;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace KubeOps.Operator.Web.Builder;
 
@@ -61,6 +63,7 @@ public static class OperatorBuilderExtensions
         builder.Services.AddSingleton(new WebhookLoader(Assembly.GetEntryAssembly()!));
         builder.Services.AddSingleton(new WebhookConfig(hostname, port));
         builder.Services.AddSingleton<DevelopmentTunnel>();
+        builder.Services.TryAddSingleton<IWebhookConfigurationFactory, KubeOpsWebhookConfigurationFactory>();
 
         return builder;
     }
@@ -106,6 +109,7 @@ public static class OperatorBuilderExtensions
         builder.Services.AddSingleton(new WebhookLoader(Assembly.GetEntryAssembly()!));
         builder.Services.AddSingleton(new WebhookConfig(hostname, port));
         builder.Services.AddSingleton(certificateProvider);
+        builder.Services.TryAddSingleton<IWebhookConfigurationFactory, KubeOpsWebhookConfigurationFactory>();
 
         return builder;
     }

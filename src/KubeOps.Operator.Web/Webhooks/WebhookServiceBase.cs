@@ -2,15 +2,19 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using k8s;
+using System.Reflection;
+
 using k8s.Models;
 
+using KubeOps.Abstractions.Webhooks;
 using KubeOps.KubernetesClient;
 using KubeOps.Transpiler;
 
+using Microsoft.AspNetCore.Mvc;
+
 namespace KubeOps.Operator.Web.Webhooks;
 
-internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoader loader, WebhookConfig config)
+internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoader loader, WebhookConfig config, IWebhookConfigurationFactory webhookConfigurationFactory)
 {
     /// <summary>
     /// The URI the webhooks will use to connect to the operator.
@@ -31,6 +35,46 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
         await RegisterConverters();
     }
 
+    internal async Task RegisterValidators()
+    {
+        var registrations = loader
+            .ValidationWebhooks
+            .Select(t => (
+                Uri: GetWebHookUri(t),
+                Entities.ToEntityMetadata(t.BaseType!.GenericTypeArguments[0]).Metadata))
+            .Select(hook => new ValidatingWebhookRegistration(
+                hook.Metadata,
+                hook.Uri,
+                CaBundle));
+
+        var validatorConfig = webhookConfigurationFactory.CreateValidatingConfiguration(registrations);
+
+        if (validatorConfig.Webhooks.Any())
+        {
+            await Client.SaveAsync(validatorConfig);
+        }
+    }
+
+    internal async Task RegisterMutators()
+    {
+        var registrations = loader
+            .MutationWebhooks
+            .Select(t => (
+                Uri: GetWebHookUri(t),
+                Entities.ToEntityMetadata(t.BaseType!.GenericTypeArguments[0]).Metadata))
+            .Select(hook => new MutatingWebhookRegistration(
+                hook.Metadata,
+                hook.Uri,
+                CaBundle));
+
+        var mutatorConfig = webhookConfigurationFactory.CreateMutatingConfiguration(registrations);
+
+        if (mutatorConfig.Webhooks.Any())
+        {
+            await Client.SaveAsync(mutatorConfig);
+        }
+    }
+
     internal async Task RegisterConverters()
     {
         var conversionWebhooks = loader.ConversionWebhooks.ToList();
@@ -49,16 +93,17 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
                 continue;
             }
 
-            var whUrl = $"{Uri}convert/{metadata.Group}/{metadata.PluralName}";
+            var webhookUri = GetWebHookUri(wh);
+
             crd.Spec.Conversion = new()
             {
                 Strategy = "Webhook",
                 Webhook = new()
                 {
-                    ConversionReviewVersions = new[] { "v1" },
+                    ConversionReviewVersions = ["v1"],
                     ClientConfig = new()
                     {
-                        Url = whUrl,
+                        Url = webhookUri.ToString(),
                         CaBundle = CaBundle,
                     },
                 },
@@ -68,88 +113,28 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
         }
     }
 
-    internal async Task RegisterMutators()
+    private Uri GetWebHookUri(TypeInfo wh)
     {
-        var mutationWebhooks = loader
-            .MutationWebhooks
-            .Select(t => (HookTypeName: t.BaseType!.GenericTypeArguments[0].Name.ToLowerInvariant(),
-                Entities.ToEntityMetadata(t.BaseType!.GenericTypeArguments[0]).Metadata))
-            .Select(hook => new V1MutatingWebhook
-            {
-                Name = $"mutate.{hook.Metadata.SingularName}.{Defaulted(hook.Metadata.Group, "core")}.{hook.Metadata.Version}",
-                MatchPolicy = "Exact",
-                AdmissionReviewVersions = new[] { "v1" },
-                SideEffects = "None",
-                Rules = new[]
-                {
-                    new V1RuleWithOperations
-                    {
-                        Operations = new[] { "*" },
-                        Resources = new[] { hook.Metadata.PluralName },
-                        ApiGroups = new[] { hook.Metadata.Group },
-                        ApiVersions = new[] { hook.Metadata.Version },
-                    },
-                },
-                ClientConfig = new()
-                {
-                    Url = $"{Uri}mutate/{hook.HookTypeName}",
-                    CaBundle = CaBundle,
-                },
-            });
+        var webhookAttribute = wh.GetCustomAttributes().OfType<IWebhookAttribute>().FirstOrDefault();
 
-        var mutatorConfig = new V1MutatingWebhookConfiguration()
+        if (webhookAttribute is not null)
         {
-            Metadata = new() { Name = "dev-mutators" },
-            Webhooks = mutationWebhooks.ToList(),
-        }.Initialize();
-
-        if (mutatorConfig.Webhooks.Any())
-        {
-            await Client.SaveAsync(mutatorConfig);
+            return new Uri(
+                Uri,
+                webhookAttribute.Uri);
         }
-    }
 
-    private static string Defaulted(string? value, string defaultValue) =>
-        string.IsNullOrWhiteSpace(value) ? defaultValue : value;
+        var routeAttribute = wh.GetCustomAttribute<RouteAttribute>();
 
-    private async Task RegisterValidators()
-    {
-        var validationWebhooks = loader
-            .ValidationWebhooks
-            .Select(t => (HookTypeName: t.BaseType!.GenericTypeArguments[0].Name.ToLowerInvariant(),
-                Entities.ToEntityMetadata(t.BaseType!.GenericTypeArguments[0]).Metadata))
-            .Select(hook => new V1ValidatingWebhook
-            {
-                Name = $"validate.{hook.Metadata.SingularName}.{Defaulted(hook.Metadata.Group, "core")}.{hook.Metadata.Version}",
-                MatchPolicy = "Exact",
-                AdmissionReviewVersions = new[] { "v1" },
-                SideEffects = "None",
-                Rules = new[]
-                {
-                    new V1RuleWithOperations
-                    {
-                        Operations = new[] { "*" },
-                        Resources = new[] { hook.Metadata.PluralName },
-                        ApiGroups = new[] { hook.Metadata.Group },
-                        ApiVersions = new[] { hook.Metadata.Version },
-                    },
-                },
-                ClientConfig = new()
-                {
-                    Url = $"{Uri}validate/{hook.HookTypeName}",
-                    CaBundle = CaBundle,
-                },
-            });
-
-        var validatorConfig = new V1ValidatingWebhookConfiguration()
+        if (routeAttribute is { Template: not null and not "" })
         {
-            Metadata = new() { Name = "dev-validators" },
-            Webhooks = validationWebhooks.ToList(),
-        }.Initialize();
-
-        if (validatorConfig.Webhooks.Any())
-        {
-            await Client.SaveAsync(validatorConfig);
+            return new Uri(
+                Uri,
+                routeAttribute.Template);
         }
+
+        throw new InvalidOperationException(
+            $"No {nameof(IWebhookAttribute)} or {nameof(RouteAttribute)} with a valid Uri found on webhook class {wh.FullName}. " +
+            $"Add one of these attributes to specify the webhook's relative URI.");
     }
 }

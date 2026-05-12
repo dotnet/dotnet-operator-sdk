@@ -68,6 +68,5 @@ public sealed class OperatorBuilderExtensionsTest : IDisposable
     public void Dispose()
     {
         _certProvider.Dispose();
-        GC.SuppressFinalize(this);
     }
 }
