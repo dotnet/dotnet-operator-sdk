@@ -12,6 +12,7 @@ jobs:
   semantic-release:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write
       contents: write
       issues: write
     steps:
@@ -23,6 +24,12 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 9.x
+
+      - name: NuGet login
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
 
       - name: Setup Semantic Release
         run: |
@@ -38,6 +45,6 @@ jobs:
         run: npx https://github.com/buehler/semantic-release#feat/force-pre-release -e ./.release/release.base.mjs -e ./.release/release.main.mjs
         env:
           DEBUG: semantic-release:*
-          NUGET_API_KEY: ${{ secrets.NUGET_KEY }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
           GH_NUGET_API_KEY: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
