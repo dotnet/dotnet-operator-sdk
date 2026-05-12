@@ -4,7 +4,6 @@
 
 using System.Net;
 using System.Reflection;
-using System.Runtime.InteropServices;
 
 using k8s;
 using k8s.Models;
@@ -13,16 +12,17 @@ using KubeOps.Abstractions.Crds;
 using KubeOps.Abstractions.Entities.Attributes;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Retry;
-using KubeOps.Transpiler;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Crds;
 
-internal sealed class CrdInstaller : IHostedService, IDisposable, IAsyncDisposable
+internal sealed class CrdInstaller
+    : IHostedService, IDisposable, IAsyncDisposable
 {
     private readonly IKubernetesClient _client;
+    private readonly ICrdResourceFactory _crdResourceFactory;
     private readonly CancellationTokenSource _cts = new();
     private readonly Func<uint, TimeSpan> _retryDelayFactory;
     private readonly ILogger<CrdInstaller> _logger;
@@ -31,11 +31,16 @@ internal sealed class CrdInstaller : IHostedService, IDisposable, IAsyncDisposab
     private bool _disposed;
     private Task? _installationTask;
 
-    public CrdInstaller(ILogger<CrdInstaller> logger, CrdInstallerSettings settings, IKubernetesClient client)
+    public CrdInstaller(
+        ILogger<CrdInstaller> logger,
+        CrdInstallerSettings settings,
+        IKubernetesClient client,
+        ICrdResourceFactory crdResourceFactory)
         : this(
             logger,
             settings,
             client,
+            crdResourceFactory,
             ExponentialRetryBackoff.GetDelayWithJitter)
     {
     }
@@ -44,17 +49,24 @@ internal sealed class CrdInstaller : IHostedService, IDisposable, IAsyncDisposab
         ILogger<CrdInstaller> logger,
         CrdInstallerSettings settings,
         IKubernetesClient client,
+        ICrdResourceFactory crdResourceFactory,
         Func<uint, TimeSpan> retryDelayFactory)
     {
         _logger = logger;
         _settings = settings;
         _client = client;
+        _crdResourceFactory = crdResourceFactory;
         _retryDelayFactory = retryDelayFactory;
     }
 
+    public Task WaitForInstallCompletedAsync(CancellationToken cancellationToken) =>
+        (_installationTask ?? throw new InvalidOperationException()).WaitAsync(cancellationToken);
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _installationTask = Task.Run(RunInstallerWithRetriesAsync, CancellationToken.None);
+        _installationTask = Task.Run(
+            RunInstallerWithRetriesAsync,
+            CancellationToken.None);
         return Task.CompletedTask;
     }
 
@@ -83,12 +95,19 @@ internal sealed class CrdInstaller : IHostedService, IDisposable, IAsyncDisposab
         {
             try
             {
-                _logger.LogInformation("Deleting CRD {Name}.", crd.Name());
-                await _client.DeleteAsync(crd, cancellationToken);
+                _logger.LogInformation(
+                    "Deleting CRD {Name}.",
+                    crd.Name());
+                await _client.DeleteAsync(
+                    crd,
+                    cancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to delete CRD {Name}.", crd.Name());
+                _logger.LogError(
+                    ex,
+                    "Failed to delete CRD {Name}.",
+                    crd.Name());
             }
         }
     }
@@ -143,7 +162,9 @@ internal sealed class CrdInstaller : IHostedService, IDisposable, IAsyncDisposab
                     delay.TotalSeconds);
                 try
                 {
-                    await Task.Delay(delay, _cts.Token);
+                    await Task.Delay(
+                        delay,
+                        _cts.Token);
                 }
                 catch (OperationCanceledException) when (_cts.IsCancellationRequested)
                 {
@@ -152,7 +173,9 @@ internal sealed class CrdInstaller : IHostedService, IDisposable, IAsyncDisposab
             }
             catch (Exception exception)
             {
-                _logger.LogError(exception, "Failed to install CRDs due to a non-transient error.");
+                _logger.LogError(
+                    exception,
+                    "Failed to install CRDs due to a non-transient error.");
                 return;
             }
         }
@@ -176,8 +199,12 @@ internal sealed class CrdInstaller : IHostedService, IDisposable, IAsyncDisposab
 
     private async Task InstallAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Execute CRD installer with overwrite: {Overwrite}", _settings.OverwriteExisting);
+        _logger.LogInformation(
+            "Execute CRD installer with overwrite: {Overwrite}",
+            _settings.OverwriteExisting);
+
         var assembly = Assembly.GetEntryAssembly();
+
         if (assembly is null)
         {
             _logger.LogError("No entry assembly found, cannot install CRDs.");
@@ -190,36 +217,44 @@ internal sealed class CrdInstaller : IHostedService, IDisposable, IAsyncDisposab
             .Select(t => (t, attrs: CustomAttributeData.GetCustomAttributes(t)))
             .Where(e => e.attrs.Any(a => a.AttributeType.Name == nameof(KubernetesEntityAttribute)) &&
                         e.attrs.All(a => a.AttributeType.Name != nameof(IgnoreAttribute)))
-            .Select(e => e.t);
+            .Select(e => e.t)
+            .ToList();
 
-        using var mlc = ContextCreator.Create(
-            Directory
-                .GetFiles(RuntimeEnvironment.GetRuntimeDirectory(), "*.dll")
-                .Concat(
-                    Directory.GetFiles(Path.GetDirectoryName(assembly.Location)!, "*.dll"))
-                .Distinct(),
-            coreAssemblyName: typeof(object).Assembly.GetName().Name);
-        _crds = mlc.Transpile(entities).ToList();
+        _crds = _crdResourceFactory.CreateCustomResourceDefinitions(entities).ToList();
 
         foreach (var crd in _crds)
         {
-            var existing =
-                await _client.GetAsync<V1CustomResourceDefinition>(crd.Name(), cancellationToken: cancellationToken);
+            var existing = await _client.GetAsync<V1CustomResourceDefinition>(
+                crd.Name(),
+                cancellationToken: cancellationToken);
+
             if (existing is not null && !_settings.OverwriteExisting)
             {
-                _logger.LogDebug("CRD {Name} already exists, skipping installation.", crd.Name());
+                _logger.LogDebug(
+                    "CRD {Name} already exists, skipping installation.",
+                    crd.Name());
             }
             else if (existing is not null)
             {
-                _logger.LogDebug("CRD {Name} already exists.", crd.Name());
-                _logger.LogInformation("Overwriting existing CRD {Name}.", crd.Name());
+                _logger.LogDebug(
+                    "CRD {Name} already exists.",
+                    crd.Name());
+                _logger.LogInformation(
+                    "Overwriting existing CRD {Name}.",
+                    crd.Name());
                 crd.Metadata.ResourceVersion = existing.ResourceVersion();
-                await _client.UpdateAsync(crd, cancellationToken);
+                await _client.UpdateAsync(
+                    crd,
+                    cancellationToken);
             }
             else
             {
-                _logger.LogInformation("Installing CRD {Name}.", crd.Name());
-                await _client.CreateAsync(crd, cancellationToken);
+                _logger.LogInformation(
+                    "Installing CRD {Name}.",
+                    crd.Name());
+                await _client.CreateAsync(
+                    crd,
+                    cancellationToken);
             }
         }
     }

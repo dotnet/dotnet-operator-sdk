@@ -12,4 +12,9 @@ namespace KubeOps.Operator.Web.Webhooks.Admission.Mutation;
 /// This must be used in conjunction with the <see cref="MutationWebhook{TEntity}"/> class.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class)]
-public class MutationWebhookAttribute(Type entityType) : RouteAttribute($"/mutate/{entityType.Name.ToLowerInvariant()}");
+public class MutationWebhookAttribute(Type entityType)
+    : RouteAttribute($"/mutate/{entityType.Name.ToLowerInvariant()}"), IWebhookAttribute
+{
+    /// <inheritdoc />
+    public Uri Uri { get; } = new($"/mutate/{entityType.Name.ToLowerInvariant()}", UriKind.Relative);
+}

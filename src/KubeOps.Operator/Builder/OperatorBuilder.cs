@@ -143,6 +143,8 @@ internal sealed class OperatorBuilder : IOperatorBuilder
             new Kubernetes(services.GetRequiredService<KubernetesClientConfiguration>()));
         Services.TryAddSingleton<IKubernetesClient, KubernetesClient.KubernetesClient>();
 
+        Services.TryAddSingleton<ICrdResourceFactory, KubeOpsCrdResourceFactory>();
+        Services.TryAddSingleton<IEventResourceFactory, KubeOpsEventResourceFactory>();
         Services.TryAddTransient<IEventPublisherFactory, KubeOpsEventPublisherFactory>();
         Services.TryAddTransient<EventPublisher>(services =>
             services.GetRequiredService<IEventPublisherFactory>().Create());
