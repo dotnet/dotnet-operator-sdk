@@ -10,9 +10,9 @@ builder.Services
 #if DEBUG
     .AddCrdInstaller(c =>
     {
-        // Careful, this can be very destructive.
-        // c.OverwriteExisting = true;
-        // c.DeleteOnShutdown = true;
+        // Careful, these can be very destructive.
+        // c.WithOverwriteExisting()
+        //     .WithDeleteOnShutdown();
     })
 #endif
 //+:cnd:noEmit

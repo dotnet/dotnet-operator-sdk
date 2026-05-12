@@ -78,10 +78,10 @@ public interface IOperatorBuilder
     /// This is intended for development purposes only.
     /// </summary>
     /// <param name="configure">
-    /// Configuration action for the <see cref="CrdInstallerSettings"/>.
+    /// Configuration action for the <see cref="CrdInstallerSettingsBuilder"/>.
     /// Determines the behavior of the CRD installer, such as whether existing CRDs
     /// should be overwritten or deleted on shutdown.
     /// </param>
     /// <returns>The builder for chaining.</returns>
-    IOperatorBuilder AddCrdInstaller(Action<CrdInstallerSettings>? configure = null);
+    IOperatorBuilder AddCrdInstaller(Action<CrdInstallerSettingsBuilder>? configure = null);
 }
