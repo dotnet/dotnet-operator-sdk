@@ -43,22 +43,6 @@ public sealed class ReconcilerTest
     }
 
     [Fact]
-    public async Task Reconcile_Should_Remove_Entity_From_Queue_Before_Processing()
-    {
-        var entity = CreateTestEntity();
-        var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.ApiServer);
-        var controller = CreateMockController();
-
-        var reconciler = CreateReconcilerForController(controller);
-
-        await reconciler.Reconcile(context, TestContext.Current.CancellationToken);
-
-        _mockQueue.Verify(
-            q => q.Remove(entity, It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    [Fact]
     public async Task Reconcile_Should_Enqueue_Entity_When_Result_Has_RequeueAfter()
     {
         var entity = CreateTestEntity();

@@ -79,7 +79,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                 {
                     _logger
                         .LogTrace(
-                            """Adding schedule for entity "{Identifier}" to reconcile in {Seconds}s.""",
+                            """Scheduling entity "{Identifier}" to reconcile in {Seconds}s.""",
                             entity.ToIdentifierString(),
                             queueIn.TotalSeconds);
 
@@ -97,7 +97,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
 
                         _logger
                             .LogTrace(
-                                """Keeping existing schedule for entity "{Identifier}" to reconcile in {Seconds}s.""",
+                                """Keeping scheduled entity "{Identifier}" to reconcile in {Seconds}s.""",
                                 entity.ToIdentifierString(),
                                 newQueueIn.TotalSeconds);
                     }
@@ -105,7 +105,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                     {
                         _logger
                             .LogTrace(
-                                """Updating schedule for entity "{Identifier}" to reconcile in {Seconds}s.""",
+                                """Updating scheduled entity "{Identifier}" to reconcile in {Seconds}s.""",
                                 entity.ToIdentifierString(),
                                 newQueueIn.TotalSeconds);
                     }
@@ -155,23 +155,6 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
         }
     }
 
-    /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Remove"/>
-    public Task Remove(TEntity entity, CancellationToken cancellationToken)
-    {
-        var key = this.GetKey(entity);
-        if (key is null)
-        {
-            return Task.CompletedTask;
-        }
-
-        if (_management.Remove(key, out var entry))
-        {
-            entry.Cancel();
-        }
-
-        return Task.CompletedTask;
-    }
-
     /// <summary>
     /// Continuously processes scheduled entries, adding ready entries to the queue.
     /// </summary>
@@ -199,21 +182,24 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                         if (entry.IsCancelled)
                         {
                             _management.TryRemove(key, out _);
+                            _logger
+                                .LogTrace(
+                                    """Removed cancelled scheduled entry for entity "{Identifier}".""",
+                                    entry.GetEntityIdentifierString());
                             continue;
                         }
 
-                        // Check if entry is ready to be added
-                        // to the queue and remove from management
-                        if (entry.EnqueueAt <= now && _management.TryRemove(key, out _))
+                        if (entry.EnqueueAt > now || !_management.TryRemove(key, out _))
                         {
-                            var queueEntry = entry.ToQueueEntry();
-                            _queue.TryAdd(queueEntry);
-
-                            _logger
-                                .LogTrace(
-                                    """Entity "{Identifier}" is queued for reconciliation.""",
-                                    queueEntry.Entity.ToIdentifierString());
+                            continue;
                         }
+
+                        _queue.TryAdd(entry.ToQueueEntry());
+
+                        _logger
+                            .LogTrace(
+                                """Moved scheduled entry for entity "{Identifier}" to ready queue.""",
+                                entry.GetEntityIdentifierString());
                     }
                 }
             }

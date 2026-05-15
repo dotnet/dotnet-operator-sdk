@@ -41,9 +41,6 @@ public sealed class EntityQueueBackgroundServiceTest
             return Task.CompletedTask;
         }
 
-        public Task Remove(TEntity entity, CancellationToken cancellationToken)
-            => Task.CompletedTask;
-
         public void Push(TEntity entity, ReconciliationType type, ReconciliationTriggerSource source, int retryCount = 0)
             => _channel.Writer.TryWrite(new(entity, type, source, retryCount));
 

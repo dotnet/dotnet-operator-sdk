@@ -76,11 +76,6 @@ internal sealed class Reconciler<TEntity>(
 
     private async Task<ReconciliationResult<TEntity>> ReconcileDeletion(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        await entityQueue
-            .Remove(
-                reconciliationContext.Entity,
-                cancellationToken);
-
         await using var scope = serviceProvider.CreateAsyncScope();
         var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
         return await controller.DeletedAsync(reconciliationContext.Entity, cancellationToken);
@@ -88,11 +83,6 @@ internal sealed class Reconciler<TEntity>(
 
     private async Task<ReconciliationResult<TEntity>> ReconcileEntity(TEntity entity, CancellationToken cancellationToken)
     {
-        await entityQueue
-            .Remove(
-                entity,
-                cancellationToken);
-
         await using var scope = serviceProvider.CreateAsyncScope();
 
         if (operatorSettings.AutoAttachFinalizers)
@@ -116,11 +106,6 @@ internal sealed class Reconciler<TEntity>(
 
     private async Task<ReconciliationResult<TEntity>> ReconcileFinalizersSequential(TEntity entity, CancellationToken cancellationToken)
     {
-        await entityQueue
-            .Remove(
-                entity,
-                cancellationToken);
-
         await using var scope = serviceProvider.CreateAsyncScope();
 
         // the condition to call ReconcileFinalizersSequentialAsync is:

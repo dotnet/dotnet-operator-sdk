@@ -20,7 +20,7 @@ public sealed class TimedEntityQueueTest
     [Fact]
     public async Task Can_Enqueue_Multiple_Entities_With_Same_Name()
     {
-        var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
 
         await queue.Enqueue(
             CreateSecret("app-ns1", "secret-name"),
@@ -37,7 +37,7 @@ public sealed class TimedEntityQueueTest
             retryCount: 0,
             TestContext.Current.CancellationToken);
 
-        var items = new List<V1Secret>();
+        var items = new List<QueueEntry<V1Secret>>();
 
         using var tokenSource = new CancellationTokenSource();
         tokenSource.CancelAfter(TimeSpan.FromMilliseconds(500));
@@ -48,7 +48,7 @@ public sealed class TimedEntityQueueTest
         {
             while (await enumerator.MoveNextAsync())
             {
-                items.Add(enumerator.Current.Entity);
+                items.Add(enumerator.Current);
             }
         }
         catch (OperationCanceledException)
@@ -56,69 +56,136 @@ public sealed class TimedEntityQueueTest
             // We expect to timeout watching the queue so that we can assert the items received
         }
 
-        items.Count.Should().Be(2);
+        items.Select(e => e.Entity).Should().HaveCount(2);
     }
 
     [Fact]
-    public async Task Cancelled_Entry_Should_Not_Be_Promoted_To_Queue()
+    public async Task Enqueue_Should_Replace_Later_Schedule_For_Same_Entity()
     {
-        var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
         var secret = CreateSecret("ns", "secret");
 
         await queue.Enqueue(
             secret,
             ReconciliationType.Modified,
             ReconciliationTriggerSource.Operator,
-            TimeSpan.FromMilliseconds(200),
+            TimeSpan.FromMilliseconds(300),
             retryCount: 0,
             TestContext.Current.CancellationToken);
 
-        // Cancel before the entry is promoted
-        await queue.Remove(secret, TestContext.Current.CancellationToken);
+        await queue.Enqueue(
+            secret,
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.ApiServer,
+            TimeSpan.Zero,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
 
-        var items = new List<V1Secret>();
-        using var tokenSource = new CancellationTokenSource();
-        tokenSource.CancelAfter(TimeSpan.FromMilliseconds(500));
+        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
 
-        var enumerator = queue.GetAsyncEnumerator(tokenSource.Token);
-        try
-        {
-            while (await enumerator.MoveNextAsync())
-            {
-                items.Add(enumerator.Current.Entity);
-            }
-        }
-        catch (OperationCanceledException e) when (e.CancellationToken != TestContext.Current.CancellationToken)
-        {
-            // We expect to timeout watching the queue so that we can assert the items received
-        }
-
-        items.Should().BeEmpty();
+        items.Should().ContainSingle();
+        items[0].ReconciliationType.Should().Be(ReconciliationType.Modified);
+        items[0].ReconciliationTriggerSource.Should().Be(ReconciliationTriggerSource.ApiServer);
+        items[0].RetryCount.Should().Be(0);
+        queue.Count.Should().Be(0);
     }
 
     [Fact]
-    public async Task Remove_Should_Prevent_Entry_From_Being_Promoted()
+    public async Task Enqueue_Should_Keep_Earliest_Schedule_For_Same_Entity()
     {
-        var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
-        var secret = CreateSecret("ns", "removable-secret");
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        var secret = CreateSecret("ns", "secret");
+
+        await queue.Enqueue(
+            secret,
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.FromMilliseconds(50),
+            retryCount: 1,
+            TestContext.Current.CancellationToken);
 
         await queue.Enqueue(
             secret,
             ReconciliationType.Added,
             ReconciliationTriggerSource.ApiServer,
-            TimeSpan.FromMilliseconds(300),
+            TimeSpan.FromSeconds(5),
+            retryCount: 2,
+            TestContext.Current.CancellationToken);
+
+        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+
+        items.Should().ContainSingle();
+        items[0].ReconciliationType.Should().Be(ReconciliationType.Added);
+        items[0].ReconciliationTriggerSource.Should().Be(ReconciliationTriggerSource.ApiServer);
+        items[0].RetryCount.Should().Be(2);
+        queue.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Enqueue_Should_Not_Downgrade_Scheduled_Deleted_Reconciliation()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        var secret = CreateSecret("ns", "secret");
+
+        await queue.Enqueue(
+            secret,
+            ReconciliationType.Deleted,
+            ReconciliationTriggerSource.ApiServer,
+            TimeSpan.FromMilliseconds(50),
             retryCount: 0,
             TestContext.Current.CancellationToken);
 
-        await queue.Remove(secret, TestContext.Current.CancellationToken);
+        await queue.Enqueue(
+            secret,
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.FromMilliseconds(100),
+            retryCount: 1,
+            TestContext.Current.CancellationToken);
 
+        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+
+        items.Should().ContainSingle();
+        items[0].ReconciliationType.Should().Be(ReconciliationType.Deleted);
+        items[0].ReconciliationTriggerSource.Should().Be(ReconciliationTriggerSource.Operator);
+        items[0].RetryCount.Should().Be(1);
+        queue.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Enqueue_Should_Replace_Scheduled_Modified_With_Deleted_Reconciliation()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        var secret = CreateSecret("ns", "secret");
+
+        await queue.Enqueue(
+            secret,
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.FromSeconds(5),
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+
+        await queue.Enqueue(
+            secret,
+            ReconciliationType.Deleted,
+            ReconciliationTriggerSource.ApiServer,
+            TimeSpan.Zero,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+
+        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+
+        items.Should().ContainSingle();
+        items[0].ReconciliationType.Should().Be(ReconciliationType.Deleted);
+        items[0].ReconciliationTriggerSource.Should().Be(ReconciliationTriggerSource.ApiServer);
         queue.Count.Should().Be(0);
     }
 
     [Fact]
     public void Dispose_Should_Complete_Without_Exception()
     {
-        var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
 
         var act = () => queue.Dispose();
 
@@ -134,5 +201,28 @@ public sealed class TimedEntityQueueTest
         secret.Metadata.Name = secretName;
 
         return secret;
+    }
+
+    private static async Task<List<QueueEntry<V1Secret>>> DrainQueue(
+        TimedEntityQueue<V1Secret> queue,
+        TimeSpan timeout)
+    {
+        var items = new List<QueueEntry<V1Secret>>();
+        using var tokenSource = new CancellationTokenSource(timeout);
+        var enumerator = queue.GetAsyncEnumerator(tokenSource.Token);
+
+        try
+        {
+            while (await enumerator.MoveNextAsync())
+            {
+                items.Add(enumerator.Current);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected: stop draining after assertion window.
+        }
+
+        return items;
     }
 }
