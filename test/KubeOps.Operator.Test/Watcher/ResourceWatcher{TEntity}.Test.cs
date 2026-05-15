@@ -49,6 +49,7 @@ public sealed class ResourceWatcherTest
                     "unit-test",
                     null,
                     null,
+                    null,
                     true,
                     It.IsAny<CancellationToken>()),
                 Times.Exactly(2));
@@ -489,6 +490,7 @@ public sealed class ResourceWatcherTest
         var fCache = cache ?? Mock.Of<IFusionCache>();
         var timedEntityQueue = queue ?? Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
         var labelSelector = new DefaultEntityLabelSelector<V1OperatorIntegrationTestEntity>();
+        var fieldSelector = new DefaultEntityFieldSelector<V1OperatorIntegrationTestEntity>();
 
         // If a fully configured cacheProvider is passed, use it directly.
         // Otherwise build a default mock that returns fCache for any cache name.
@@ -503,8 +505,8 @@ public sealed class ResourceWatcherTest
         if (waitForCancellation)
         {
             Mock.Get(kubeClient)
-                .Setup(client => client.WatchAsync<V1Pod>("unit-test", null, null, true, It.IsAny<CancellationToken>()))
-                .Returns<string?, string?, string?, bool?, CancellationToken>((_, _, _, _, cancellationToken) => WaitForCancellationAsync<(WatchEventType, V1Pod)>(cancellationToken));
+                .Setup(client => client.WatchAsync<V1Pod>("unit-test", null, null, null, true, It.IsAny<CancellationToken>()))
+                .Returns<string?, string?, string?, string?, bool?, CancellationToken>((_, _, _, _, _, cancellationToken) => WaitForCancellationAsync<(WatchEventType, V1Pod)>(cancellationToken));
         }
 
         return new(
@@ -514,6 +516,7 @@ public sealed class ResourceWatcherTest
             timedEntityQueue,
             effectiveSettings,
             labelSelector,
+            fieldSelector,
             kubeClient);
     }
 
@@ -530,8 +533,9 @@ public sealed class ResourceWatcherTest
         ITimedEntityQueue<V1OperatorIntegrationTestEntity> queue,
         OperatorSettings settings,
         IEntityLabelSelector<V1OperatorIntegrationTestEntity> labelSelector,
+        IEntityFieldSelector<V1OperatorIntegrationTestEntity> fieldSelector,
         IKubernetesClient client)
-        : ResourceWatcher<V1OperatorIntegrationTestEntity>(activitySource, logger, cacheProvider, queue, settings, labelSelector, client)
+        : ResourceWatcher<V1OperatorIntegrationTestEntity>(activitySource, logger, cacheProvider, queue, settings, labelSelector, fieldSelector, client)
     {
         public Task InvokeOnEventAsync(WatchEventType eventType, V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
             => OnEventAsync(eventType, entity, cancellationToken);

@@ -8,15 +8,15 @@ using k8s.Models;
 namespace KubeOps.Abstractions.Entities;
 
 /// <summary>
-/// Default implementation of <see cref="IEntityLabelSelector{TEntity}"/> that applies no label selector,
+/// Default implementation of <see cref="IEntityFieldSelector{TEntity}"/> that applies no field selector,
 /// causing the watcher to observe all entities of type <typeparamref name="TEntity"/>.
-/// Replace this registration with a custom implementation to narrow the watch to entities matching specific labels.
+/// Replace this registration with a custom implementation to narrow the watch to a specific field expression.
 /// </summary>
 /// <typeparam name="TEntity">The Kubernetes entity type this selector applies to.</typeparam>
-public sealed class DefaultEntityLabelSelector<TEntity> : IEntityLabelSelector<TEntity>
+public sealed class DefaultEntityFieldSelector<TEntity> : IEntityFieldSelector<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     /// <inheritdoc />
-    public ValueTask<string?> GetLabelSelectorAsync(CancellationToken cancellationToken) =>
+    public ValueTask<string?> GetFieldSelectorAsync(CancellationToken cancellationToken) =>
         ValueTask.FromResult<string?>(null);
 }

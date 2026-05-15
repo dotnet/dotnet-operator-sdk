@@ -438,6 +438,7 @@ public class KubernetesClient : IKubernetesClient
         string? @namespace = null,
         string? resourceVersion = null,
         string? labelSelector = null,
+        string? fieldSelector = null,
         bool? allowWatchBookmarks = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
@@ -452,6 +453,7 @@ public class KubernetesClient : IKubernetesClient
                 @namespace,
                 metadata.PluralName,
                 allowWatchBookmarks: allowWatchBookmarks,
+                fieldSelector: fieldSelector,
                 labelSelector: labelSelector,
                 resourceVersion: resourceVersion,
                 watch: true,
@@ -461,6 +463,7 @@ public class KubernetesClient : IKubernetesClient
                 metadata.Version,
                 metadata.PluralName,
                 allowWatchBookmarks: allowWatchBookmarks,
+                fieldSelector: fieldSelector,
                 labelSelector: labelSelector,
                 resourceVersion: resourceVersion,
                 watch: true,
