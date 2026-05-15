@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-namespace KubeOps.KubernetesClient.LabelSelectors;
+namespace KubeOps.KubernetesClient.Selectors;
 
 /// <summary>
 /// Label-selector that checks if a certain label does not contain
@@ -11,7 +11,7 @@ namespace KubeOps.KubernetesClient.LabelSelectors;
 /// </summary>
 /// <param name="Label">The label that must not equal to one of the values.</param>
 /// <param name="Values">The possible values.</param>
-public record NotEqualsSelector(string Label, params string[] Values) : LabelSelector
+public record NotEqualsLabelSelector(string Label, params string[] Values) : LabelSelector
 {
     protected override string ToExpression() => $"{Label} notin ({string.Join(",", Values)})";
 }
