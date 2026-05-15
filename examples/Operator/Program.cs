@@ -14,11 +14,9 @@ builder.Logging.SetMinimumLevel(LogLevel.Trace);
 builder.Services
     .AddKubernetesOperator()
 #if DEBUG
-    .AddCrdInstaller(c =>
-    {
-        c.OverwriteExisting = true;
-        c.DeleteOnShutdown = true;
-    })
+    .AddCrdInstaller(c => c
+        .WithOverwriteExisting()
+        .WithDeleteOnShutdown())
 #endif
     .RegisterComponents();
 

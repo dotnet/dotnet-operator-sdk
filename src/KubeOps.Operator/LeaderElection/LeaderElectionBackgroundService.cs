@@ -4,6 +4,8 @@
 
 using k8s.LeaderElection;
 
+using KubeOps.Operator.Retry;
+
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -98,10 +100,7 @@ internal sealed class LeaderElectionBackgroundService(ILogger<LeaderElectionBack
             {
                 leadershipRetries++;
 
-                var delay = TimeSpan
-                    .FromSeconds(Math.Pow(2, Math.Clamp(leadershipRetries, 0, 5)))
-                    .Add(TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1000)));
-
+                var delay = ExponentialRetryBackoff.GetDelayWithJitter(leadershipRetries);
                 logger.LogError(exception, "Failed to hold leadership. Wait {Seconds}s before attempting to reacquire leadership.", delay.TotalSeconds);
                 await Task.Delay(delay);
             }

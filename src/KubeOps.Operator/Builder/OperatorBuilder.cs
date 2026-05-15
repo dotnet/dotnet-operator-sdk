@@ -109,11 +109,12 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         return this;
     }
 
-    public IOperatorBuilder AddCrdInstaller(Action<CrdInstallerSettings>? configure = null)
+    public IOperatorBuilder AddCrdInstaller(Action<CrdInstallerSettingsBuilder>? configure = null)
     {
-        var settings = new CrdInstallerSettings();
-        configure?.Invoke(settings);
-        Services.AddSingleton(settings);
+        var settingsBuilder = new CrdInstallerSettingsBuilder();
+        configure?.Invoke(settingsBuilder);
+
+        Services.AddSingleton(settingsBuilder.Build());
         Services.AddHostedService<CrdInstaller>();
         return this;
     }
