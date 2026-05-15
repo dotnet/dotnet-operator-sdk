@@ -5,6 +5,7 @@
 using FluentAssertions;
 
 using KubeOps.Abstractions.Builder;
+using KubeOps.Abstractions.Crds;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Events;
 using KubeOps.Abstractions.Reconciliation;
@@ -141,6 +142,24 @@ public sealed class OperatorBuilderTest
             s.ServiceType == typeof(IHostedService) &&
             s.ImplementationType == typeof(ResourceWatcher<V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Singleton);
+    }
+
+    [Fact]
+    public void Should_Add_CrdInstaller_Settings()
+    {
+        _builder.AddCrdInstaller(c => c
+            .WithOverwriteExisting()
+            .WithDeleteOnShutdown());
+
+        var settingsDescriptor = _builder.Services.Single(s => s.ServiceType == typeof(CrdInstallerSettings));
+
+        settingsDescriptor.ImplementationInstance.Should().BeEquivalentTo(new
+        {
+            OverwriteExisting = true,
+            DeleteOnShutdown = true,
+        });
+        settingsDescriptor.Lifetime.Should().Be(ServiceLifetime.Singleton);
+        _builder.Services.Should().NotContain(s => s.ServiceType == typeof(CrdInstallerSettingsBuilder));
     }
 
     private sealed class TestController : IEntityController<V1OperatorIntegrationTestEntity>
