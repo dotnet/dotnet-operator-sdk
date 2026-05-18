@@ -136,4 +136,49 @@ public class RbacMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
     [GenericRbac(Urls = ["url", "foobar"], Resources = ["configmaps"], Groups = ["group"],
         Verbs = RbacVerb.Delete | RbacVerb.Get)]
     public class GenericRbacTest : CustomKubernetesEntity;
+
+    // -------------------------------------------------------------------
+    // #1025: attribute on base class must be collected for derived class
+    // -------------------------------------------------------------------
+
+    [Fact]
+    public void Should_Inherit_EntityRbac_From_Base_Class()
+    {
+        var rules = _mlc
+            .Transpile(_mlc.GetContextType<RbacInheritanceDerivedController>()
+                .GetInheritedCustomAttributesData<EntityRbacAttribute>())
+            .ToList();
+
+        rules.Should().ContainSingle(r =>
+            r.Resources.Contains("rbacbaseentitys") &&
+            r.Verbs.Contains("get"));
+    }
+
+    [Fact]
+    public void Should_Merge_EntityRbac_From_Full_Inheritance_Chain()
+    {
+        var rules = _mlc
+            .Transpile(_mlc.GetContextType<RbacInheritanceDeepDerivedController>()
+                .GetInheritedCustomAttributesData<EntityRbacAttribute>())
+            .ToList();
+
+        // get+update are on the same entity → transpiler merges them into one rule
+        rules.Should().ContainSingle(r =>
+            r.Resources.Contains("rbacbaseentitys") &&
+            r.Verbs.Contains("get") &&
+            r.Verbs.Contains("update"));
+    }
+
+    [KubernetesEntity(Group = "test", ApiVersion = "v1")]
+    public class RbacBaseEntity : CustomKubernetesEntity;
+
+    [EntityRbac(typeof(RbacBaseEntity), Verbs = RbacVerb.Get)]
+    public abstract class RbacBaseController;
+
+    public class RbacInheritanceDerivedController : RbacBaseController;
+
+    [EntityRbac(typeof(RbacBaseEntity), Verbs = RbacVerb.Update)]
+    public abstract class RbacMidController : RbacBaseController;
+
+    public class RbacInheritanceDeepDerivedController : RbacMidController;
 }

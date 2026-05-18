@@ -164,7 +164,8 @@ internal static partial class AssemblyLoader
         .Select(e => e.t);
 
     public static IEnumerable<CustomAttributeData> GetRbacAttributes(this MetadataLoadContext context) => context
-        .GetTypesToInspect().SelectMany(t => t.GetCustomAttributesData<GenericRbacAttribute>().Concat(t.GetCustomAttributesData<EntityRbacAttribute>()));
+        .GetTypesToInspect().SelectMany(t => t.GetInheritedCustomAttributesData<GenericRbacAttribute>()
+            .Concat(t.GetInheritedCustomAttributesData<EntityRbacAttribute>()));
 
     public static IEnumerable<ValidationWebhook> GetValidatedEntities(this MetadataLoadContext context) => context
         .GetTypesToInspect()

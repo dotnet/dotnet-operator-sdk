@@ -217,13 +217,26 @@ public static class Crds
             };
         }
 
-        foreach (var attr in type.GetCustomAttributesData<GenericAdditionalPrinterColumnAttribute>())
+        foreach (var attr in type.GetInheritedCustomAttributesData<GenericAdditionalPrinterColumnAttribute>())
         {
+            string? jsonPath, colName, colType;
+            if (attr.ConstructorArguments.Count >= 3)
+            {
+                jsonPath = attr.GetCustomAttributeCtorArg<string>(context, 0);
+                colName = attr.GetCustomAttributeCtorArg<string>(context, 1);
+                colType = attr.GetCustomAttributeCtorArg<string>(context, 2);
+            }
+            else if (!InheritedAttributeCtorReader.TryReadBaseCtorArgs(
+                         attr.AttributeType, out jsonPath, out colName, out colType))
+            {
+                continue;
+            }
+
             yield return new()
             {
-                Name = attr.GetCustomAttributeCtorArg<string>(context, 1),
-                JsonPath = attr.GetCustomAttributeCtorArg<string>(context, 0),
-                Type = attr.GetCustomAttributeCtorArg<string>(context, 2),
+                Name = colName,
+                JsonPath = jsonPath,
+                Type = colType,
                 Description = attr.GetCustomAttributeNamedArg<string>(context, "Description"),
                 Format = attr.GetCustomAttributeNamedArg<string>(context, "Format"),
                 Priority = attr.GetCustomAttributeNamedArg<PrinterColumnPriority>(context, "Priority") switch

@@ -15,6 +15,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="System.Reflection.Metadata" Version="10.0.8" />
         <PackageReference Include="System.Reflection.MetadataLoadContext" Version="10.0.8" />
     </ItemGroup>
 
