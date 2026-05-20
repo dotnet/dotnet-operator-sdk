@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 namespace KubeOps.Operator.Web.LocalTunnel;
 
 internal class TunnelWebhookService(
-    ILogger<CertificateWebhookService> logger,
+    ILogger<TunnelWebhookService> logger,
     IKubernetesClient client,
     WebhookLoader loader,
     WebhookConfig config,
