@@ -21,7 +21,7 @@ namespace KubeOps.Operator.Events;
 internal sealed class KubeOpsEventPublisherFactory(
     IKubernetesClient client,
     OperatorSettings settings,
-    ILogger<EventPublisher> logger) : IEventPublisherFactory
+    ILogger<KubeOpsEventPublisherFactory> logger) : IEventPublisherFactory
 {
     public EventPublisher Create() => async (entity, reason, message, type, token) =>
     {
