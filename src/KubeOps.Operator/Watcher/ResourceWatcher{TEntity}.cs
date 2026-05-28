@@ -170,39 +170,36 @@ public class ResourceWatcher<TEntity>(
         {
             switch (settings.ReconcileStrategy)
             {
-                case ReconcileStrategy.ByGeneration:
-                    if (deletionTrackingEntry is not null)
+                case ReconcileStrategy.ByGeneration when deletionTrackingEntry is not null:
+                    var cachedDeletionFingerprint = await EntityCache.TryGetAsync<string>(
+                        deletionTrackingEntry.CacheKey,
+                        token: cancellationToken);
+
+                    if (cachedDeletionFingerprint.HasValue && cachedDeletionFingerprint.Value == deletionTrackingEntry.Fingerprint)
                     {
-                        var cachedDeletionFingerprint = await EntityCache.TryGetAsync<string>(
-                            deletionTrackingEntry.CacheKey,
-                            token: cancellationToken);
+                        logger
+                            .LogDebug(
+                                """Entity "{Identifier}" deletion state did not change. Skip event.""",
+                                entity.ToIdentifierString());
 
-                        if (cachedDeletionFingerprint.HasValue && cachedDeletionFingerprint.Value == deletionTrackingEntry.Fingerprint)
-                        {
-                            logger
-                                .LogDebug(
-                                    """Entity "{Identifier}" deletion state did not change. Skip event.""",
-                                    entity.ToIdentifierString());
-
-                            return;
-                        }
+                        return;
                     }
-                    else
+
+                    break;
+                case ReconcileStrategy.ByGeneration when deletionTrackingEntry is null:
+                    var cachedGeneration = await EntityCache.TryGetAsync<long>(
+                        entity.Uid(),
+                        token: cancellationToken);
+
+                    // skip reconcile if generation did not increase.
+                    if (cachedGeneration.HasValue && cachedGeneration.Value >= entity.Generation())
                     {
-                        var cachedGeneration = await EntityCache.TryGetAsync<long>(
-                            entity.Uid(),
-                            token: cancellationToken);
+                        logger
+                            .LogDebug(
+                                """Entity "{Identifier}" modification did not modify generation. Skip event.""",
+                                entity.ToIdentifierString());
 
-                        // skip reconcile if generation did not increase.
-                        if (cachedGeneration.HasValue && cachedGeneration.Value >= entity.Generation())
-                        {
-                            logger
-                                .LogDebug(
-                                    """Entity "{Identifier}" modification did not modify generation. Skip event.""",
-                                    entity.ToIdentifierString());
-
-                            return;
-                        }
+                        return;
                     }
 
                     break;
@@ -246,21 +243,18 @@ public class ResourceWatcher<TEntity>(
         {
             switch (settings.ReconcileStrategy)
             {
-                case ReconcileStrategy.ByGeneration:
-                    if (deletionTrackingEntry is not null)
-                    {
-                        await EntityCache.SetAsync(
-                            deletionTrackingEntry.CacheKey,
-                            deletionTrackingEntry.Fingerprint,
-                            token: cancellationToken);
-                    }
-                    else
-                    {
-                        await EntityCache.SetAsync(
-                            entity.Uid(),
-                            entity.Generation() ?? 1,
-                            token: cancellationToken);
-                    }
+                case ReconcileStrategy.ByGeneration when deletionTrackingEntry is not null:
+                    await EntityCache.SetAsync(
+                        deletionTrackingEntry.CacheKey,
+                        deletionTrackingEntry.Fingerprint,
+                        token: cancellationToken);
+
+                    break;
+                case ReconcileStrategy.ByGeneration when deletionTrackingEntry is null:
+                    await EntityCache.SetAsync(
+                        entity.Uid(),
+                        entity.Generation() ?? 1,
+                        token: cancellationToken);
 
                     break;
                 case ReconcileStrategy.ByResourceVersion:
@@ -268,6 +262,7 @@ public class ResourceWatcher<TEntity>(
                         entity.Uid(),
                         entity.ResourceVersion(),
                         token: cancellationToken);
+
                     break;
             }
         }
