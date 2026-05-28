@@ -162,13 +162,32 @@ public class ResourceWatcher<TEntity>(
 
     protected virtual async Task OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
     {
+        var deletionTrackingEntry = entity.Metadata.DeletionTimestamp is not null
+            ? new DeletionTrackingEntry(GetDeletionCacheKey(entity), GetDeletionFingerprint(entity))
+            : null;
+
         if (eventType != WatchEventType.Deleted)
         {
             switch (settings.ReconcileStrategy)
             {
                 case ReconcileStrategy.ByGeneration:
-                    // bypass generation check for finalizer handling — finalizer removal does not increment generation
-                    if (entity.Metadata.DeletionTimestamp is null)
+                    if (deletionTrackingEntry is not null)
+                    {
+                        var cachedDeletionFingerprint = await EntityCache.TryGetAsync<string>(
+                            deletionTrackingEntry.CacheKey,
+                            token: cancellationToken);
+
+                        if (cachedDeletionFingerprint.HasValue && cachedDeletionFingerprint.Value == deletionTrackingEntry.Fingerprint)
+                        {
+                            logger
+                                .LogDebug(
+                                    """Entity "{Identifier}" deletion state did not change. Skip event.""",
+                                    entity.ToIdentifierString());
+
+                            return;
+                        }
+                    }
+                    else
                     {
                         var cachedGeneration = await EntityCache.TryGetAsync<long>(
                             entity.Uid(),
@@ -221,16 +240,28 @@ public class ResourceWatcher<TEntity>(
         if (eventType == WatchEventType.Deleted)
         {
             await EntityCache.RemoveAsync(entity.Uid(), token: cancellationToken);
+            await EntityCache.RemoveAsync(GetDeletionCacheKey(entity), token: cancellationToken);
         }
         else
         {
             switch (settings.ReconcileStrategy)
             {
-                case ReconcileStrategy.ByGeneration when entity.Metadata.DeletionTimestamp is null:
-                    await EntityCache.SetAsync(
-                        entity.Uid(),
-                        entity.Generation() ?? 1,
-                        token: cancellationToken);
+                case ReconcileStrategy.ByGeneration:
+                    if (deletionTrackingEntry is not null)
+                    {
+                        await EntityCache.SetAsync(
+                            deletionTrackingEntry.CacheKey,
+                            deletionTrackingEntry.Fingerprint,
+                            token: cancellationToken);
+                    }
+                    else
+                    {
+                        await EntityCache.SetAsync(
+                            entity.Uid(),
+                            entity.Generation() ?? 1,
+                            token: cancellationToken);
+                    }
+
                     break;
                 case ReconcileStrategy.ByResourceVersion:
                     await EntityCache.SetAsync(
@@ -241,6 +272,18 @@ public class ResourceWatcher<TEntity>(
             }
         }
     }
+
+    private static string GetDeletionCacheKey(TEntity entity)
+        => $"{entity.Uid()}:deletion";
+
+    private static string GetDeletionFingerprint(TEntity entity)
+        => string.Join(
+            ':',
+            "deleting",
+            entity.Metadata.DeletionTimestamp?.ToUniversalTime().ToString("O"),
+            entity.Metadata.DeletionGracePeriodSeconds,
+            entity.Generation(),
+            string.Join(',', entity.Finalizers() ?? []));
 
     private async Task WatchClientEventsAsync(CancellationToken stoppingToken)
     {
@@ -349,4 +392,6 @@ public class ResourceWatcher<TEntity>(
             delay.TotalSeconds);
         await Task.Delay(delay);
     }
+
+    private sealed record DeletionTrackingEntry(string CacheKey, string Fingerprint);
 }
