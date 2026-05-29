@@ -88,7 +88,7 @@ public static class Utilities
     {
         var current = (Type?)type;
         while (current is not null
-               && current.FullName is not ("System.Object" or "System.ValueType" or "System.Enum"))
+               && current.FullName is not (null or "System.Object" or "System.ValueType" or "System.Enum"))
         {
             foreach (var attr in CustomAttributeData.GetCustomAttributes(current)
                 .Where(a => IsOrInheritsFromAttribute(a.AttributeType, typeof(TAttribute).Name)))

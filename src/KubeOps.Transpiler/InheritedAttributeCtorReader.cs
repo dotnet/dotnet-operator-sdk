@@ -79,7 +79,7 @@ internal static class InheritedAttributeCtorReader
                 }
             }
         }
-        catch
+        catch (Exception)
         {
             return false;
         }
