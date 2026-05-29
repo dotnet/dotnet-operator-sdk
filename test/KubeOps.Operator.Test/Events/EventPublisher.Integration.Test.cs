@@ -14,6 +14,7 @@ using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Events;
 using KubeOps.Operator.Test.TestEntities;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -37,10 +38,7 @@ public sealed class EventPublisherIntegrationTest : IntegrationTestBase
         await _mock.WaitForInvocations;
 
         var eventName = $"{entity.Uid()}.single-entity.{_ns.Namespace}.REASON.message.Normal";
-        var encodedEventName =
-            Convert.ToHexString(
-                SHA512.HashData(
-                    Encoding.UTF8.GetBytes(eventName)));
+        var encodedEventName = EventNameEncoder.Encode(eventName);
 
         var e = await _client.GetAsync<Corev1Event>(encodedEventName, _ns.Namespace, TestContext.Current.CancellationToken);
         e!.Count.Should().Be(1);
@@ -58,10 +56,7 @@ public sealed class EventPublisherIntegrationTest : IntegrationTestBase
         await _mock.WaitForInvocations;
 
         var eventName = $"{entity.Uid()}.test-entity.{_ns.Namespace}.REASON.message.Normal";
-        var encodedEventName =
-            Convert.ToHexString(
-                SHA512.HashData(
-                    Encoding.UTF8.GetBytes(eventName)));
+        var encodedEventName = EventNameEncoder.Encode(eventName);
 
         var e = await _client.GetAsync<Corev1Event>(
             encodedEventName,

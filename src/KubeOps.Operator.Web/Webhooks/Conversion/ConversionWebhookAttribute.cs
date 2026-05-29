@@ -19,17 +19,26 @@ namespace KubeOps.Operator.Web.Webhooks.Conversion;
 [RequiresPreviewFeatures(
     "Conversion webhooks API is not yet stable, the way that conversion " +
     "webhooks are implemented may change in the future based on user feedback.")]
-public class ConversionWebhookAttribute : RouteAttribute
+public class ConversionWebhookAttribute : RouteAttribute, IWebhookAttribute
 {
     public ConversionWebhookAttribute(Type entityType)
-        : base(GetRouteTemplate(entityType))
+        : this(GetRouteTemplate(entityType))
     {
     }
 
     public ConversionWebhookAttribute(string group, string pluralName)
-        : base($"/convert/{group}/{pluralName}")
+        : this($"/convert/{group}/{pluralName}")
     {
     }
+
+    private ConversionWebhookAttribute(string route)
+        : base(route)
+    {
+        Uri = new(route, UriKind.Relative);
+    }
+
+    /// <inheritdoc />
+    public Uri Uri { get; }
 
     private static string GetRouteTemplate(Type entityType)
     {
