@@ -37,7 +37,7 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <param name="reason">
 /// reason provides a machine-readable validation failure reason that is returned to the caller when a request fails this validation rule.
 /// </param>
-[AttributeUsage(AttributeTargets.Property, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Class, AllowMultiple = true)]
 public sealed class ValidationRuleAttribute(
     string rule,
     string? fieldPath = null,
