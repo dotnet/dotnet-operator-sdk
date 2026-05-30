@@ -192,6 +192,27 @@ public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec
 }
 ```
 
+## Attribute Inheritance
+
+CRD-shaping attributes are collected across the **class inheritance chain**. An attribute placed on a base class is picked up by every derived entity, so shared CRD configuration can live on a common base type.
+
+You can also create **reusable, named attributes** by subclassing an existing attribute and forwarding the values to its base constructor:
+
+```csharp
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+public sealed class ReadyPrinterColumnAttribute : GenericAdditionalPrinterColumnAttribute
+{
+    public ReadyPrinterColumnAttribute()
+        : base(".status.conditions[?(@.type==\"Ready\")].status", "Ready", "string") { }
+}
+
+[KubernetesEntity(Group = "demo.kubeops.dev", ApiVersion = "v1", Kind = "DemoEntity")]
+[ReadyPrinterColumn]
+public class V1DemoEntity : CustomKubernetesEntity { }
+```
+
+The base-constructor arguments are not stored in attribute metadata. They are recovered without parsing IL: at runtime the operator instantiates the attribute via reflection, and the CLI reads them from the Roslyn semantic model of your compiled project. Attributes defined in pre-built, referenced assemblies (no source available to the CLI) are therefore only resolved at runtime — prefer defining such reusable attributes in your operator project.
+
 ## Scale Subresource
 
 The `[ScaleSubresource]` attribute enables the Kubernetes [scale subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource) on a CRD. This allows [HorizontalPodAutoscalers (HPAs)](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) to manage the replica count of your custom resource.

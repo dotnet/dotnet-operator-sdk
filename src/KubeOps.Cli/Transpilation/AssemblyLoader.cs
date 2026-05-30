@@ -4,6 +4,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -33,10 +34,26 @@ namespace KubeOps.Cli.Transpilation;
     Justification = "It is the CLI that uses the libraries.")]
 internal static partial class AssemblyLoader
 {
+    private static readonly ConditionalWeakTable<MetadataLoadContext, IInheritedAttributeResolver>
+        InheritedAttributeResolvers = new();
+
     static AssemblyLoader()
     {
         MSBuildLocator.RegisterDefaults();
     }
+
+    /// <summary>
+    /// Returns the Roslyn-based resolver associated with a context loaded by this loader, used to
+    /// recover inherited attribute property values without executing user code. Falls back to
+    /// reflection-based resolution for contexts not created here.
+    /// </summary>
+    /// <param name="context">The context previously created by <see cref="ForProject"/> or <see cref="ForSolution"/>.</param>
+    /// <returns>The resolver for inherited attribute property values.</returns>
+    public static IInheritedAttributeResolver GetInheritedAttributeResolver(
+        this MetadataLoadContext context)
+        => InheritedAttributeResolvers.TryGetValue(context, out var resolver)
+            ? resolver
+            : ReflectionInheritedAttributeResolver.Default;
 
     public static Task<MetadataLoadContext> ForProject(
         IAnsiConsole console,
@@ -74,6 +91,9 @@ internal static partial class AssemblyLoader
                     .Concat(new[] { typeof(object).Assembly.Location })));
             mlc.LoadFromByteArray(assemblyStream.ToArray());
 
+            InheritedAttributeResolvers.AddOrUpdate(
+                mlc, new RoslynInheritedAttributeResolver(new[] { compilation }));
+
             return mlc;
         });
 
@@ -81,17 +101,17 @@ internal static partial class AssemblyLoader
         IAnsiConsole console,
         FileInfo slnFile,
         Regex? projectFilter = null,
-        string? tfm = null)
+        string? targetFramework = null)
         => console.Status().StartAsync($"Compiling {slnFile.Name}...", async _ =>
         {
             projectFilter ??= DefaultRegex();
-            tfm ??= "latest";
+            targetFramework ??= "latest";
 
             console.MarkupLineInterpolated($"Compile solution [aqua]{slnFile.FullName}[/].");
 #pragma warning disable RCS1097
             console.MarkupLineInterpolated($"[grey]With project filter:[/] {projectFilter.ToString()}");
 #pragma warning restore RCS1097
-            console.MarkupLineInterpolated($"[grey]With Target Platform:[/] {tfm}");
+            console.MarkupLineInterpolated($"[grey]With Target Platform:[/] {targetFramework}");
 
             using var workspace = MSBuildWorkspace.Create();
             workspace.SkipUnrecognizedProjects = true;
@@ -103,25 +123,26 @@ internal static partial class AssemblyLoader
             var assemblies = await Task.WhenAll(solution.Projects
                 .Select(p =>
                 {
-                    var name = TfmComparer.TfmRegex().Replace(p.Name, string.Empty);
-                    var tfm = TfmComparer.TfmRegex().Match(p.Name).Groups["tfm"].Value;
-                    return (name, tfm, project: p);
+                    var name = TargetFrameworkComparer.TfmRegex().Replace(p.Name, string.Empty);
+                    var ltfm = TargetFrameworkComparer.TfmRegex().Match(p.Name).Groups["tfm"].Value;
+                    return (Name: name, TargetFramework: ltfm, Project: p);
                 })
-                .Where(p => projectFilter.IsMatch(p.name))
-                .Where(p => tfm == "latest" || p.tfm.Length == 0 || p.tfm == tfm)
-                .OrderByDescending(p => p.tfm, new TfmComparer())
-                .GroupBy(p => p.name)
+                .Where(p =>
+                    projectFilter.IsMatch(p.Name)
+                    && (targetFramework == "latest" || p.TargetFramework.Length == 0 || p.TargetFramework == targetFramework))
+                .OrderByDescending(p => p.TargetFramework, new TargetFrameworkComparer())
+                .GroupBy(p => p.Name)
                 .Select(p => p.FirstOrDefault())
                 .Where(p => p != default)
                 .Select(async p =>
                 {
                     console.MarkupLineInterpolated(
-                        p.tfm.Length > 0
-                            ? (FormattableString)$"Load compilation context for [aqua]{p.name}[/] [grey]{p.tfm}[/]."
-                            : (FormattableString)$"Load compilation context for [aqua]{p.name}[/].");
+                        p.TargetFramework.Length > 0
+                            ? (FormattableString)$"Load compilation context for [aqua]{p.Name}[/] [grey]{p.TargetFramework}[/]."
+                            : (FormattableString)$"Load compilation context for [aqua]{p.Name}[/].");
 
-                    var compilation = await p.project.GetCompilationAsync();
-                    console.MarkupLineInterpolated($"[green]Compilation context loaded for {p.name}.[/]");
+                    var compilation = await p.Project.GetCompilationAsync();
+                    console.MarkupLineInterpolated($"[green]Compilation context loaded for {p.Name}.[/]");
                     if (compilation is null)
                     {
                         throw new AggregateException("Compilation could not be found.");
@@ -129,9 +150,9 @@ internal static partial class AssemblyLoader
 
                     await using var assemblyStream = new MemoryStream();
                     console.MarkupLineInterpolated(
-                        p.tfm.Length > 0
-                            ? (FormattableString)$"Start compilation for [aqua]{p.name}[/] [grey]{p.tfm}[/]."
-                            : (FormattableString)$"Start compilation for [aqua]{p.name}[/].");
+                        p.TargetFramework.Length > 0
+                            ? (FormattableString)$"Start compilation for [aqua]{p.Name}[/] [grey]{p.TargetFramework}[/]."
+                            : (FormattableString)$"Start compilation for [aqua]{p.Name}[/].");
                     switch (compilation.Emit(assemblyStream))
                     {
                         case { Success: false, Diagnostics: var diag }:
@@ -139,9 +160,10 @@ internal static partial class AssemblyLoader
                                 $"Compilation failed: {diag.Aggregate(new StringBuilder(), (sb, d) => sb.AppendLine(d.ToString()))}");
                     }
 
-                    console.MarkupLineInterpolated($"[green]Compilation successful for {p.name}.[/]");
+                    console.MarkupLineInterpolated($"[green]Compilation successful for {p.Name}.[/]");
                     return (Assembly: assemblyStream.ToArray(),
-                        Refs: p.project.MetadataReferences.Select(m => m.Display ?? string.Empty));
+                        Refs: p.Project.MetadataReferences.Select(m => m.Display ?? string.Empty),
+                        Compilation: compilation);
                 }));
 
             console.WriteLine();
@@ -152,6 +174,10 @@ internal static partial class AssemblyLoader
             {
                 mlc.LoadFromByteArray(assembly.Assembly);
             }
+
+            InheritedAttributeResolvers.AddOrUpdate(
+                mlc,
+                new RoslynInheritedAttributeResolver(assemblies.Select(a => a.Compilation).ToList()));
 
             return mlc;
         });
@@ -191,7 +217,7 @@ internal static partial class AssemblyLoader
     private static IEnumerable<TypeInfo> GetTypesToInspect(this MetadataLoadContext context) => context
         .GetAssemblies()
         .SelectMany(a => a.DefinedTypes)
-        .Where(t => !t.IsInterface && !t.IsAbstract && !t.IsGenericType)
+        .Where(t => t is { IsInterface: false, IsAbstract: false, IsGenericType: false })
         .OrderBy(t => t.FullName, StringComparer.Ordinal);
 
     [GeneratedRegex(".*")]
