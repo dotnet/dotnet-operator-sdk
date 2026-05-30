@@ -65,6 +65,53 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
+    public void Should_Set_Validations_On_Root_Class()
+    {
+        var crd = _mlc.Transpile(typeof(RootClassValidateAttrEntity));
+
+        var schema = crd.Spec.Versions[0].Schema.OpenAPIV3Schema;
+        schema.XKubernetesValidations.Should().HaveCount(1);
+        schema.XKubernetesValidations[0].Rule.Should().Be(Rule1);
+        schema.XKubernetesValidations[0].Message.Should().Be(Message1);
+        schema.XKubernetesValidations[0].MessageExpression.Should().BeNull();
+        schema.XKubernetesValidations[0].FieldPath.Should().BeNull();
+        schema.XKubernetesValidations[0].Reason.Should().BeNull();
+    }
+
+    [Fact]
+    public void Should_Set_Multiple_Validations_On_Root_Class()
+    {
+        var crd = _mlc.Transpile(typeof(MultiRootClassValidateAttrEntity));
+
+        var schema = crd.Spec.Versions[0].Schema.OpenAPIV3Schema;
+        schema.XKubernetesValidations.Should().HaveCount(2);
+        schema.XKubernetesValidations[0].Rule.Should().Be(Rule1);
+        schema.XKubernetesValidations[1].Rule.Should().Be(Rule2);
+    }
+
+    [Fact]
+    public void Should_Set_Validations_On_Nested_Class()
+    {
+        var crd = _mlc.Transpile(typeof(NestedClassValidateAttrEntity));
+
+        var nestedSchema = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["nested"];
+        nestedSchema.XKubernetesValidations.Should().HaveCount(1);
+        nestedSchema.XKubernetesValidations[0].Rule.Should().Be(Rule1);
+        nestedSchema.XKubernetesValidations[0].Message.Should().Be(Message1);
+    }
+
+    [Fact]
+    public void Should_Merge_Class_And_Property_Validations()
+    {
+        var crd = _mlc.Transpile(typeof(ClassAndPropertyValidateAttrEntity));
+
+        var nestedSchema = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["nested"];
+        nestedSchema.XKubernetesValidations.Should().HaveCount(2);
+        nestedSchema.XKubernetesValidations[0].Rule.Should().Be(Rule1);
+        nestedSchema.XKubernetesValidations[1].Rule.Should().Be(Rule2);
+    }
+
+    [Fact]
     public void Should_Set_ValidationFields()
     {
         var crd = _mlc.Transpile(typeof(AllFieldsValidateAttrEntity));
@@ -84,6 +131,46 @@ public sealed partial class CrdsMlcTest
     public sealed class NoValidateAttrEntity : CustomKubernetesEntity
     {
         public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    [ValidationRule(Rule1, message: Message1)]
+    public sealed class RootClassValidateAttrEntity : CustomKubernetesEntity
+    {
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    [ValidationRule(Rule1, message: Message1)]
+    [ValidationRule(Rule2, message: Message2)]
+    public sealed class MultiRootClassValidateAttrEntity : CustomKubernetesEntity
+    {
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public sealed class NestedClassValidateAttrEntity : CustomKubernetesEntity
+    {
+        public NestedObject Nested { get; set; } = new();
+
+        [ValidationRule(Rule1, message: Message1)]
+        public sealed class NestedObject
+        {
+            public string Name { get; set; } = null!;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public sealed class ClassAndPropertyValidateAttrEntity : CustomKubernetesEntity
+    {
+        [ValidationRule(Rule2, message: Message2)]
+        public NestedWithClassRule Nested { get; set; } = new();
+
+        [ValidationRule(Rule1, message: Message1)]
+        public sealed class NestedWithClassRule
+        {
+            public string Name { get; set; } = null!;
+        }
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
