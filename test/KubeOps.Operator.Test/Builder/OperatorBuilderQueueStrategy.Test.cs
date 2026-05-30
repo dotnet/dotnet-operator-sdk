@@ -34,6 +34,26 @@ public sealed class OperatorBuilderQueueStrategyTest
     }
 
     [Fact]
+    public void Should_Register_LeaderAware_BackgroundService_For_Single_LeaderElection()
+    {
+        var builder = new OperatorBuilder(
+            new ServiceCollection(),
+            new OperatorSettingsBuilder
+            {
+                QueueStrategy = QueueStrategy.InMemory,
+                LeaderElectionType = LeaderElectionType.Single,
+            }.Build());
+        builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+
+        builder.Services.Should().Contain(s =>
+            s.ServiceType == typeof(IHostedService) &&
+            s.ImplementationType == typeof(LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
+        builder.Services.Should().NotContain(s =>
+            s.ServiceType == typeof(IHostedService) &&
+            s.ImplementationType == typeof(EntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
+    }
+
+    [Fact]
     public void Should_Not_Register_TimedEntityQueue_Or_BackgroundService_For_Custom_Strategy()
     {
         var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { QueueStrategy = QueueStrategy.Custom }.Build());

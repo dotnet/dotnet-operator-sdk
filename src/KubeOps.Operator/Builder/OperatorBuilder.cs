@@ -57,7 +57,16 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         if (Settings.QueueStrategy == QueueStrategy.InMemory)
         {
             Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
-            Services.AddHostedService<EntityQueueBackgroundService<TEntity>>();
+
+            switch (Settings.LeaderElectionType)
+            {
+                case LeaderElectionType.None:
+                    Services.AddHostedService<EntityQueueBackgroundService<TEntity>>();
+                    break;
+                case LeaderElectionType.Single:
+                    Services.AddHostedService<LeaderAwareEntityQueueBackgroundService<TEntity>>();
+                    break;
+            }
         }
 
         // Leader Election

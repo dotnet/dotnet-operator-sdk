@@ -59,7 +59,7 @@ namespace KubeOps.Operator.Queue;
 /// unbounded task accumulation.
 /// </para>
 /// </remarks>
-internal sealed class EntityQueueBackgroundService<TEntity>(
+internal class EntityQueueBackgroundService<TEntity>(
     ActivitySource activitySource,
     IKubernetesClient client,
     OperatorSettings operatorSettings,
@@ -68,12 +68,12 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
     ILogger<EntityQueueBackgroundService<TEntity>> logger) : IHostedService, IDisposable, IAsyncDisposable
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, UidEntry> _uidEntries = new();
     private readonly SemaphoreSlim _parallelismSemaphore = new(
         operatorSettings.ParallelReconciliation.MaxParallelReconciliations,
         operatorSettings.ParallelReconciliation.MaxParallelReconciliations);
 
+    private CancellationTokenSource _cts = new();
     private volatile bool _disposed;
 
     /// <inheritdoc cref="IHostedService.StartAsync"/>
@@ -83,8 +83,16 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
     /// cancellation is managed via an internal <see cref="CancellationTokenSource"/> that is signaled by <see cref="StopAsync"/>.
     /// This avoids cancelling the scheduled work during the host startup phase.
     /// </remarks>
-    public Task StartAsync(CancellationToken cancellationToken)
+    public virtual Task StartAsync(CancellationToken cancellationToken)
     {
+        // Re-create the cancellation token source when it was cancelled by a previous StopAsync.
+        // This allows the processing loop to be restarted (e.g. when leadership is re-acquired).
+        if (_cts.IsCancellationRequested)
+        {
+            _cts.Dispose();
+            _cts = new();
+        }
+
         // The current implementation of IHostedService expects that StartAsync is "really" asynchronous.
         // Blocking calls are not allowed, they would stop the rest of the startup flow.
         //
@@ -101,7 +109,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
     }
 
     /// <inheritdoc/>
-    public Task StopAsync(CancellationToken cancellationToken)
+    public virtual Task StopAsync(CancellationToken cancellationToken)
         => _disposed
             ? Task.CompletedTask
             : _cts.CancelAsync();
@@ -109,23 +117,8 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
     /// <inheritdoc/>
     public void Dispose()
     {
-        _cts.Dispose();
-        _parallelismSemaphore.Dispose();
-
-        lock (_uidEntries)
-        {
-            foreach (var entry in _uidEntries.Values)
-            {
-                entry.Semaphore.Dispose();
-            }
-
-            _uidEntries.Clear();
-        }
-
-        client.Dispose();
-        queue.Dispose();
-
-        _disposed = true;
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     /// <inheritdoc/>
@@ -157,6 +150,36 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                 resource.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Releases the resources used by the background service.
+    /// </summary>
+    /// <param name="disposing">Whether the method is called from <see cref="Dispose()"/>.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing || _disposed)
+        {
+            return;
+        }
+
+        _cts.Dispose();
+        _parallelismSemaphore.Dispose();
+
+        lock (_uidEntries)
+        {
+            foreach (var entry in _uidEntries.Values)
+            {
+                entry.Semaphore.Dispose();
+            }
+
+            _uidEntries.Clear();
+        }
+
+        client.Dispose();
+        queue.Dispose();
+
+        _disposed = true;
     }
 
     private async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
