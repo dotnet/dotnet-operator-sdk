@@ -211,8 +211,6 @@ public sealed class ReadyPrinterColumnAttribute : GenericAdditionalPrinterColumn
 public class V1DemoEntity : CustomKubernetesEntity { }
 ```
 
-The base-constructor arguments are not stored in attribute metadata. They are recovered without parsing IL: at runtime the operator instantiates the attribute via reflection, and the CLI reads them from the Roslyn semantic model of your compiled project. Attributes defined in pre-built, referenced assemblies (no source available to the CLI) are therefore only resolved at runtime — prefer defining such reusable attributes in your operator project.
-
 ## Scale Subresource
 
 The `[ScaleSubresource]` attribute enables the Kubernetes [scale subresource](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#scale-subresource) on a CRD. This allows [HorizontalPodAutoscalers (HPAs)](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) to manage the replica count of your custom resource.
