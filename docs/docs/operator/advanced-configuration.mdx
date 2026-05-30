@@ -129,6 +129,17 @@ builder.Services
             retryPeriod: TimeSpan.FromSeconds(2)));
 ```
 
+### Behavior on Leadership Loss
+
+With `LeaderElectionType.Single`, both the resource watcher **and** the reconciliation queue are gated on leadership. When an instance loses its lease, it performs a **hard stop**: the queue processing loop and any in-flight reconciliations are cancelled immediately. This prevents a former leader from continuing to process resources — including timed requeues and error retries — after another instance has taken over.
+
+Interrupting a running reconciliation is safe because KubeOps follows the standard Kubernetes model:
+
+- **Optimistic concurrency** — concurrent writes to the same object are serialized by the API server via `resourceVersion`; a stale write fails with HTTP 409 Conflict.
+- **Level-triggered, idempotent reconciliation** — a reconciler converges observed state towards desired state, so an interrupted reconciliation is simply re-run by the new leader against the current state. The lease timings (`LeaseDuration > RenewDeadline`) bound the short overlap window during a leadership transition.
+
+This mirrors the behavior of the wider operator ecosystem. See the [Kubernetes leases documentation](https://kubernetes.io/docs/concepts/architecture/leases/) for details.
+
 ### Custom Leader Election
 
 The `Custom` leader election type allows you to implement your own coordination logic, such as namespace-based leader election.
