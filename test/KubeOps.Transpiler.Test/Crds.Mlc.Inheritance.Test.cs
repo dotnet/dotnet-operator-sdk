@@ -13,10 +13,7 @@ namespace KubeOps.Transpiler.Test;
 
 public sealed partial class CrdsMlcTest
 {
-    // -------------------------------------------------------------------
-    // #806 sub-case A: base entity class carries [GenericAdditionalPrinterColumn]
-    // -------------------------------------------------------------------
-
+    [Trait("Area", "Inheritance")]
     [Fact]
     public void Should_Inherit_GenericPrinterColumn_From_Base_Entity_Class()
     {
@@ -28,6 +25,7 @@ public sealed partial class CrdsMlcTest
             col.JsonPath == ".status.foo" && col.Name == "Foo" && col.Type == "string");
     }
 
+    [Trait("Area", "Inheritance")]
     [Fact]
     public void Should_Accumulate_PrinterColumns_From_All_Hierarchy_Levels()
     {
@@ -39,10 +37,7 @@ public sealed partial class CrdsMlcTest
         apc.Should().Contain(col => col.Name == "Bar");
     }
 
-    // -------------------------------------------------------------------
-    // #806 sub-case B: attribute type inherits GenericAdditionalPrinterColumnAttribute
-    // -------------------------------------------------------------------
-
+    [Trait("Area", "Inheritance")]
     [Fact]
     public void Should_Recognize_Inherited_PrinterColumn_Attribute_Type()
     {
@@ -56,6 +51,7 @@ public sealed partial class CrdsMlcTest
             col.Type == "string");
     }
 
+    [Trait("Area", "Inheritance")]
     [Fact]
     public void Should_Support_Multiple_Inherited_PrinterColumn_Attribute_Types()
     {
@@ -67,9 +63,7 @@ public sealed partial class CrdsMlcTest
         apc.Should().Contain(col => col.Name == "Reason");
     }
 
-    // -------------------------------------------------------------------
-    // Test entity classes
-    // -------------------------------------------------------------------
+    #region Test Entity Classes
 
     [GenericAdditionalPrinterColumn(".status.foo", "Foo", "string")]
     private class BasePrinterColumnEntity : CustomKubernetesEntity;
@@ -105,4 +99,6 @@ public sealed partial class CrdsMlcTest
     [ReadyPrinterColumn]
     [ReasonPrinterColumn]
     private sealed class EntityWithMultipleInheritedPrinterColumnAttrTypes : CustomKubernetesEntity;
+
+    #endregion
 }

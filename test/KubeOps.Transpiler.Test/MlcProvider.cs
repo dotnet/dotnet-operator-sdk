@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.MSBuild;
 
 namespace KubeOps.Transpiler.Test;
 
-public class MlcProvider : IAsyncLifetime
+public sealed class MlcProvider : IAsyncLifetime
 {
     static MlcProvider()
     {
