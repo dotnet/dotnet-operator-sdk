@@ -11,7 +11,7 @@ using KubeOps.Abstractions.Entities.Attributes;
 
 namespace KubeOps.Transpiler.Test;
 
-public class EntitiesMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
+public sealed class EntitiesMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
 {
     [Theory]
     [InlineData(typeof(NamespaceEntity), "Namespaced", "namespaceentity", "namespaceentities", "testing.dev/v1")]

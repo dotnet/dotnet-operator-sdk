@@ -17,6 +17,7 @@ namespace KubeOps.Transpiler.Test;
 
 public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
 {
+    [Trait("Area", "General")]
     [Theory]
     [InlineData(typeof(StringTestEntity), "string", null, null)]
     [InlineData(typeof(NullableStringTestEntity), "string", null, true)]
@@ -66,6 +67,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         prop.Nullable.Should().Be(isNullable);
     }
 
+    [Trait("Area", "General")]
     [Theory]
     [InlineData(typeof(StringArrayEntity), "string", null)]
     [InlineData(typeof(NullableStringArrayEntity), "string", null)]
@@ -83,6 +85,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         prop.Nullable.Should().Be(isNullable);
     }
 
+    [Trait("Area", "General")]
     [Theory]
     [InlineData(typeof(DictionaryEntity), "string", null)]
     [InlineData(typeof(EnumerableKeyPairsEntity), "string", null)]
@@ -94,64 +97,67 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         prop.Nullable.Should().Be(isNullable);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Ignore_Entity()
     {
-        var crds = _mlc.Transpile(new[] { typeof(IgnoredEntity) });
+        var crds = _mlc.Transpile([typeof(IgnoredEntity)]);
         crds.Count().Should().Be(0);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Ignore_NonEntity()
     {
-        var crds = _mlc.Transpile(new[] { typeof(NonEntity) });
+        var crds = _mlc.Transpile([typeof(NonEntity)]);
         crds.Count().Should().Be(0);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Ignore_Kubernetes_Entities()
     {
-        var crds = _mlc.Transpile(new[] { typeof(V1Pod) });
+        var crds = _mlc.Transpile([typeof(V1Pod)]);
         crds.Count().Should().Be(0);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Highest_Version_As_Storage()
     {
-        var crds = _mlc.Transpile(new[]
-        {
+        var crds = _mlc.Transpile([
             typeof(V1Alpha1VersionedEntity), typeof(V1Beta1VersionedEntity), typeof(V2Beta2VersionedEntity),
             typeof(V2VersionedEntity), typeof(V1VersionedEntity), typeof(V1AttributeVersionedEntity),
             typeof(V2AttributeVersionedEntity),
-        });
+        ]);
         var crd = crds.First(c => c.Spec.Names.Kind == "VersionedEntity");
         crd.Spec.Versions.Count(v => v.Storage).Should().Be(1);
         crd.Spec.Versions.First(v => v.Storage).Name.Should().Be("v2");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Storage_When_Attribute_Is_Set()
     {
-        var crds = _mlc.Transpile(new[]
-        {
+        var crds = _mlc.Transpile([
             typeof(V1Alpha1VersionedEntity), typeof(V1Beta1VersionedEntity), typeof(V2Beta2VersionedEntity),
             typeof(V2VersionedEntity), typeof(V1VersionedEntity), typeof(V1AttributeVersionedEntity),
             typeof(V2AttributeVersionedEntity),
-        });
+        ]);
         var crd = crds.First(c => c.Spec.Names.Kind == "AttributeVersionedEntity");
         crd.Spec.Versions.Count(v => v.Storage).Should().Be(1);
         crd.Spec.Versions.First(v => v.Storage).Name.Should().Be("v1");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Add_Multiple_Versions_To_Crd()
     {
-        var crds = _mlc.Transpile(new[]
-        {
+        var crds = _mlc.Transpile([
             typeof(V1Alpha1VersionedEntity), typeof(V1Beta1VersionedEntity), typeof(V2Beta2VersionedEntity),
             typeof(V2VersionedEntity), typeof(V1VersionedEntity), typeof(V1AttributeVersionedEntity),
             typeof(V2AttributeVersionedEntity),
-        }).ToList();
+        ]).ToList();
         crds
             .First(c => c.Spec.Names.Kind == "VersionedEntity")
             .Spec.Versions.Should()
@@ -162,6 +168,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
             .HaveCount(2);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Use_Correct_CRD()
     {
@@ -177,6 +184,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         crd.Spec.Scope.Should().Be(scope);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Add_Status_SubResource_If_Absent()
     {
@@ -184,6 +192,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         crd.Spec.Versions[0].Subresources?.Status?.Should().BeNull();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Add_Status_SubResource_If_Present()
     {
@@ -191,6 +200,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         crd.Spec.Versions[0].Subresources.Status.Should().NotBeNull();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Add_ShortNames_To_Crd()
     {
@@ -198,9 +208,10 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         crd.Spec.Names.ShortNames.Should()
             .NotBeNull()
             .And
-            .Contain(new[] { "foo", "bar", "baz" });
+            .Contain(["foo", "bar", "baz"]);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Description_On_Class()
     {
@@ -210,6 +221,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.Description.Should().NotBe("");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Description()
     {
@@ -219,6 +231,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.Description.Should().NotBe("");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_ExternalDocs()
     {
@@ -228,6 +241,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.ExternalDocs.Url.Should().NotBe("");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_ExternalDocs_Description()
     {
@@ -237,6 +251,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.ExternalDocs.Description.Should().NotBe("");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Items_Information()
     {
@@ -250,6 +265,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.MinItems.Should().Be(13);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Length_Information()
     {
@@ -261,6 +277,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.MaxLength.Should().Be(42);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_MinLengthOnly_Information()
     {
@@ -272,6 +289,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.MaxLength.Should().BeNull();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_MaxLengthOnly_Information()
     {
@@ -283,6 +301,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.MaxLength.Should().Be(42);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_MultipleOf()
     {
@@ -293,6 +312,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.MultipleOf.Should().Be(2);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Pattern()
     {
@@ -303,6 +323,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.Pattern.Should().Be(@"/\d*/");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_RangeMinimum()
     {
@@ -314,6 +335,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.ExclusiveMinimum.Should().BeTrue();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_RangeMaximum()
     {
@@ -325,6 +347,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.ExclusiveMaximum.Should().BeTrue();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Required()
     {
@@ -334,6 +357,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.Required.Should().Contain("property");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Spec_As_Required_Via_Auto_Inference_When_Spec_Has_Required_Properties()
     {
@@ -343,6 +367,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         topLevel.Required.Should().Contain("spec");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Spec_As_Required_When_Required_Property_Is_Under_Optional_Parent()
     {
@@ -351,6 +376,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().BeNullOrEmpty();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Spec_As_Required_Via_Explicit_Class_Attribute()
     {
@@ -359,6 +385,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().Contain("spec");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Spec_As_Required_When_Required_Property_Is_Inside_Optional_Collection()
     {
@@ -367,6 +394,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().BeNullOrEmpty();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Spec_As_Required_When_Only_Required_Property_Is_Ignored()
     {
@@ -376,6 +404,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         topLevel.Required.Should().BeNullOrEmpty();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Spec_As_Required_Without_Required_Properties_Or_Attribute()
     {
@@ -385,6 +414,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         topLevel.Required.Should().BeNullOrEmpty();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Status_As_Required_Via_Auto_Inference_Even_When_Status_Has_Required_Properties()
     {
@@ -394,6 +424,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         topLevel.Required.Should().BeNullOrEmpty();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Status_As_Required_Via_Explicit_Class_Attribute()
     {
@@ -403,6 +434,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         topLevel.Required.Should().BeNullOrEmpty();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Contain_Ignored_Property()
     {
@@ -412,6 +444,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.Properties.Should().NotContainKey("property");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Preserve_Unknown_Fields()
     {
@@ -421,6 +454,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.XKubernetesPreserveUnknownFields.Should().BeTrue();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_EmbeddedResource_Fields()
     {
@@ -430,6 +464,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.XKubernetesEmbeddedResource.Should().BeTrue();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Preserve_Unknown_Fields_On_Dictionaries()
     {
@@ -439,6 +474,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.XKubernetesPreserveUnknownFields.Should().BeTrue();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Preserve_Unknown_Fields_On_Classes()
     {
@@ -448,6 +484,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.XKubernetesPreserveUnknownFields.Should().BeTrue();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Preserve_Unknown_Fields_On_System_Object()
     {
@@ -457,6 +494,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.XKubernetesPreserveUnknownFields.Should().BeTrue();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_Preserve_Unknown_Fields_On_ObjectLists()
     {
@@ -466,6 +504,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.XKubernetesPreserveUnknownFields.Should().BeTrue();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Preserve_Unknown_Fields_On_Generic_Dictionaries()
     {
@@ -475,6 +514,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.XKubernetesPreserveUnknownFields.Should().BeNull();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Preserve_Unknown_Fields_On_KeyValuePair_Enumerable()
     {
@@ -484,6 +524,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.XKubernetesPreserveUnknownFields.Should().BeNull();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Properties_On_Dictionaries()
     {
@@ -493,6 +534,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.Properties.Should().BeNull();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Properties_On_Generic_Dictionaries()
     {
@@ -502,6 +544,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.Properties.Should().BeNull();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Properties_On_KeyValuePair_Enumerable()
     {
@@ -511,6 +554,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.Properties.Should().BeNull();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_AdditionalProperties_On_Dictionaries_For_Value_type()
     {
@@ -520,6 +564,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.AdditionalProperties.Should().NotBeNull();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_AdditionalProperties_On_KeyValuePair_For_Value_type()
     {
@@ -529,6 +574,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.AdditionalProperties.Should().NotBeNull();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_IntOrString()
     {
@@ -539,6 +585,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.XKubernetesIntOrString.Should().BeTrue();
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Use_PropertyName_From_JsonPropertyAttribute()
     {
@@ -548,6 +595,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.Should().Contain(p => p.Key == "otherName");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Must_Not_Contain_Ignored_TopLevel_Properties()
     {
@@ -557,6 +605,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         specProperties.Should().NotContainKeys("metadata", "apiVersion", "kind");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Add_AdditionalPrinterColumns()
     {
@@ -565,6 +614,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         apc.Should().ContainSingle(def => def.JsonPath == ".property");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Add_AdditionalPrinterColumns_With_Prio()
     {
@@ -573,6 +623,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         apc.Should().ContainSingle(def => def.JsonPath == ".property" && def.Priority == 1);
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Add_AdditionalPrinterColumns_With_Name()
     {
@@ -581,6 +632,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         apc.Should().ContainSingle(def => def.JsonPath == ".property" && def.Name == "OtherName");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Add_GenericAdditionalPrinterColumns()
     {
@@ -591,6 +643,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         apc.Should().ContainSingle(def => def.JsonPath == ".metadata.namespace" && def.Name == "Namespace");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Correctly_Use_Entity_Scope_Attribute()
     {
@@ -601,6 +654,7 @@ public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(prov
         clusterCrd.Spec.Scope.Should().Be("Cluster");
     }
 
+    [Trait("Area", "General")]
     [Fact]
     public void Should_Correctly_Get_Enum_Value_From_JsonStringEnumMemberNameAttribute()
     {
