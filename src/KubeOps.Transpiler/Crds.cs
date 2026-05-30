@@ -120,7 +120,7 @@ public static class Crds
                     _ => null,
                 },
                 XKubernetesValidations = context.MapValidationRules(
-                    type.GetCustomAttributesData<ValidationRuleAttribute>()),
+                    type.GetInheritedCustomAttributesData<ValidationRuleAttribute>()),
             },
         };
 
@@ -547,7 +547,7 @@ public static class Crds
                     XKubernetesPreserveUnknownFields =
                         type.GetCustomAttributeData<PreserveUnknownFieldsAttribute>() != null ? true : null,
                     XKubernetesValidations = context.MapValidationRules(
-                        type.GetCustomAttributesData<ValidationRuleAttribute>()),
+                        type.GetInheritedCustomAttributesData<ValidationRuleAttribute>()),
                 };
         }
     }

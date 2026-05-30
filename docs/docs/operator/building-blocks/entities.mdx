@@ -137,7 +137,7 @@ public class EntitySpec
 - `[RangeMinimum]` and `[RangeMaximum]`: Defines numeric value ranges
 - `[MultipleOf]`: Specifies that a number must be a multiple of a given value
 - `[Items]`: Defines minimum and maximum items for arrays
-- `[ValidationRule]`: Defines custom validation rules using CEL expressions. Can be applied to properties and to class types — in both cases it emits `x-kubernetes-validations` on the corresponding schema node. When applied to both a class and a property of that type, the rules are merged (class rules first, then property rules)
+- `[ValidationRule]`: Defines custom validation rules using CEL expressions. Can be applied to properties and to class types — in both cases it emits `x-kubernetes-validations` on the corresponding schema node. When applied to both a class and a property of that type, the rules are merged (class rules first, then property rules). Class-level rules are also collected across the **class inheritance chain**: a rule placed on a base class is inherited by every derived entity or nested type, and all rules found along the chain are merged onto the schema node
 
 ### Documentation Attributes
 

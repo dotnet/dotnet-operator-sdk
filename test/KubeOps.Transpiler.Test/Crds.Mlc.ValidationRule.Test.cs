@@ -112,6 +112,26 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
+    public void Should_Inherit_And_Merge_Class_Validations_From_Base_Entity()
+    {
+        var crd = _mlc.Transpile(typeof(DerivedClassValidateAttrEntity));
+
+        var schema = crd.Spec.Versions[0].Schema.OpenAPIV3Schema;
+        schema.XKubernetesValidations.Should().HaveCount(2);
+        schema.XKubernetesValidations.Select(v => v.Rule).Should().Contain([Rule1, Rule2]);
+    }
+
+    [Fact]
+    public void Should_Inherit_And_Merge_Class_Validations_On_Nested_Class()
+    {
+        var crd = _mlc.Transpile(typeof(NestedDerivedClassValidateAttrEntity));
+
+        var nestedSchema = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["nested"];
+        nestedSchema.XKubernetesValidations.Should().HaveCount(2);
+        nestedSchema.XKubernetesValidations.Select(v => v.Rule).Should().Contain([Rule1, Rule2]);
+    }
+
+    [Fact]
     public void Should_Set_ValidationFields()
     {
         var crd = _mlc.Transpile(typeof(AllFieldsValidateAttrEntity));
@@ -170,6 +190,35 @@ public sealed partial class CrdsMlcTest
         public sealed class NestedWithClassRule
         {
             public string Name { get; set; } = null!;
+        }
+    }
+
+    [ValidationRule(Rule1, message: Message1)]
+    public abstract class BaseValidateAttrEntity : CustomKubernetesEntity
+    {
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    [ValidationRule(Rule2, message: Message2)]
+    public sealed class DerivedClassValidateAttrEntity : BaseValidateAttrEntity
+    {
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public sealed class NestedDerivedClassValidateAttrEntity : CustomKubernetesEntity
+    {
+        public DerivedNestedObject Nested { get; set; } = new();
+
+        [ValidationRule(Rule1, message: Message1)]
+        public abstract class BaseNestedObject
+        {
+            public string Name { get; set; } = null!;
+        }
+
+        [ValidationRule(Rule2, message: Message2)]
+        public sealed class DerivedNestedObject : BaseNestedObject
+        {
         }
     }
 
