@@ -48,13 +48,13 @@ There are two ways to start building an operator with KubeOps:
     cd MyOperator
     ```
 
-Both methods generate a basic operator structure with a sample custom resource, controller, and finalizer. The template approach is simpler and more direct, while the CLI provides additional commands for generating CRDs, RBAC rules, and more.
+The template approach (`dotnet new operator`) scaffolds a basic operator structure with a sample custom resource, controller, and finalizer, so it is the quickest way to get started. The plain console approach gives you an empty project that you build up manually by adding the `KubeOps.Operator` package. In either case, the [`kubeops` CLI tool](./src/KubeOps.Cli/README.md) provides additional commands for generating CRDs, RBAC rules, and more.
 
 For detailed tutorials and guides, visit the [KubeOps Documentation Site](https://dotnet.github.io/dotnet-operator-sdk/).
 
 ## Packages
 
-All packages target [.NET 8.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-8/overview) and [.NET 9.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-9/overview), leveraging modern C# features. The underlying Kubernetes client library (`KubernetesClient.Official`) also follows this versioning strategy.
+The runtime libraries target [.NET 8.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-8/overview), [.NET 9.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-9/overview), and [.NET 10.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-10/overview), leveraging modern C# features. The build-time packages (`KubeOps.Generator` and `KubeOps.Templates`) target [.NET Standard 2.0](https://learn.microsoft.com/en-us/dotnet/standard/net-standard) for broad tooling compatibility. The underlying Kubernetes client library (`KubernetesClient`) is referenced for interacting with the Kubernetes API.
 
 The SDK is designed to be modular. You can include only the packages you need:
 
@@ -71,7 +71,11 @@ The SDK is designed to be modular. You can include only the packages you need:
 
 ## Examples
 
-You can find various example operators demonstrating different features in the [`examples/`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/) directory of this repository.
+You can find various example operators demonstrating different features in the [`examples/`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/) directory of this repository:
+
+- [`Operator`](./examples/Operator) - A minimal operator with an entity, controller, and finalizer.
+- [`WebhookOperator`](./examples/WebhookOperator) - Demonstrates validating and mutating admission webhooks.
+- [`ConversionWebhookOperator`](./examples/ConversionWebhookOperator) - Demonstrates converting between entity versions with a conversion webhook.
 
 ## License
 
