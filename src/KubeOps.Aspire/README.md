@@ -1,0 +1,36 @@
+# KubeOps.Aspire
+
+`KubeOps.Aspire` is the [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) **service defaults** integration for KubeOps operators. It is the operator-side counterpart to the [`KubeOps.Aspire.Hosting`](https://www.nuget.org/packages/KubeOps.Aspire.Hosting) AppHost integration.
+
+A single call wires up the cross-cutting concerns that Aspire expects from a well-behaved resource:
+
+- **OpenTelemetry** &mdash; logging, metrics and tracing, including the operator's `ActivitySource`.
+- **OTLP export** &mdash; enabled automatically when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (Aspire injects this).
+- **Service discovery** &mdash; so the operator can call other Aspire resources by their logical name.
+- **HTTP resilience** &mdash; a standard resilience handler on all `HttpClient` instances.
+- **Health checks** &mdash; a default `self` liveness check.
+
+## Usage
+
+```csharp
+using KubeOps.Aspire;
+
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.AddKubeOpsServiceDefaults();
+
+builder.Services
+    .AddKubernetesOperator()
+    .RegisterComponents();
+
+using var host = builder.Build();
+await host.RunAsync();
+```
+
+If you customise the operator name via `OperatorSettings`, call `AddKubeOpsServiceDefaults()` **after** `AddKubernetesOperator()` so the OpenTelemetry service and tracing source names are picked up automatically, or pass the name explicitly:
+
+```csharp
+builder.AddKubeOpsServiceDefaults("my-operator");
+```
+
+See the [.NET Aspire guide](https://dotnet.github.io/dotnet-operator-sdk/docs/operator/aspire) for the full picture.

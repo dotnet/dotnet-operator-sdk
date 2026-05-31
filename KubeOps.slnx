@@ -1,5 +1,6 @@
 ﻿<Solution>
   <Folder Name="/examples/">
+    <Project Path="examples\AspireAppHost\AspireAppHost.csproj" />
     <Project Path="examples\ConversionWebhookOperator\ConversionWebhookOperator.csproj" />
     <Project Path="examples\Operator\Operator.csproj" />
     <Project Path="examples\WebhookOperator\WebhookOperator.csproj" />
@@ -29,6 +30,8 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src\KubeOps.Abstractions\KubeOps.Abstractions.csproj" />
+    <Project Path="src\KubeOps.Aspire.Hosting\KubeOps.Aspire.Hosting.csproj" />
+    <Project Path="src\KubeOps.Aspire\KubeOps.Aspire.csproj" />
     <Project Path="src\KubeOps.Cli\KubeOps.Cli.csproj" />
     <Project Path="src\KubeOps.Generator\KubeOps.Generator.csproj" />
     <Project Path="src\KubeOps.KubernetesClient\KubeOps.KubernetesClient.csproj" />
@@ -41,6 +44,8 @@
   <Folder Name="/test/">
     <Project Path="test/KubeOps.Generator.Test.Entities/KubeOps.Generator.Test.Entities.csproj" />
     <Project Path="test\KubeOps.Abstractions.Test\KubeOps.Abstractions.Test.csproj" />
+    <Project Path="test\KubeOps.Aspire.Hosting.Test\KubeOps.Aspire.Hosting.Test.csproj" />
+    <Project Path="test\KubeOps.Aspire.Test\KubeOps.Aspire.Test.csproj" />
     <Project Path="test\KubeOps.Cli.Test\KubeOps.Cli.Test.csproj" />
     <Project Path="test\KubeOps.Generator.Test\KubeOps.Generator.Test.csproj" />
     <Project Path="test\KubeOps.KubernetesClient.Test\KubeOps.KubernetesClient.Test.csproj" />

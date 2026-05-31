@@ -1,0 +1,122 @@
+---
+title: .NET Aspire
+description: Orchestrate and observe a KubeOps operator with .NET Aspire
+sidebar_position: 9.5
+---
+
+# .NET Aspire Integration
+
+[.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) is an opinionated stack for building observable, production-ready distributed applications. KubeOps ships two packages that let you treat an operator as a first-class Aspire resource:
+
+| Package | Side | Purpose |
+| --- | --- | --- |
+| [`KubeOps.Aspire.Hosting`](../packages/aspire-hosting) | AppHost | Adds `AddKubeOps<TProject>(...)` so the operator is orchestrated as a resource. |
+| [`KubeOps.Aspire`](../packages/aspire) | Operator | Adds `AddKubeOpsServiceDefaults()` for OpenTelemetry, service discovery, resilience and health checks. |
+
+Together they give you a local dashboard with the operator's logs, traces and metrics, automatic service discovery to other resources, and a single entry point to run the whole stack.
+
+## The two halves of an Aspire integration
+
+Aspire integrations always come in two parts, and KubeOps follows that convention:
+
+1. **Hosting integration** &mdash; code that runs in the *AppHost* project and describes the application model.
+2. **Service defaults** &mdash; a small amount of wiring inside the *operator* project itself.
+
+The service-defaults call is the one piece you add to the operator. This is the idiomatic Aspire pattern (`AddServiceDefaults()`); the hosting side then injects the configuration (telemetry endpoint, service discovery variables) automatically.
+
+## Operator project
+
+Install `KubeOps.Aspire` and call `AddKubeOpsServiceDefaults()` on the host builder:
+
+```csharp
+using KubeOps.Aspire;
+using KubeOps.Operator;
+
+using Microsoft.Extensions.Hosting;
+
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.AddKubeOpsServiceDefaults();
+
+builder.Services
+    .AddKubernetesOperator()
+    .RegisterComponents();
+
+using var host = builder.Build();
+await host.RunAsync();
+```
+
+`AddKubeOpsServiceDefaults()` configures:
+
+- **OpenTelemetry** logging (with scopes and formatted messages), metrics (runtime + `HttpClient`) and tracing. It subscribes to the operator's `ActivitySource`, which KubeOps registers under the operator name (see [Logging, Tracing, and OpenTelemetry](./logging)).
+- **OTLP export** &mdash; enabled automatically when the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable is present. Aspire sets this for you, so traces and metrics show up in the dashboard with no extra code.
+- **Service discovery** &mdash; `HttpClient` instances resolve logical Aspire resource names (e.g. `https://apiservice`).
+- **HTTP resilience** &mdash; the standard resilience handler (retries, circuit breaker, timeouts) is applied to all `HttpClient` instances.
+- **Health checks** &mdash; a default `self` liveness check tagged `live`.
+
+:::tip Operator name
+The OpenTelemetry service name and the tracing source name must match `OperatorSettings.Name`. When you call `AddKubeOpsServiceDefaults()` **after** `AddKubernetesOperator()`, KubeOps detects the configured name automatically. Otherwise pass it explicitly:
+
+```csharp
+builder.AddKubeOpsServiceDefaults("my-operator");
+```
+:::
+
+## AppHost project
+
+Create an [Aspire AppHost](https://learn.microsoft.com/dotnet/aspire/fundamentals/app-host-overview) project, reference `KubeOps.Aspire.Hosting`, and add the operator with `AddKubeOps`:
+
+```csharp
+var builder = DistributedApplication.CreateBuilder(args);
+
+var apiService = builder.AddProject<Projects.ApiService>("apiservice");
+
+builder.AddKubeOps<Projects.Operator>("operator")
+    .WithReference(apiService);
+
+builder.Build().Run();
+```
+
+`AddKubeOps<TProject>` is a thin, KubeOps-flavoured wrapper around the built-in `AddProject<TProject>`. It returns the standard `IResourceBuilder<ProjectResource>`, so every Aspire extension works as usual:
+
+- `WithReference(apiService)` injects the service-discovery configuration so the operator can call `apiservice` by name.
+- `WithEnvironment(...)`, `WaitFor(...)`, `WithReplicas(...)` and friends all apply unchanged.
+
+:::note Project reference
+When referencing `KubeOps.Aspire.Hosting` from an AppHost, mark it as a normal code reference so the AppHost SDK does not treat it as a resource:
+
+```xml
+<ProjectReference Include="..\..\src\KubeOps.Aspire.Hosting\KubeOps.Aspire.Hosting.csproj"
+                  IsAspireProjectResource="false" />
+```
+:::
+
+## Running locally
+
+Run the AppHost; the Aspire dashboard opens and starts the operator alongside any other resources:
+
+```bash
+dotnet run --project examples/AspireAppHost
+```
+
+The operator connects to your current cluster using the standard Kubernetes configuration resolution (`KUBECONFIG`, in-cluster config). The dashboard shows structured logs, the reconciliation traces emitted from the operator's `ActivitySource`, and runtime/HTTP metrics.
+
+## Health endpoints
+
+`KubeOps.Aspire` is usable from a plain console operator and therefore does **not** force an ASP.NET Core dependency. The default health checks are registered in the service collection, but exposing them over HTTP requires an HTTP server.
+
+If your operator already hosts webhooks via [`KubeOps.Operator.Web`](../packages/operator-web), map the endpoints on the `WebApplication`:
+
+```csharp
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/alive", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("live"),
+});
+```
+
+These line up with the standard Kubernetes liveness/readiness probe conventions and the Aspire dashboard's health reporting.
+
+## Deployment
+
+Because the operator is an ordinary project resource in the Aspire application model, you can publish the whole stack with the [Aspire CLI](https://learn.microsoft.com/dotnet/aspire/cli/overview) or community tooling such as [Aspir8](https://github.com/prom3theu5/aspirational-manifests) to generate Kubernetes manifests. For hand-rolled manifests and RBAC, see [Deployment](./deployment) and [RBAC](./rbac).
