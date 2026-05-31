@@ -26,8 +26,11 @@ public static class KubeOpsServiceDefaultsExtensions
 {
     /// <summary>
     /// Wires up the standard Aspire service defaults for a KubeOps operator.
-    /// Call this once on the host builder, typically before
-    /// <c>AddKubernetesOperator()</c>.
+    /// Call this once on the host builder, after <c>AddKubernetesOperator()</c>,
+    /// so the configured <see cref="OperatorSettings.Name"/> can be resolved and
+    /// the tracing source matches the operator's <see cref="System.Diagnostics.ActivitySource"/>.
+    /// If you call it earlier, pass <paramref name="operatorName"/> explicitly with
+    /// the same value as <see cref="OperatorSettings.Name"/>.
     /// </summary>
     /// <typeparam name="TBuilder">The host application builder type.</typeparam>
     /// <param name="builder">The host application builder.</param>

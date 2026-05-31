@@ -17,17 +17,17 @@ using KubeOps.Aspire;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.AddKubeOpsServiceDefaults();
-
 builder.Services
     .AddKubernetesOperator()
     .RegisterComponents();
+
+builder.AddKubeOpsServiceDefaults();
 
 using var host = builder.Build();
 await host.RunAsync();
 ```
 
-If you customise the operator name via `OperatorSettings`, call `AddKubeOpsServiceDefaults()` **after** `AddKubernetesOperator()` so the OpenTelemetry service and tracing source names are picked up automatically, or pass the name explicitly:
+Call `AddKubeOpsServiceDefaults()` **after** `AddKubernetesOperator()` so the OpenTelemetry service and tracing source names match `OperatorSettings.Name` and the operator's reconciliation traces are captured. If you must call it earlier, pass the name explicitly (and keep it in sync with `OperatorSettings.Name`):
 
 ```csharp
 builder.AddKubeOpsServiceDefaults("my-operator");

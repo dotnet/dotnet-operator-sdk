@@ -26,7 +26,7 @@ The service-defaults call is the one piece you add to the operator. This is the 
 
 ## Operator project
 
-Install `KubeOps.Aspire` and call `AddKubeOpsServiceDefaults()` on the host builder:
+Install `KubeOps.Aspire` and call `AddKubeOpsServiceDefaults()` on the host builder, **after** `AddKubernetesOperator()`:
 
 ```csharp
 using KubeOps.Aspire;
@@ -36,11 +36,11 @@ using Microsoft.Extensions.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.AddKubeOpsServiceDefaults();
-
 builder.Services
     .AddKubernetesOperator()
     .RegisterComponents();
+
+builder.AddKubeOpsServiceDefaults();
 
 using var host = builder.Build();
 await host.RunAsync();
@@ -55,7 +55,7 @@ await host.RunAsync();
 - **Health checks** &mdash; a default `self` liveness check tagged `live`.
 
 :::tip Operator name
-The OpenTelemetry service name and the tracing source name must match `OperatorSettings.Name`. When you call `AddKubeOpsServiceDefaults()` **after** `AddKubernetesOperator()`, KubeOps detects the configured name automatically. Otherwise pass it explicitly:
+The OpenTelemetry service name and the tracing source name must match `OperatorSettings.Name` — otherwise the operator's reconciliation traces are never captured. Call `AddKubeOpsServiceDefaults()` **after** `AddKubernetesOperator()` so KubeOps can resolve the configured name automatically. If you must call it earlier, pass the name explicitly (and keep it in sync with `OperatorSettings.Name`):
 
 ```csharp
 builder.AddKubeOpsServiceDefaults("my-operator");
