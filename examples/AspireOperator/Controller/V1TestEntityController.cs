@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using k8s.Models;
-
 using AspireOperator.Entities;
+
+using k8s.Models;
 
 using KubeOps.Abstractions.Rbac;
 using KubeOps.Abstractions.Reconciliation;
