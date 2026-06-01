@@ -52,6 +52,100 @@ The template approach (`dotnet new operator`) scaffolds a basic operator structu
 
 For detailed tutorials and guides, visit the [KubeOps Documentation Site](https://dotnet.github.io/dotnet-operator-sdk/).
 
+## Aspire Quickstart
+
+KubeOps can be used as a first-class resource in a [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) AppHost. Add `KubeOps.Aspire.Hosting` to the AppHost and `KubeOps.Aspire` to the operator project.
+
+The repository keeps this in a dedicated `examples/AspireOperator` project so the plain `examples/Operator` sample remains a non-Aspire KubeOps operator.
+
+In the operator project, register the service defaults after the operator:
+
+```csharp
+using KubeOps.Aspire;
+using KubeOps.Operator;
+
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.Services
+    .AddKubernetesOperator()
+    .RegisterComponents();
+
+builder.AddKubeOpsServiceDefaults();
+
+await builder.Build().RunAsync();
+```
+
+In the AppHost, add the operator and choose whether it should run locally, publish to Kubernetes, or both:
+
+```csharp
+var builder = DistributedApplication.CreateBuilder(args);
+
+var k8s = builder.AddKubernetesEnvironment("k8s")
+    .WithHelm(helm =>
+    {
+        helm.WithChartName("my-operator");
+        helm.WithReleaseName("my-operator");
+        helm.WithNamespace("operator-system");
+    });
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(k8s)
+    .PublishAsKubernetesOperator(k8s);
+
+builder.Build().Run();
+```
+
+Run and publish with the Aspire CLI:
+
+```bash
+aspire run --project src/MyApp.AppHost/MyApp.AppHost.csproj
+aspire publish --project src/MyApp.AppHost/MyApp.AppHost.csproj --output-path ./artifacts/k8s
+```
+
+Common AppHost shapes:
+
+Local development only:
+
+```csharp
+var dev = builder.AddKubernetesEnvironment("dev");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(dev, run => run.WithPersistentCrds());
+```
+
+Azure publish/deploy only:
+
+```csharp
+var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .PublishAsKubernetesOperator(aks, publish => publish.WithServiceAccount("operator"));
+```
+
+Local run and Azure deploy:
+
+```csharp
+var dev = builder.AddKubernetesEnvironment("dev");
+var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(dev)
+    .PublishAsKubernetesOperator(aks);
+```
+
+Publish only without an Aspire Kubernetes environment:
+
+```csharp
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .PublishAsKubernetesOperator(publish =>
+    {
+        publish.Namespace = "operator-system";
+        publish.WithServiceAccount("operator");
+    });
+```
+
+Without `RunWithKubernetes(...)`, `AddKubeOps<TProject>(...)` keeps the operator in explicit-start mode for local Aspire runs. Standalone manifest publish does not require `AddKubernetesEnvironment(...)`, Helm, or a live cluster; publishing with a Kubernetes environment generates an Aspire Helm chart, while `aspire deploy` installs that chart into the selected environment.
+
 ## Packages
 
 The runtime libraries target [.NET 8.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-8/overview), [.NET 9.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-9/overview), and [.NET 10.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-10/overview), leveraging modern C# features. The build-time packages (`KubeOps.Generator` and `KubeOps.Templates`) target [.NET Standard 2.0](https://learn.microsoft.com/en-us/dotnet/standard/net-standard) for broad tooling compatibility. The underlying Kubernetes client library (`KubernetesClient`) is referenced for interacting with the Kubernetes API.
@@ -61,6 +155,8 @@ The SDK is designed to be modular. You can include only the packages you need:
 | Package                                                              | Description                                                                                                                                                                                                                                                                               |
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [KubeOps.Abstractions](./src/KubeOps.Abstractions/README.md)         | Defines core interfaces, attributes (like `[KubernetesEntity]`), and base classes used across the SDK. Essential for defining your custom resources and controllers.                                                                                                                      |
+| [KubeOps.Aspire](./src/KubeOps.Aspire/README.md)                     | [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) service defaults for an operator: a single `AddKubeOpsServiceDefaults()` call wiring up OpenTelemetry, service discovery, HTTP resilience, and health checks.                                                                    |
+| [KubeOps.Aspire.Hosting](./src/KubeOps.Aspire.Hosting/README.md)     | [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) hosting integration. Adds `AddKubeOps<TProject>(...)` so a KubeOps operator can be orchestrated as a resource inside an Aspire AppHost.                                                                                          |
 | [KubeOps.Cli](./src/KubeOps.Cli/README.md)                           | A [.NET Tool](https://docs.microsoft.com/en-us/dotnet/core/tools/global-tools) providing commands for scaffolding projects, generating [Custom Resource Definitions (CRDs)](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/), and more.  |
 | [KubeOps.Generator](./src/KubeOps.Generator/README.md)               | Contains [Roslyn Source Generators](https://docs.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/source-generators-overview) to automate boilerplate code generation for CRDs and controllers based on your definitions.                                                                     |
 | [KubeOps.KubernetesClient](./src/KubeOps.KubernetesClient/README.md) | Provides an enhanced client for interacting with the [Kubernetes API](https://kubernetes.io/docs/reference/kubernetes-api/), built on top of the official `KubernetesClient` library. Offers convenience methods for common operator tasks.                                               |
@@ -71,11 +167,7 @@ The SDK is designed to be modular. You can include only the packages you need:
 
 ## Examples
 
-You can find various example operators demonstrating different features in the [`examples/`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/) directory of this repository:
-
-- [`Operator`](./examples/Operator) - A minimal operator with an entity, controller, and finalizer.
-- [`WebhookOperator`](./examples/WebhookOperator) - Demonstrates validating and mutating admission webhooks.
-- [`ConversionWebhookOperator`](./examples/ConversionWebhookOperator) - Demonstrates converting between entity versions with a conversion webhook.
+You can find various example operators demonstrating different features in the [`examples/`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/) directory of this repository.
 
 ## License
 

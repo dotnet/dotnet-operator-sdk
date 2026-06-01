@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\examples\AspireAppHost\AspireAppHost.csproj" />
+        <ProjectReference Include="..\..\src\KubeOps.Aspire.Hosting\KubeOps.Aspire.Hosting.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Aspire.Hosting.Testing" Version="13.3.5" />
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>KubeOps.Aspire.Hosting</PackageId>
+        <PackageTags>Kubernetes Operator SDK Aspire Hosting AppHost</PackageTags>
+        <PackageDescription>
+            .NET Aspire hosting integration for KubeOps operators. Adds an
+            AddKubeOps extension to the distributed application builder so a KubeOps
+            operator project can be orchestrated as a resource in a .NET Aspire
+            AppHost, wired up with references, environment variables and telemetry.
+        </PackageDescription>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Aspire.Hosting" Version="13.3.5" />
+        <PackageReference Include="Aspire.Hosting.Kubernetes" Version="13.3.5-preview.1.26270.6" />
+        <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    </ItemGroup>
+
+</Project>
