@@ -2,9 +2,7 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-#if DEBUG
-using KubeOps.Abstractions.Crds;
-#endif
+using KubeOps.Aspire;
 using KubeOps.Operator;
 
 using Microsoft.Extensions.Hosting;
@@ -16,12 +14,9 @@ builder.Logging.SetMinimumLevel(LogLevel.Trace);
 
 builder.Services
     .AddKubernetesOperator()
-#if DEBUG
-    .AddCrdInstaller(c => c
-        .WithOverwriteExisting()
-        .WithDeleteOnShutdown())
-#endif
     .RegisterComponents();
+
+builder.AddKubeOpsServiceDefaults();
 
 using var host = builder.Build();
 await host.RunAsync();
