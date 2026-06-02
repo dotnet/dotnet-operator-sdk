@@ -2,6 +2,9 @@
 
     <PropertyGroup>
         <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+        <!-- Aspire.Hosting.Kubernetes is only published as a prerelease package.
+             Allow this stable package to depend on it (NU5104). -->
+        <NoWarn>$(NoWarn);NU5104</NoWarn>
     </PropertyGroup>
 
     <PropertyGroup>
