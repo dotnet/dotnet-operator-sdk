@@ -55,7 +55,7 @@ namespace KubeOps.Operator.Queue;
 /// </list>
 /// </para>
 /// </remarks>
-internal class LeaderAwareEntityQueueBackgroundService<TEntity>(
+public class LeaderAwareEntityQueueBackgroundService<TEntity>(
     ActivitySource activitySource,
     IKubernetesClient client,
     OperatorSettings operatorSettings,

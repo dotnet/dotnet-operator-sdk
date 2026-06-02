@@ -59,7 +59,7 @@ namespace KubeOps.Operator.Queue;
 /// unbounded task accumulation.
 /// </para>
 /// </remarks>
-internal class EntityQueueBackgroundService<TEntity>(
+public class EntityQueueBackgroundService<TEntity>(
     ActivitySource activitySource,
     IKubernetesClient client,
     OperatorSettings operatorSettings,
