@@ -40,6 +40,22 @@ public class CertificateGeneratorTest : IDisposable
         key.Should().NotBeNull();
     }
 
+    [Fact]
+    public void Server_Should_Use_Service_Name_For_First_San()
+    {
+        using var generator = new CertificateGenerator("my-operator", "my-namespace");
+
+        var dnsNames = generator.Server.Certificate.Extensions
+            .OfType<X509SubjectAlternativeNameExtension>()
+            .Single()
+            .EnumerateDnsNames()
+            .ToList();
+
+        dnsNames.Should().Equal(
+            "my-operator.my-namespace.svc",
+            "*.my-namespace.svc");
+    }
+
     public void Dispose()
     {
         _certificateGenerator.Dispose();
