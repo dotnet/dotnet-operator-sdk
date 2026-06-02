@@ -1,4 +1,4 @@
-﻿<Solution>
+<Solution>
   <Folder Name="/examples/">
     <Project Path="examples\ConversionWebhookOperator\ConversionWebhookOperator.csproj" />
     <Project Path="examples\Operator\Operator.csproj" />

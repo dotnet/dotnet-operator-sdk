@@ -6,8 +6,7 @@ using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json.Nodes;
 
-using Json.More;
-using Json.Patch;
+using Jadipa;
 
 using k8s;
 using k8s.Models;
@@ -71,9 +70,21 @@ public static class JsonPatchExtensions
     /// </list>
     /// </summary>
     public static readonly Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>> DefaultOperationsFilter =
-        operations =>
-            operations.Where(o => !DefaultIgnoredProperties.Any(ignored => o.Path.ToString().StartsWith(ignored)))
-                .ToList();
+        operations => [.. operations.Select(o => new
+        {
+            op = o,
+            path = o switch
+            {
+                PatchOperation.Add po => po.Path,
+                PatchOperation.Remove po => po.Path,
+                PatchOperation.Replace po => po.Path,
+                PatchOperation.Copy po => po.Path,
+                PatchOperation.Move po => po.Path,
+                PatchOperation.Test po => po.Path,
+                _ => throw new ArgumentException($"Unknown PatchOperation type: {o.GetType()}"),
+            },
+        }).Where(obj => !DefaultIgnoredProperties.Any(ign => obj.path.StartsWith(ign)))
+        .Select(obj => obj.op)];
 
     /// <summary>
     /// Convert a <see cref="IKubernetesObject{TMetadata}"/> into a <see cref="JsonNode"/>.
@@ -91,19 +102,20 @@ public static class JsonPatchExtensions
     /// <param name="from">The source entity to compare from.</param>
     /// <param name="to">The target entity to compare to.</param>
     /// <param name="operationsFilter">An optional filter action that filters the <see cref="PatchOperation"/>s that are contained in the <see cref="JsonPatch"/>.</param>
-    /// <returns>A <see cref="JsonNode"/> representing the JSON Patch diff between the two entities.</returns>
+    /// <returns>A <see cref="Patch"/> representing the JSON Patch diff between the two entities.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the diff could not be created.</exception>
-    public static JsonPatch CreateJsonPatch<TEntity>(
+    public static Patch CreateJsonPatch<TEntity>(
         this TEntity from,
         TEntity to,
         Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>>? operationsFilter = null)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
-        var fromNode = from.ToNode();
-        var toNode = to.ToNode();
-        var patch = fromNode.CreatePatch(toNode);
+        var fromJson = KubernetesJson.Serialize(from);
+        var toJson = KubernetesJson.Serialize(to);
+        var patch = Patch.FromDiff(fromJson, toJson);
+        var ops = (operationsFilter ?? DefaultOperationsFilter).Invoke(patch.Operations());
 
-        return new JsonPatch((operationsFilter ?? DefaultOperationsFilter).Invoke(patch.Operations));
+        return Patch.NewWith([.. ops]);
     }
 
     /// <summary>
@@ -116,29 +128,29 @@ public static class JsonPatchExtensions
     public static bool HasChanges<TEntity>(
         this TEntity from,
         TEntity to)
-        where TEntity : IKubernetesObject<V1ObjectMeta> => from.CreateJsonPatch(to).Operations.Count > 0;
+        where TEntity : IKubernetesObject<V1ObjectMeta> => from.CreateJsonPatch(to).Operations().Length != 0;
 
     /// <summary>
-    /// Create a <see cref="V1Patch"/> out of a <see cref="JsonPatch"/>.
+    /// Create a <see cref="V1Patch"/> out of a <see cref="Patch"/>.
     /// This can be used to apply the patch to a Kubernetes entity using the Kubernetes client.
     /// </summary>
     /// <param name="patch">The patch that should be converted.</param>
     /// <returns>A <see cref="V1Patch"/> that may be applied to Kubernetes objects.</returns>
-    public static V1Patch ToKubernetesPatch(this JsonPatch patch) =>
-        new(patch.ToJsonString(), V1Patch.PatchType.JsonPatch);
+    public static V1Patch ToKubernetesPatch(this Patch patch) =>
+        new(patch.ToJson(), V1Patch.PatchType.JsonPatch);
 
     /// <summary>
-    /// Create the unformatted JSON string representation of a <see cref="JsonPatch"/>.
+    /// Create the unformatted JSON string representation of a <see cref="Patch"/>.
     /// </summary>
-    /// <param name="patch">The <see cref="JsonPatch"/> to convert.</param>
+    /// <param name="patch">The <see cref="Patch"/> to convert.</param>
     /// <returns>A string that represents the unformatted JSON representation of the patch.</returns>
-    public static string ToJsonString(this JsonPatch patch) => patch.ToJsonDocument().RootElement.GetRawText();
+    public static string ToJsonString(this Patch patch) => patch.ToJson();
 
     /// <summary>
-    /// Create the base 64 representation of a <see cref="JsonPatch"/>.
+    /// Create the base 64 representation of a <see cref="Patch"/>.
     /// </summary>
     /// <param name="patch">The patch to convert.</param>
     /// <returns>The base64 encoded representation of the patch.</returns>
-    public static string ToBase64String(this JsonPatch patch) =>
+    public static string ToBase64String(this Patch patch) =>
         Convert.ToBase64String(Encoding.UTF8.GetBytes(patch.ToJsonString()));
 }
