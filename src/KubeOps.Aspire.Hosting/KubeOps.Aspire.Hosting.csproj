@@ -16,7 +16,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Hosting" Version="13.3.5" />
+        <PackageReference Include="Aspire.Hosting" Version="13.4.0" />
         <PackageReference Include="Aspire.Hosting.Kubernetes" Version="13.3.5-preview.1.26270.6" />
         <PackageReference Include="YamlDotNet" Version="16.3.0" />
     </ItemGroup>
