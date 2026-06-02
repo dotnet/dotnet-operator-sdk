@@ -182,7 +182,7 @@ public class EntityQueueBackgroundService<TEntity>(
         _disposed = true;
     }
 
-    private async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
+    protected virtual async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
         logger
             .LogTrace(
