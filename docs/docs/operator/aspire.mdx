@@ -1,0 +1,236 @@
+---
+title: .NET Aspire
+description: Orchestrate and observe a KubeOps operator with .NET Aspire
+sidebar_position: 9.5
+---
+
+# .NET Aspire Integration
+
+[.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) is an opinionated stack for building observable, production-ready distributed applications. KubeOps ships two packages that let you treat an operator as a first-class Aspire resource:
+
+| Package | Side | Purpose |
+| --- | --- | --- |
+| [`KubeOps.Aspire.Hosting`](../packages/aspire-hosting) | AppHost | Adds `AddKubeOps<TProject>(...)` so the operator is orchestrated as a resource. |
+| [`KubeOps.Aspire`](../packages/aspire) | Operator | Adds `AddKubeOpsServiceDefaults()` for OpenTelemetry, service discovery, resilience and health checks. |
+
+Together they give you a local dashboard with the operator's logs, traces and metrics, automatic service discovery to other resources, and a single entry point to run, publish, or deploy the whole stack.
+
+## The two halves of an Aspire integration
+
+Aspire integrations always come in two parts, and KubeOps follows that convention:
+
+1. **Hosting integration** &mdash; code that runs in the *AppHost* project and describes the application model.
+2. **Service defaults** &mdash; a small amount of wiring inside the *operator* project itself.
+
+The service-defaults call is the one piece you add to the operator. This is the idiomatic Aspire pattern (`AddServiceDefaults()`); the hosting side then injects the configuration (telemetry endpoint, service discovery variables) automatically.
+
+## Operator project
+
+Install `KubeOps.Aspire` and call `AddKubeOpsServiceDefaults()` on the host builder, **after** `AddKubernetesOperator()`:
+
+```csharp
+using KubeOps.Aspire;
+using KubeOps.Operator;
+
+using Microsoft.Extensions.Hosting;
+
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.Services
+    .AddKubernetesOperator()
+    .RegisterComponents();
+
+builder.AddKubeOpsServiceDefaults();
+
+using var host = builder.Build();
+await host.RunAsync();
+```
+
+`AddKubeOpsServiceDefaults()` configures:
+
+- **OpenTelemetry** logging (with scopes and formatted messages), metrics (runtime + `HttpClient`) and tracing. It subscribes to the operator's `ActivitySource`, which KubeOps registers under the operator name (see [Logging, Tracing, and OpenTelemetry](./logging)).
+- **OTLP export** &mdash; enabled automatically when the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable is present. Aspire sets this for you, so traces and metrics show up in the dashboard with no extra code.
+- **Service discovery** &mdash; `HttpClient` instances resolve logical Aspire resource names (e.g. `https://apiservice`).
+- **HTTP resilience** &mdash; the standard resilience handler (retries, circuit breaker, timeouts) is applied to all `HttpClient` instances.
+- **Health checks** &mdash; a default `self` liveness check tagged `live`.
+
+:::tip Operator name
+The OpenTelemetry service name and the tracing source name must match `OperatorSettings.Name` — otherwise the operator's reconciliation traces are never captured. Call `AddKubeOpsServiceDefaults()` **after** `AddKubernetesOperator()` so KubeOps can resolve the configured name automatically. If you must call it earlier, pass the name explicitly (and keep it in sync with `OperatorSettings.Name`):
+
+```csharp
+builder.AddKubeOpsServiceDefaults("my-operator");
+```
+:::
+
+## AppHost project
+
+Create an [Aspire AppHost](https://learn.microsoft.com/dotnet/aspire/fundamentals/app-host-overview) project, reference `KubeOps.Aspire.Hosting`, and add the operator with `AddKubeOps`:
+
+The repository sample uses `examples/AspireOperator` for this so `examples/Operator` stays a plain KubeOps operator sample.
+
+```csharp
+var builder = DistributedApplication.CreateBuilder(args);
+
+builder.AddKubernetesEnvironment("k8s")
+    .WithHelm(helm =>
+    {
+        helm.WithChartName("my-operator");
+        helm.WithReleaseName("my-operator");
+        helm.WithNamespace("operator-system");
+    });
+
+var apiService = builder.AddProject<Projects.ApiService>("apiservice");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(k8s)
+    .PublishAsKubernetesOperator(k8s)
+    .WithReference(apiService);
+
+builder.Build().Run();
+```
+
+`AddKubeOps<TProject>` is a thin, KubeOps-flavoured wrapper around the built-in `AddProject<TProject>`. It returns the standard `IResourceBuilder<ProjectResource>`, so every Aspire extension works as usual:
+
+- `WithReference(apiService)` injects the service-discovery configuration so the operator can call `apiservice` by name.
+- `WithEnvironment(...)`, `WaitFor(...)`, `WithReplicas(...)` and friends all apply unchanged.
+- `RunWithKubernetes(k8s)` opts the operator into local execution against a Kubernetes target.
+- `PublishAsKubernetesOperator(k8s)` includes the operator, CRDs, RBAC, and service account in the Aspire Kubernetes publish/deploy output.
+
+:::note Project reference
+When referencing `KubeOps.Aspire.Hosting` from an AppHost, mark it as a normal code reference so the AppHost SDK does not treat it as a resource:
+
+```xml
+<ProjectReference Include="..\..\src\KubeOps.Aspire.Hosting\KubeOps.Aspire.Hosting.csproj"
+                  IsAspireProjectResource="false" />
+```
+:::
+
+## Running locally
+
+Run the AppHost; the Aspire dashboard opens and starts resources that are configured for local run:
+
+```bash
+dotnet run --project examples/AspireAppHost
+```
+
+A KubeOps operator is explicit-start by default. It does not run in local mode unless you call `RunWithKubernetes(...)`. This prevents an operator from accidentally using the developer's current kube context.
+
+```csharp
+var dev = builder.AddKubernetesEnvironment("dev");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(dev);
+```
+
+By default, `RunWithKubernetes(...)` creates missing CRDs before the local operator process starts, tracks the CRDs created by this AppHost run, and removes only those CRDs when the AppHost shuts down. Existing CRDs are left alone.
+
+Use the run options when the development cluster should keep CRDs after shutdown or when CRDs are managed separately:
+
+```csharp
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(dev, run =>
+    {
+        run.WithPersistentCrds();  // create or update CRDs and leave them in the cluster
+        // run.RequireExistingCrds();
+        // run.SkipCrds();
+    });
+```
+
+The operator process runs locally and authenticates through the selected Kubernetes environment. The dashboard shows structured logs, the reconciliation traces emitted from the operator's `ActivitySource`, and runtime/HTTP metrics.
+
+## Health endpoints
+
+`KubeOps.Aspire` is usable from a plain console operator and therefore does **not** force an ASP.NET Core dependency. The default health checks are registered in the service collection, but exposing them over HTTP requires an HTTP server.
+
+If your operator already hosts webhooks via [`KubeOps.Operator.Web`](../packages/operator-web), map the endpoints on the `WebApplication`:
+
+```csharp
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/alive", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("live"),
+});
+```
+
+These line up with the standard Kubernetes liveness/readiness probe conventions and the Aspire dashboard's health reporting.
+
+## Deployment
+
+The Aspire path for Kubernetes publishing is the official [`Aspire.Hosting.Kubernetes`](https://learn.microsoft.com/dotnet/aspire/deployment/kubernetes-integration) hosting integration. Add the package to the AppHost, call `AddKubernetesEnvironment(...)`, then publish the AppHost with the [Aspire CLI](https://learn.microsoft.com/dotnet/aspire/cli/overview):
+
+```bash
+aspire publish --project examples/AspireAppHost/AspireAppHost.csproj --output-path ./k8s-artifacts
+```
+
+When you call `PublishAsKubernetesOperator(k8s)`, Aspire writes a Helm chart for the resources in the AppHost. `AddKubeOps<TProject>` also contributes the Kubernetes API extension pieces that KubeOps generates:
+
+- CRDs are appended to the generated chart.
+- RBAC resources are appended to the generated chart.
+- The Aspire-generated operator `Deployment` is patched with the KubeOps-generated pod/deployment settings, `POD_NAMESPACE`, and the configured service account.
+- KubeOps' generated `Deployment` is merged into the Aspire workload instead of emitted as a second workload, so the chart does not deploy the operator twice.
+
+`aspire publish` generates the chart and does not require the Helm CLI. `aspire deploy` installs the chart into the target environment and requires Helm plus the registry and cluster configuration expected by Aspire's Kubernetes deployment flow.
+
+By default, the hosting integration invokes `kubeops generate operator`. If the CLI is not on `PATH`, configure the invocation:
+
+```csharp
+builder.AddKubeOps<Projects.AspireOperator>(
+    "operator",
+    manifests =>
+    {
+        manifests.Namespace = "operator-system";
+        manifests.UseKubeOpsCli("dotnet", "tool", "run", "kubeops", "--");
+    });
+```
+
+### Standalone manifest publish
+
+If the AppHost does not define a Kubernetes environment, the operator can still publish KubeOps manifests:
+
+```csharp
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .PublishAsKubernetesOperator(publish =>
+    {
+        publish.Namespace = "operator-system";
+        publish.WithServiceAccount("operator");
+    });
+```
+
+This `aspire publish` path writes raw KubeOps YAML under the operator resource output directory and does not require `AddKubernetesEnvironment(...)`, Helm, or a live cluster.
+
+### Common scenarios
+
+Local development against a local cluster:
+
+```csharp
+var dev = builder.AddKubernetesEnvironment("dev");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(dev, run => run.WithPersistentCrds());
+```
+
+Azure deployment into AKS:
+
+```csharp
+var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .PublishAsKubernetesOperator(aks, publish =>
+    {
+        publish.Namespace = "operator-system";
+        publish.WithServiceAccount("operator");
+    });
+```
+
+Local run plus Azure deployment:
+
+```csharp
+var dev = builder.AddKubernetesEnvironment("dev");
+var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(dev)
+    .PublishAsKubernetesOperator(aks, publish => publish.WithServiceAccount("operator"));
+```
+
+For the deeper run/publish model, see [Aspire Kubernetes Operator Model](./aspire-kubernetes-model).
