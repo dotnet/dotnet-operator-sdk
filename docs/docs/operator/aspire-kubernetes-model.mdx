@@ -1,0 +1,243 @@
+---
+title: Aspire Kubernetes Operator Model
+description: Run, publish, and deploy KubeOps operators with Aspire Kubernetes environments.
+sidebar_position: 12
+---
+
+# Aspire Kubernetes Operator Model
+
+This document describes the implemented Aspire model for running, publishing, and deploying KubeOps operators.
+
+Aspire has two relevant execution modes:
+
+- **Run mode** starts the AppHost locally for development and debugging.
+- **Publish/deploy mode** generates and applies deployment artifacts for a target environment.
+
+KubeOps operators need both modes, but they need different behavior in each mode.
+
+## Design
+
+- Keep `aspire run` as local process orchestration.
+- Keep `aspire publish` and `aspire deploy` as deployment artifact and cluster deployment flows.
+- Reuse Aspire Kubernetes and AKS compute environments instead of inventing a separate KubeOps target model.
+- Make local CRD handling explicit, safe, and predictable.
+- Avoid automatic destructive changes to a developer's current cluster.
+
+## AppHost Shape
+
+The AppHost can express a local run target and a publish target separately:
+
+```csharp
+var builder = DistributedApplication.CreateBuilder(args);
+
+var dev = builder.AddKubernetesEnvironment("dev")
+    .WithHelm(helm => helm.WithNamespace("operator-dev"));
+
+var aks = builder.AddAzureKubernetesEnvironment("aks")
+    .WithHelm(helm => helm.WithNamespace("operator-system"));
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(dev, run =>
+    {
+        run.WithPersistentCrds();
+    })
+    .PublishAsKubernetesOperator(aks, publish =>
+    {
+        publish.WithServiceAccount("operator");
+    });
+
+builder.Build().Run();
+```
+
+`RunWithKubernetes(...)` configures the local project process. The operator still runs on the developer machine under Aspire, but its Kubernetes client is configured for the selected Kubernetes target.
+
+`PublishAsKubernetesOperator(...)` configures the Kubernetes deployment. The operator becomes a Kubernetes workload, and KubeOps-generated CRDs, RBAC, and service-account resources are incorporated into the generated Aspire chart.
+
+If `RunWithKubernetes(...)` is not configured, `AddKubeOps<TProject>(...)` keeps the operator resource in Aspire's explicit-start mode during `aspire run`. The project remains in the AppHost model and publish graph, but the local operator process does not start by default. A KubeOps operator without a Kubernetes run target would otherwise fail against an accidental kube context or mutate the wrong cluster.
+
+## Run Mode
+
+Run mode defaults to a productive inner loop once you opt in:
+
+```csharp
+var dev = builder.AddKubernetesEnvironment("dev");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(dev);
+```
+
+Default run behavior:
+
+- If run mode is not configured, do not start the operator automatically.
+- Create missing CRDs before starting the local operator process.
+- Track which CRDs were created by this Aspire run.
+- Remove only the CRDs that this run created when the AppHost shuts down.
+- Leave pre-existing CRDs alone.
+- Configure the operator process with the target namespace and Kubernetes client hints.
+
+Run mode exposes explicit CRD lifecycle choices:
+
+```csharp
+run.WithEphemeralCrds();   // default: create missing CRDs, remove only those created by this run
+run.WithPersistentCrds();  // create or update CRDs, leave them after shutdown
+run.RequireExistingCrds(); // fail before operator start if CRDs are missing
+run.SkipCrds();            // do not check or manage CRDs
+```
+
+RBAC and service accounts are not required for the default local process path because the process normally authenticates with the developer's kubeconfig credentials. They can be added later for parity scenarios, for example a `RunAsServiceAccount(...)` option that creates a service account, binds RBAC, obtains a token, and configures the local process to use it.
+
+## Publish And Deploy Mode
+
+Publish mode defaults to production-ready Kubernetes output:
+
+```csharp
+var k8s = builder.AddKubernetesEnvironment("k8s")
+    .WithHelm(helm =>
+    {
+        helm.WithChartName("my-operator");
+        helm.WithReleaseName("my-operator");
+        helm.WithNamespace("operator-system");
+    });
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .PublishAsKubernetesOperator(k8s);
+```
+
+Default publish behavior:
+
+- Generate CRDs.
+- Generate RBAC.
+- Generate a service account using the operator resource name.
+- Bind generated RBAC to that service account.
+- Let Aspire own the operator `Deployment` so image publishing, Helm values, service discovery, configuration, and telemetry wiring remain part of the full Aspire model.
+- Merge KubeOps-generated deployment settings into the Aspire-owned deployment instead of emitting a duplicate deployment.
+
+Publish options make each part explicit:
+
+```csharp
+publish.GenerateCrds();                 // default
+publish.GenerateRbac();                 // default
+publish.WithServiceAccount("operator"); // default name: resource name
+publish.SkipCrds();
+publish.SkipRbac();
+```
+
+With a Kubernetes environment, `aspire publish` writes the generated Helm chart. `aspire deploy` uses the same Kubernetes environment and deployment engine to install it. The KubeOps integration hooks into Aspire's Kubernetes resource customization path (`PublishAsKubernetesService`) rather than running a separate KubeOps deployment.
+
+The integration filters KubeOps' generated `Deployment` out of the additional resource set because Aspire owns the workload. KubeOps deployment settings such as replicas, termination grace period, environment variables, resource requirements, `POD_NAMESPACE`, and the service account are merged into the Aspire-owned deployment instead. The chart therefore deploys one operator deployment, not a service-only placeholder and not a duplicate operator.
+
+## Standalone Publish
+
+You can also generate KubeOps manifests without an Aspire Kubernetes environment:
+
+```csharp
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .PublishAsKubernetesOperator(publish =>
+    {
+        publish.Namespace = "operator-system";
+        publish.WithServiceAccount("operator");
+    });
+```
+
+This path is useful when the AppHost should participate in Aspire publish, but the Kubernetes installation is handled by another workflow. It does not call Aspire's Kubernetes publishing integration and does not require `AddKubernetesEnvironment(...)`, Helm, or a live cluster. `aspire publish` writes the raw KubeOps-generated YAML under the operator resource's output directory.
+
+## AKS And Existing Resources
+
+AKS follows Aspire's Azure resource conventions.
+
+When the AppHost declares:
+
+```csharp
+var aks = builder.AddAzureKubernetesEnvironment("aks");
+```
+
+then `aspire deploy` provisions the AKS cluster, ACR, identity, and dependent Azure resources according to Aspire's AKS integration, then builds images, pushes them to ACR, generates Helm charts, and installs them into AKS.
+
+For local run mode, Azure integrations may provision Azure resources unless configured as existing resources. Users who want local run mode to attach to an existing AKS cluster should use Aspire's existing-resource APIs:
+
+```csharp
+var aks = builder.AddAzureKubernetesEnvironment("aks")
+    .RunAsExisting(aksName, aksResourceGroup);
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(aks);
+```
+
+This keeps KubeOps aligned with Aspire instead of inventing a KubeOps-specific `UseExistingAks` switch.
+
+## Scenario Examples
+
+### Local Only
+
+Run the operator as a local process against the selected Kubernetes environment. The operator is not automatically published to Kubernetes unless you also call `PublishAsKubernetesOperator(...)`.
+
+```csharp
+var dev = builder.AddKubernetesEnvironment("dev");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(dev, run => run.WithPersistentCrds());
+```
+
+### Azure Only
+
+Deploy the operator into AKS without running it as a local process during `aspire run`.
+
+```csharp
+var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .PublishAsKubernetesOperator(aks, publish =>
+    {
+        publish.Namespace = "operator-system";
+        publish.WithServiceAccount("operator");
+    });
+```
+
+### Local Run And Azure Deploy
+
+Use a local Kubernetes environment for the development loop and AKS for publish/deploy.
+
+```csharp
+var dev = builder.AddKubernetesEnvironment("dev");
+var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(dev)
+    .PublishAsKubernetesOperator(aks, publish => publish.WithServiceAccount("operator"));
+```
+
+### Publish Only Without A Kubernetes Environment
+
+Generate standalone KubeOps manifests without registering an Aspire Kubernetes environment.
+
+```csharp
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .PublishAsKubernetesOperator(publish =>
+    {
+        publish.Namespace = "operator-system";
+        publish.WithServiceAccount("operator");
+    });
+```
+
+## Mock And Local Cluster Targets
+
+KubeOps runtime watchers require a Kubernetes API server. Unit tests can replace `IKubernetesClient`, but the normal operator runtime is not an offline simulator.
+
+Additional targets can be modeled as Kubernetes environments if they provide Kubernetes API semantics:
+
+```csharp
+var k3s = builder.AddK3sCluster("k3s");
+var mock = builder.AddKubeOpsMockKubernetes("mock-kube");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(k3s);
+```
+
+A mock target would require operator-side runtime support to replace the Kubernetes client and watcher behavior. It should not be represented as a normal Kubernetes environment unless it provides Kubernetes API semantics.
+
+## Non-Goals
+
+- Do not hide cluster mutations behind `#if DEBUG`.
+- Do not deploy a second KubeOps-generated operator deployment beside Aspire's deployment.
+- Do not require users to use AKS; plain Kubernetes environments, kind, k3s, and existing kubeconfig targets should work.
+- Do not make local run mode require RBAC/service-account generation unless the user explicitly asks to run as a service account.

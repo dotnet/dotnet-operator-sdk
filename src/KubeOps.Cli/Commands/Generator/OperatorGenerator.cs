@@ -96,7 +96,7 @@ internal static class OperatorGenerator
                 "[yellow]The operator contains webhooks of some sort, generating webhook operator specific resources.[/]");
 
             console.MarkupLine("[green]Generate CA and Server certificates.[/]");
-            new CertificateGenerator(name, effectiveNamespace).Generate(result);
+            new CertificateGenerator($"{name}-{OperatorName}", effectiveNamespace).Generate(result);
 
             console.MarkupLine("[green]Generate Deployment and Service.[/]");
             new WebhookDeploymentGenerator(format).Generate(result);
