@@ -146,7 +146,6 @@ public class CertificateGenerator : ICertificateProvider
             {
                 sanBuilder.AddDnsName($"{_serverName}.{_serverNamespace}.svc");
                 sanBuilder.AddDnsName($"*.{_serverNamespace}.svc");
-                sanBuilder.AddDnsName("*.svc");
             }
             else if (IPAddress.TryParse(_serverName, out IPAddress? ipAddress))
             {

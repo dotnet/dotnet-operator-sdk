@@ -40,8 +40,8 @@ internal sealed class WebhookDeploymentGenerator(OutputFormat format) : IConfigG
                     TerminationGracePeriodSeconds = 10,
                     Volumes = new List<V1Volume>
                     {
-                        new() { Name = "certificates", Secret = new() { SecretName = "webhook-cert" }, },
-                        new() { Name = "ca-certificates", Secret = new() { SecretName = "webhook-ca" }, },
+                        new() { Name = "certificates", Secret = new() { SecretName = "webhook-cert" } },
+                        new() { Name = "ca-certificates", Secret = new() { SecretName = "webhook-ca" } },
                     },
                     Containers = new List<V1Container>
                     {
@@ -51,8 +51,8 @@ internal sealed class WebhookDeploymentGenerator(OutputFormat format) : IConfigG
                             Name = "operator",
                             VolumeMounts = new List<V1VolumeMount>
                             {
-                                new() { Name = "certificates", MountPath = "/certs", ReadOnlyProperty = true, },
-                                new() { Name = "ca-certificates", MountPath = "/ca", ReadOnlyProperty = true, },
+                                new() { Name = "certificates", MountPath = "/certs", ReadOnlyProperty = true },
+                                new() { Name = "ca-certificates", MountPath = "/ca", ReadOnlyProperty = true },
                             },
                             Env = new List<V1EnvVar>
                             {

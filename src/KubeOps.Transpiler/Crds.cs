@@ -111,6 +111,8 @@ public static class Crds
                     { Count: > 0 } list => list,
                     _ => null,
                 },
+                XKubernetesValidations = context.MapValidationRules(
+                    type.GetCustomAttributesData<ValidationRuleAttribute>()),
             },
         };
 
@@ -309,18 +311,12 @@ public static class Crds
             props.Properties = null;
         }
 
-        if (prop.GetCustomAttributesData<ValidationRuleAttribute>().ToArray() is { Length: > 0 } validations)
+        var propValidations = context.MapValidationRules(prop.GetCustomAttributesData<ValidationRuleAttribute>());
+        if (propValidations != null)
         {
-            props.XKubernetesValidations = validations
-                .Select(validation => new V1ValidationRule
-                {
-                    Rule = validation.GetCustomAttributeCtorArg<string>(context, 0),
-                    FieldPath = validation.GetCustomAttributeCtorArg<string?>(context, 1),
-                    Message = validation.GetCustomAttributeCtorArg<string?>(context, 2),
-                    MessageExpression = validation.GetCustomAttributeCtorArg<string?>(context, 3),
-                    Reason = validation.GetCustomAttributeCtorArg<string?>(context, 4),
-                })
-                .ToList();
+            props.XKubernetesValidations = props.XKubernetesValidations is { } existing
+                ? [.. existing, .. propValidations]
+                : propValidations;
         }
 
         return props;
@@ -411,6 +407,24 @@ public static class Crds
         };
     }
 
+    private static List<V1ValidationRule>? MapValidationRules(
+        this MetadataLoadContext context,
+        IEnumerable<CustomAttributeData> attributesData)
+    {
+        var rules = attributesData
+            .Select(v => new V1ValidationRule
+            {
+                Rule = v.GetCustomAttributeCtorArg<string>(context, 0),
+                FieldPath = v.GetCustomAttributeCtorArg<string?>(context, 1),
+                Message = v.GetCustomAttributeCtorArg<string?>(context, 2),
+                MessageExpression = v.GetCustomAttributeCtorArg<string?>(context, 3),
+                Reason = v.GetCustomAttributeCtorArg<string?>(context, 4),
+            })
+            .ToList();
+
+        return rules.Count > 0 ? rules : null;
+    }
+
     private static IList<object> GetEnumNames(this MetadataLoadContext context, Type type)
     {
 #if NET9_0_OR_GREATER
@@ -484,6 +498,8 @@ public static class Crds
                     },
                     XKubernetesPreserveUnknownFields =
                         type.GetCustomAttributeData<PreserveUnknownFieldsAttribute>() != null ? true : null,
+                    XKubernetesValidations = context.MapValidationRules(
+                        type.GetCustomAttributesData<ValidationRuleAttribute>()),
                 };
         }
     }
