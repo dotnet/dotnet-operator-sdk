@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -16,9 +15,6 @@ namespace KubeOps.Abstractions.Entities;
 /// <summary>
 /// Method extensions for JSON diffing between two entities (<see cref="IKubernetesObject{TMetadata}"/>).
 /// </summary>
-[RequiresPreviewFeatures("JsonPatch extensions are a preview feature and may change in the future." +
-                         "Because maybe the default filtering does not catch all volatile and non-impactful" +
-                         "properties.")]
 public static class JsonPatchExtensions
 {
     /// <summary>
@@ -27,7 +23,7 @@ public static class JsonPatchExtensions
     /// This mainly concerns metadata properties that are not relevant for the diff,
     /// like the UID of the object and resource version.
     /// </para>
-    /// <para>Currently, contains the following properties:</para>
+    /// <para>Currently, it contains the following properties:</para>
     /// <list type="bullet">
     /// <item><term>/metadata/creationTimestamp</term></item>
     /// <item><term>/metadata/deletionGracePeriodSeconds</term></item>
@@ -90,7 +86,7 @@ public static class JsonPatchExtensions
     /// Convert a <see cref="IKubernetesObject{TMetadata}"/> into a <see cref="JsonNode"/>.
     /// </summary>
     /// <param name="entity">The entity to convert.</param>
-    /// <returns>Either the json node, or null if it failed.</returns>
+    /// <returns>Either the JSON node or null if it failed.</returns>
     public static JsonNode? ToNode(this IKubernetesObject<V1ObjectMeta> entity) =>
         JsonNode.Parse(KubernetesJson.Serialize(entity));
 
@@ -101,7 +97,7 @@ public static class JsonPatchExtensions
     /// <typeparam name="TEntity">The entity type.</typeparam>
     /// <param name="from">The source entity to compare from.</param>
     /// <param name="to">The target entity to compare to.</param>
-    /// <param name="operationsFilter">An optional filter action that filters the <see cref="PatchOperation"/>s that are contained in the <see cref="JsonPatch"/>.</param>
+    /// <param name="operationsFilter">An optional filter action that filters the <see cref="PatchOperation"/>s.</param>
     /// <returns>A <see cref="Patch"/> representing the JSON Patch diff between the two entities.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the diff could not be created.</exception>
     public static Patch CreateJsonPatch<TEntity>(
@@ -124,7 +120,7 @@ public static class JsonPatchExtensions
     /// <typeparam name="TEntity">The entity type.</typeparam>
     /// <param name="from">Original object.</param>
     /// <param name="to">Changed object.</param>
-    /// <returns>True if there are changes detected. Otherwise false.</returns>
+    /// <returns>True if there are changes detected. Otherwise, false.</returns>
     public static bool HasChanges<TEntity>(
         this TEntity from,
         TEntity to)

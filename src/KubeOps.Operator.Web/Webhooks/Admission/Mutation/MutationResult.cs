@@ -4,7 +4,7 @@
 
 using System.Text.Json.Nodes;
 
-using Json.Patch;
+using Jadipa;
 
 using k8s;
 using k8s.Models;
@@ -41,7 +41,7 @@ public sealed record MutationResult<TEntity>(TEntity? ModifiedObject = default) 
     /// <summary>
     /// Despite being "valid", the validation can add a list of warnings to the user.
     /// If this is not yet supported by the cluster, the field is ignored.
-    /// Warnings may contain up to 256 characters but they should be limited to 120 characters.
+    /// Warnings may contain up to 256 characters, but they should be limited to 120 characters.
     /// If more than 4096 characters are submitted, additional messages are ignored.
     /// </summary>
     public IList<string> Warnings { get; init; } = new List<string>();
@@ -68,7 +68,6 @@ public sealed record MutationResult<TEntity>(TEntity? ModifiedObject = default) 
             return;
         }
 
-#pragma warning disable CA2252 // TODO: as soon as patch is fully stable, remove this.
         await response.WriteAsJsonAsync(
             new AdmissionResponse
             {
@@ -81,9 +80,8 @@ public sealed record MutationResult<TEntity>(TEntity? ModifiedObject = default) 
                     PatchType = ModifiedObject is null ? null : JsonPatch,
                     Patch = ModifiedObject is null
                         ? null
-                        : OriginalObject!.CreatePatch(ModifiedObject.ToNode()).ToBase64String(),
+                        : Patch.FromDiff(OriginalObject!.ToJsonString(), ModifiedObject.ToNode()!.ToJsonString()).ToBase64String(),
                 },
             });
-#pragma warning restore CA2252
     }
 }

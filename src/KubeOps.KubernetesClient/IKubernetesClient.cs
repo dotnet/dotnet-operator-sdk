@@ -4,7 +4,7 @@
 
 using System.Runtime.Versioning;
 
-using Json.Patch;
+using Jadipa;
 
 using k8s;
 using k8s.Models;
@@ -34,10 +34,10 @@ public interface IKubernetesClient : IDisposable
 
     /// <summary>
     /// Returns the name of the current namespace.
-    /// To determine the current namespace the following places (in the given order) are checked:
+    /// To determine the current namespace, the following places (in the given order) are checked:
     /// <list type="number">
     /// <item>
-    /// <description>The created Kubernetes configuration (from file / in-cluster)</description>
+    /// <description>The created Kubernetes configuration (from a file / in-cluster)</description>
     /// </item>
     /// <item>
     /// <description>
@@ -73,7 +73,7 @@ public interface IKubernetesClient : IDisposable
     /// <param name="name">The name of the entity (metadata.name).</param>
     /// <param name="namespace">
     /// Optional namespace. If this is set, the entity must be a namespaced entity.
-    /// If it is omitted, the entity must be a cluster wide entity.
+    /// If it is omitted, the entity must be a cluster-wide entity.
     /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>The found entity of the given type, or null otherwise.</returns>
@@ -223,7 +223,7 @@ public interface IKubernetesClient : IDisposable
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entities">The entity list.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
-    /// <returns>The created instances of the entities.</returns>
+    /// <returns>Returns the created instances of the entities.</returns>
     async Task<IEnumerable<TEntity>> CreateAsync<TEntity>(
         IEnumerable<TEntity> entities,
         CancellationToken cancellationToken = default)
@@ -239,7 +239,7 @@ public interface IKubernetesClient : IDisposable
     /// This is invoking the API without any cancellation support. In order to pass a <see cref="CancellationToken"/>,
     /// you need to use the <see cref="CreateAsync{TEntity}(IEnumerable{TEntity},CancellationToken)"/> overload.
     /// </remarks>
-    /// <returns>The created instances of the entities.</returns>
+    /// <returns>Returns the created instances of the entities.</returns>
     async Task<IEnumerable<TEntity>> CreateAsync<TEntity>(params TEntity[] entities)
         where TEntity : IKubernetesObject<V1ObjectMeta>
         => await Task.WhenAll(entities.Select(entity => CreateAsync(entity)));
@@ -336,7 +336,7 @@ public interface IKubernetesClient : IDisposable
     /// </summary>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity containing the desired updates.</param>
-    /// <param name="operationsFilter">The filter that is applied to the <see cref="PatchOperation"/>s in the <see cref="JsonPatch"/> to determine if changes are present.</param>
+    /// <param name="operationsFilter">The filter that is applied to the <see cref="PatchOperation"/>s.</param>
     /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
     /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
@@ -376,13 +376,13 @@ public interface IKubernetesClient : IDisposable
     /// <summary>
     /// Patch a given entity on the Kubernetes API by calculating the diff between two provided entities.
     /// Returns the patched entity if changes were detected, otherwise returns the original entity.
-    /// Detection of changes is done by creating a <see cref="JsonPatch"/> object
+    /// Detection of changes is done by creating a <see cref="Jadipa.Patch"/> object
     /// and then applying the operationsFilter. Defaults to the <see cref="JsonPatchExtensions.DefaultOperationsFilter"/>.
     /// </summary>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="from">The current/original entity.</param>
     /// <param name="to">The updated entity with desired changes.</param>
-    /// <param name="operationsFilter">The filter that is applied to the <see cref="PatchOperation"/>s in the <see cref="JsonPatch"/> to determine if changes are present.</param>
+    /// <param name="operationsFilter">The filter that is applied to the <see cref="PatchOperation"/>s in the <see cref="Jadipa.Patch"/> to determine if changes are present.</param>
     /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
     /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
@@ -403,29 +403,25 @@ public interface IKubernetesClient : IDisposable
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
         var patch = from.CreateJsonPatch(to, operationsFilter);
-        return patch.Operations.Count == 0
+        return patch.Operations().Length == 0
             ? Task.FromResult(from)
             : PatchAsync(from, from.CreateJsonPatch(to), fieldManager, force, dryRun, cancellationToken);
     }
 
     /// <summary>
-    /// Patch a given entity on the Kubernetes API using a <see cref="JsonPatch"/> object.
+    /// Patch a given entity on the Kubernetes API using a <see cref="Jadipa.Patch"/> object.
     /// </summary>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity to patch.</param>
-    /// <param name="patch">The <see cref="JsonPatch"/> representing the changes to apply.</param>
+    /// <param name="patch">The <see cref="Jadipa.Patch"/> representing the changes to apply.</param>
     /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
     /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
     Task<TEntity> PatchAsync<TEntity>(
         TEntity entity,
-        JsonPatch patch,
+        Patch patch,
         string? fieldManager = null,
         bool? force = null,
         string? dryRun = null,
@@ -507,22 +503,18 @@ public interface IKubernetesClient : IDisposable
         => PatchAsync(from, to).GetAwaiter().GetResult();
 
     /// <summary>
-    /// Patch a given entity on the Kubernetes API using a <see cref="JsonPatch"/> object.
+    /// Patch a given entity on the Kubernetes API using a <see cref="Jadipa.Patch"/> object.
     /// </summary>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity to patch.</param>
-    /// <param name="patch">The <see cref="JsonPatch"/> representing the changes to apply.</param>
+    /// <param name="patch">The <see cref="Jadipa.Patch"/> representing the changes to apply.</param>
     /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
     /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <returns>The patched entity.</returns>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
     TEntity Patch<TEntity>(
         TEntity entity,
-        JsonPatch patch,
+        Patch patch,
         string? fieldManager = null,
         bool? force = null,
         string? dryRun = null)
@@ -657,7 +649,7 @@ public interface IKubernetesClient : IDisposable
     /// The namespace to watch for entities (if needed).
     /// If the namespace is omitted, all entities on the cluster are watched.
     /// </param>
-    /// <param name="timeout">The timeout which the watcher has (after this timeout, the server will close the connection).</param>
+    /// <param name="timeout">The timeout that the watcher has (after this timeout, the server will close the connection).</param>
     /// <param name="allowWatchBookmarks">
     /// Parameter to tell the server to send BOOKMARK events. However, if the server has no implementation or
     /// configuration for bookmarks, this flag is ignored.
@@ -704,7 +696,7 @@ public interface IKubernetesClient : IDisposable
     /// The namespace to watch for entities (if needed).
     /// If the namespace is omitted, all entities on the cluster are watched.
     /// </param>
-    /// <param name="timeout">The timeout which the watcher has (after this timeout, the server will close the connection).</param>
+    /// <param name="timeout">The timeout that the watcher has (after this timeout, the server will close the connection).</param>
     /// <param name="allowWatchBookmarks">
     /// Parameter to tell the server to send BOOKMARK events. However, if the server has no implementation or
     /// configuration for bookmarks, this flag is ignored.
@@ -747,7 +739,7 @@ public interface IKubernetesClient : IDisposable
     /// </param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <returns>An asynchronous enumerable that finishes once <paramref name="cancellationToken"/> is cancelled.</returns>
+    /// <returns>Returns an asynchronous enumerable that finishes once <paramref name="cancellationToken"/> is cancelled.</returns>
     IAsyncEnumerable<(WatchEventType Type, TEntity Entity)> WatchAsync<TEntity>(
         string? @namespace = null,
         string? resourceVersion = null,
