@@ -156,7 +156,7 @@ public class EntitySpec
 - `[EmbeddedResource]`: Marks a property as an embedded Kubernetes resource. The property type is never traversed; the schema is always an opaque embedded `type: object`. (For unusual usages such as `[EmbeddedResource]` on a scalar or collection property, this is more opaque than before — no leftover `items`/`format` are emitted.)
 
 :::note
-The CRD transpiler maps property types recursively. A **circular type reference** that is not opted out via `[PreserveUnknownFields]` or `[Ignore]` cannot be represented as a finite OpenAPI schema and raises a descriptive `CircularTypeReferenceException` during generation. Annotate the offending property or type with `[PreserveUnknownFields]` or `[Ignore]`, or restructure the type to remove the cycle.
+The CRD transpiler maps property types recursively. A **circular type reference** that is not opted out via `[PreserveUnknownFields]` or `[Ignore]` cannot be represented as a finite OpenAPI schema and raises a descriptive `TranspilationFailedException` during generation. Annotate the offending property or type with `[PreserveUnknownFields]` or `[Ignore]`, or restructure the type to remove the cycle.
 :::
 
 ## Example with Multiple Attributes

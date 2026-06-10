@@ -10,6 +10,7 @@ using k8s.Models;
 
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Entities.Attributes;
+using KubeOps.Transpiler.Exceptions;
 
 namespace KubeOps.Transpiler.Test;
 
@@ -34,7 +35,7 @@ public sealed partial class CrdsMlcTest
         var act = () => _mlc.Transpile(typeof(CircularEntity));
 
         // The exception is prefixed with the affected entity so the failure is locatable.
-        act.Should().Throw<InvalidOperationException>()
+        act.Should().Throw<TranspilationFailedException>()
             .WithMessage("*circular*")
             .WithMessage($"*{nameof(CircularEntity)}*");
     }
@@ -68,7 +69,7 @@ public sealed partial class CrdsMlcTest
     {
         var act = () => _mlc.Transpile(typeof(CircularThroughCollectionEntity));
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*circular*");
+        act.Should().Throw<TranspilationFailedException>().WithMessage("*circular*");
     }
 
     [Fact]
@@ -77,7 +78,7 @@ public sealed partial class CrdsMlcTest
     {
         var act = () => _mlc.Transpile(typeof(CircularThroughDictionaryEntity));
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*circular*");
+        act.Should().Throw<TranspilationFailedException>().WithMessage("*circular*");
     }
 
     [Fact]

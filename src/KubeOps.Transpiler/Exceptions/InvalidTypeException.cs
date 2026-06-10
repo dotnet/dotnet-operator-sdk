@@ -2,12 +2,12 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-namespace KubeOps.Transpiler;
+namespace KubeOps.Transpiler.Exceptions;
 
 /// <summary>
 /// Raised when the CRD transpiler encounters a type it cannot map to an OpenAPI schema.
 /// </summary>
-public sealed class InvalidTypeException : InvalidOperationException
+internal sealed class InvalidTypeException : InvalidOperationException
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="InvalidTypeException"/> class.

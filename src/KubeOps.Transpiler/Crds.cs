@@ -12,6 +12,7 @@ using k8s.Models;
 
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Entities.Attributes;
+using KubeOps.Transpiler.Exceptions;
 using KubeOps.Transpiler.Kubernetes;
 
 namespace KubeOps.Transpiler;
@@ -51,16 +52,87 @@ public static class Crds
         type = context.GetContextType(type);
         try
         {
-            return context.TranspileType(type);
+            var (meta, scope) = context.ToEntityMetadata(type);
+            var crd = new V1CustomResourceDefinition { Spec = new() }.Initialize();
+
+            crd.Metadata.Name = $"{meta.PluralName}.{meta.Group}";
+            crd.Spec.Group = meta.Group;
+
+            crd.Spec.Names =
+                new()
+                {
+                    Kind = meta.Kind,
+                    ListKind = meta.ListKind,
+                    Singular = meta.SingularName,
+                    Plural = meta.PluralName,
+                };
+            crd.Spec.Scope = scope;
+            if (type.GetCustomAttributeData<KubernetesEntityShortNamesAttribute>()?.ConstructorArguments[0].Value is
+                ReadOnlyCollection<CustomAttributeTypedArgument> shortNames)
+            {
+                crd.Spec.Names.ShortNames = shortNames.Select(a => a.Value?.ToString()).ToList();
+            }
+
+            var version = new V1CustomResourceDefinitionVersion { Name = meta.Version, Served = true, Storage = true };
+            var hasStatus = type.GetProperty("status", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) != null;
+            var scaleAttr = type.GetCustomAttributeData<ScaleSubresourceAttribute>();
+
+            if (hasStatus || scaleAttr != null)
+            {
+                version.Subresources = new()
+                {
+                    Status = hasStatus ? new() : null,
+                    Scale = scaleAttr != null
+                        ? new V1CustomResourceSubresourceScale
+                        {
+                            SpecReplicasPath = scaleAttr.GetCustomAttributeCtorArg<string>(context, 0)!,
+                            StatusReplicasPath = scaleAttr.GetCustomAttributeCtorArg<string>(context, 1)!,
+                            LabelSelectorPath = scaleAttr.GetCustomAttributeCtorArg<string>(context, 2),
+                        }
+                        : null,
+                };
+            }
+
+            version.Schema = new()
+            {
+                OpenAPIV3Schema = new()
+                {
+                    Type = Object,
+                    Description =
+                        type.GetCustomAttributeData<DescriptionAttribute>()?.GetCustomAttributeCtorArg<string>(context, 0),
+                    Properties = type.GetProperties()
+                        .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
+                                    && p.GetCustomAttributeData<IgnoreAttribute>() == null)
+                        .Select(p => (Name: p.GetPropertyName(context), Schema: context.Map(p, EmptyAncestors)))
+                        .OrderBy(t => t.Name, StringComparer.Ordinal)
+                        .ToDictionary(t => t.Name, t => t.Schema),
+                    Required = type.GetProperties()
+                        .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
+                                    && p.GetCustomAttributeData<IgnoreAttribute>() == null
+                                    && IsRequiredSpecProperty(p))
+                        .Select(p => p.GetPropertyName(context))
+                        .ToList() switch
+                    {
+                        { Count: > 0 } list => list,
+                        _ => null,
+                    },
+                    XKubernetesValidations = context.MapValidationRules(
+                        type.GetCustomAttributesData<ValidationRuleAttribute>()),
+                },
+            };
+
+            version.AdditionalPrinterColumns = context.MapPrinterColumns(type).ToList() switch
+            {
+                { Count: > 0 } l => l,
+                _ => null,
+            };
+            crd.Spec.Versions = new List<V1CustomResourceDefinitionVersion> { version };
+
+            return crd;
         }
-        catch (CircularTypeReferenceException ex)
+        catch (Exception ex) when (ex is CircularTypeReferenceException or InvalidTypeException)
         {
-            throw new CircularTypeReferenceException(
-                $"Failed to transpile the CRD for entity '{type.FullName ?? type.Name}'. {ex.Message}", ex);
-        }
-        catch (InvalidTypeException ex)
-        {
-            throw new InvalidTypeException(
+            throw new TranspilationFailedException(
                 $"Failed to transpile the CRD for entity '{type.FullName ?? type.Name}'. {ex.Message}", ex);
         }
     }
@@ -109,87 +181,6 @@ public static class Crds
 
                 return crd;
             });
-
-    private static V1CustomResourceDefinition TranspileType(this MetadataLoadContext context, Type type)
-    {
-        var (meta, scope) = context.ToEntityMetadata(type);
-        var crd = new V1CustomResourceDefinition { Spec = new() }.Initialize();
-
-        crd.Metadata.Name = $"{meta.PluralName}.{meta.Group}";
-        crd.Spec.Group = meta.Group;
-
-        crd.Spec.Names =
-            new()
-            {
-                Kind = meta.Kind,
-                ListKind = meta.ListKind,
-                Singular = meta.SingularName,
-                Plural = meta.PluralName,
-            };
-        crd.Spec.Scope = scope;
-        if (type.GetCustomAttributeData<KubernetesEntityShortNamesAttribute>()?.ConstructorArguments[0].Value is
-            ReadOnlyCollection<CustomAttributeTypedArgument> shortNames)
-        {
-            crd.Spec.Names.ShortNames = shortNames.Select(a => a.Value?.ToString()).ToList();
-        }
-
-        var version = new V1CustomResourceDefinitionVersion { Name = meta.Version, Served = true, Storage = true };
-        var hasStatus = type.GetProperty("status", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase) != null;
-        var scaleAttr = type.GetCustomAttributeData<ScaleSubresourceAttribute>();
-
-        if (hasStatus || scaleAttr != null)
-        {
-            version.Subresources = new()
-            {
-                Status = hasStatus ? new() : null,
-                Scale = scaleAttr != null
-                    ? new V1CustomResourceSubresourceScale
-                    {
-                        SpecReplicasPath = scaleAttr.GetCustomAttributeCtorArg<string>(context, 0)!,
-                        StatusReplicasPath = scaleAttr.GetCustomAttributeCtorArg<string>(context, 1)!,
-                        LabelSelectorPath = scaleAttr.GetCustomAttributeCtorArg<string>(context, 2),
-                    }
-                    : null,
-            };
-        }
-
-        version.Schema = new()
-        {
-            OpenAPIV3Schema = new()
-            {
-                Type = Object,
-                Description =
-                    type.GetCustomAttributeData<DescriptionAttribute>()?.GetCustomAttributeCtorArg<string>(context, 0),
-                Properties = type.GetProperties()
-                    .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
-                                && p.GetCustomAttributeData<IgnoreAttribute>() == null)
-                    .Select(p => (Name: p.GetPropertyName(context), Schema: context.Map(p, EmptyAncestors)))
-                    .OrderBy(t => t.Name, StringComparer.Ordinal)
-                    .ToDictionary(t => t.Name, t => t.Schema),
-                Required = type.GetProperties()
-                    .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
-                                && p.GetCustomAttributeData<IgnoreAttribute>() == null
-                                && IsRequiredSpecProperty(p))
-                    .Select(p => p.GetPropertyName(context))
-                    .ToList() switch
-                {
-                    { Count: > 0 } list => list,
-                    _ => null,
-                },
-                XKubernetesValidations = context.MapValidationRules(
-                    type.GetCustomAttributesData<ValidationRuleAttribute>()),
-            },
-        };
-
-        version.AdditionalPrinterColumns = context.MapPrinterColumns(type).ToList() switch
-        {
-            { Count: > 0 } l => l,
-            _ => null,
-        };
-        crd.Spec.Versions = new List<V1CustomResourceDefinitionVersion> { version };
-
-        return crd;
-    }
 
     private static string GetPropertyName(this PropertyInfo prop, MetadataLoadContext context)
     {
