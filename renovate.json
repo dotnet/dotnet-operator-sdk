@@ -48,6 +48,20 @@
       "semanticCommitScope": "docs"
     },
     {
+      "description": ["Keep MSBuild packages on the latest net8.0-compatible 17.11 line for net8.0 TFMs."],
+      "matchManagers": ["nuget"],
+      "matchPackageNames": ["Microsoft.Build.Framework", "Microsoft.NET.StringTools"],
+      "matchCurrentValue": "/^17\\.11\\./",
+      "allowedVersions": "<17.12.0"
+    },
+    {
+      "description": ["Keep MSBuild packages on the latest net9.0-compatible 17.14 line for net9.0 TFMs."],
+      "matchManagers": ["nuget"],
+      "matchPackageNames": ["Microsoft.Build.Framework", "Microsoft.NET.StringTools"],
+      "matchCurrentValue": "/^17\\.14\\./",
+      "allowedVersions": "<18.0.0"
+    },
+    {
       "matchPackageNames": ["JsonPatch.Net"],
       "allowedVersions": "<=4.0.1"
     }
