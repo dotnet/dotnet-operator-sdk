@@ -102,49 +102,6 @@ aspire run --project src/MyApp.AppHost/MyApp.AppHost.csproj
 aspire publish --project src/MyApp.AppHost/MyApp.AppHost.csproj --output-path ./artifacts/k8s
 ```
 
-Common AppHost shapes:
-
-Local development only:
-
-```csharp
-var dev = builder.AddKubernetesEnvironment("dev");
-
-builder.AddKubeOps<Projects.AspireOperator>("operator")
-    .RunWithKubernetes(dev, run => run.WithPersistentCrds());
-```
-
-Azure publish/deploy only:
-
-```csharp
-var aks = builder.AddAzureKubernetesEnvironment("aks");
-
-builder.AddKubeOps<Projects.AspireOperator>("operator")
-    .PublishAsKubernetesOperator(aks, publish => publish.WithServiceAccount("operator"));
-```
-
-Local run and Azure deploy:
-
-```csharp
-var dev = builder.AddKubernetesEnvironment("dev");
-var aks = builder.AddAzureKubernetesEnvironment("aks");
-
-builder.AddKubeOps<Projects.AspireOperator>("operator")
-    .RunWithKubernetes(dev)
-    .PublishAsKubernetesOperator(aks);
-```
-
-Publish only without an Aspire Kubernetes environment:
-
-```csharp
-builder.AddKubeOps<Projects.AspireOperator>("operator")
-    .PublishAsKubernetesOperator(publish =>
-    {
-        publish.Namespace = "operator-system";
-        publish.WithServiceAccount("operator");
-    });
-```
-
-Without `RunWithKubernetes(...)`, `AddKubeOps<TProject>(...)` keeps the operator in explicit-start mode for local Aspire runs. Standalone manifest publish does not require `AddKubernetesEnvironment(...)`, Helm, or a live cluster; publishing with a Kubernetes environment generates an Aspire Helm chart, while `aspire deploy` installs that chart into the selected environment.
 
 ## Packages
 

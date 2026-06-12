@@ -54,7 +54,7 @@ await host.RunAsync();
 - **HTTP resilience** &mdash; the standard resilience handler (retries, circuit breaker, timeouts) is applied to all `HttpClient` instances.
 - **Health checks** &mdash; a default `self` liveness check tagged `live`.
 
-:::tip Operator name
+:::tip[Operator name]
 The OpenTelemetry service name and the tracing source name must match `OperatorSettings.Name` — otherwise the operator's reconciliation traces are never captured. Call `AddKubeOpsServiceDefaults()` **after** `AddKubernetesOperator()` so KubeOps can resolve the configured name automatically. If you must call it earlier, pass the name explicitly (and keep it in sync with `OperatorSettings.Name`):
 
 ```csharp
@@ -96,7 +96,7 @@ builder.Build().Run();
 - `RunWithKubernetes(k8s)` opts the operator into local execution against a Kubernetes target.
 - `PublishAsKubernetesOperator(k8s)` includes the operator, CRDs, RBAC, and service account in the Aspire Kubernetes publish/deploy output.
 
-:::note Project reference
+:::note[Project reference]
 When referencing `KubeOps.Aspire.Hosting` from an AppHost, mark it as a normal code reference so the AppHost SDK does not treat it as a resource:
 
 ```xml
