@@ -67,7 +67,7 @@ public sealed class EventPublisherCustomResourceFactoryTest
         // Register custom factory and mock client BEFORE AddKubernetesOperator.
         services.AddSingleton(mockFactory.Object);
         services.AddSingleton(mockClient.Object);
-        services.AddSingleton(new Mock<k8s.IKubernetes>().Object);
+        services.AddSingleton(new Mock<IKubernetes>().Object);
         services.AddLogging();
 
         services.AddKubernetesOperator();

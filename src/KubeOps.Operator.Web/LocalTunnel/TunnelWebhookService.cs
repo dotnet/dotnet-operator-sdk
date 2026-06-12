@@ -4,7 +4,6 @@
 
 using KubeOps.Abstractions.Webhooks;
 using KubeOps.KubernetesClient;
-using KubeOps.Operator.Web.Certificates;
 using KubeOps.Operator.Web.Webhooks;
 
 using Microsoft.Extensions.Hosting;
@@ -12,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Web.LocalTunnel;
 
-internal class TunnelWebhookService(
+internal sealed class TunnelWebhookService(
     ILogger<TunnelWebhookService> logger,
     IKubernetesClient client,
     WebhookLoader loader,

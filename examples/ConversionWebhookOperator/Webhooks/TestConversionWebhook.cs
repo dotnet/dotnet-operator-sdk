@@ -19,7 +19,7 @@ public sealed class TestConversionWebhook : ConversionWebhook<V3TestEntity>
         new V1ToV3(), new V2ToV3(),
     };
 
-    private class V1ToV3 : IEntityConverter<V1TestEntity, V3TestEntity>
+    private sealed class V1ToV3 : IEntityConverter<V1TestEntity, V3TestEntity>
     {
         public V3TestEntity Convert(V1TestEntity from)
         {
@@ -38,7 +38,7 @@ public sealed class TestConversionWebhook : ConversionWebhook<V3TestEntity>
         }
     }
 
-    private class V2ToV3 : IEntityConverter<V2TestEntity, V3TestEntity>
+    private sealed class V2ToV3 : IEntityConverter<V2TestEntity, V3TestEntity>
     {
         public V3TestEntity Convert(V2TestEntity from)
         {
