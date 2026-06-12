@@ -8,16 +8,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace KubeOps.Generator.SyntaxReceiver;
-
-internal record struct ControllerRegistration(
-    string FullyQualifiedController,
-    string FullyQualifiedEntityName);
-
-internal record struct FinalizerRegistration(
-    string FullyQualifiedFinalizer,
-    string IdentifierName,
-    string FullyQualifiedEntityName);
+namespace KubeOps.Generator.Discovery;
 
 internal static class EntityDiscovery
 {

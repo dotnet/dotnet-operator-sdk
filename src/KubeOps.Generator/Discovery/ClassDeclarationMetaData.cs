@@ -4,7 +4,7 @@
 
 using Microsoft.CodeAnalysis.CSharp;
 
-namespace KubeOps.Generator.SyntaxReceiver;
+namespace KubeOps.Generator.Discovery;
 
 internal record struct ClassDeclarationMetaData(
     string ClassName,

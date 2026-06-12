@@ -3,10 +3,9 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 
-namespace KubeOps.Generator.SyntaxReceiver;
+namespace KubeOps.Generator.Discovery;
 
 /// <summary>
 /// An immutable array wrapper that implements structural (value-based) equality.
@@ -55,15 +54,7 @@ internal readonly struct EquatableArray<T>(ImmutableArray<T> array) : IEquatable
             return false;
         }
 
-        for (var i = 0; i < _array.Length; i++)
-        {
-            if (!EqualityComparer<T>.Default.Equals(_array[i], other._array[i]))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return !_array.Where((t, i) => !EqualityComparer<T>.Default.Equals(t, other._array[i])).Any();
     }
 
     public override bool Equals(object? obj) => obj is EquatableArray<T> other && Equals(other);

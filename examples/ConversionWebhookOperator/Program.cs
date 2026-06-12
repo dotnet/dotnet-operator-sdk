@@ -2,11 +2,7 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Net;
-
 using KubeOps.Operator;
-using KubeOps.Operator.Web.Builder;
-using KubeOps.Operator.Web.Certificates;
 
 var builder = WebApplication.CreateBuilder(args);
 var opBuilder = builder.Services

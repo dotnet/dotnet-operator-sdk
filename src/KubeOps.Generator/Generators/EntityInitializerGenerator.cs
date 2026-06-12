@@ -4,7 +4,7 @@
 
 using System.Text;
 
-using KubeOps.Generator.SyntaxReceiver;
+using KubeOps.Generator.Discovery;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
