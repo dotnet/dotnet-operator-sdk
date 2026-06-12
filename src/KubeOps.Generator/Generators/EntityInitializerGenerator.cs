@@ -16,26 +16,21 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace KubeOps.Generator.Generators;
 
 [Generator]
-internal sealed class EntityInitializerGenerator : ISourceGenerator
+internal sealed class EntityInitializerGenerator : IIncrementalGenerator
 {
     private const string EntityIdentifier = "entity";
 
-    public void Initialize(GeneratorInitializationContext context)
+    public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        context.RegisterForSyntaxNotifications(() => new KubernetesEntitySyntaxReceiver());
+        context.RegisterSourceOutput(EntityDiscovery.GetEntities(context), Execute);
     }
 
-    public void Execute(GeneratorExecutionContext context)
+    private static void Execute(SourceProductionContext context, EquatableArray<AttributedEntity> entities)
     {
-        if (context.SyntaxContextReceiver is not KubernetesEntitySyntaxReceiver receiver)
-        {
-            return;
-        }
-
         // for each partial defined entity, create a partial class that
         // introduces a default constructor that initializes the ApiVersion and Kind.
         // But only, if there is no default constructor defined.
-        foreach (var entity in receiver.Entities
+        foreach (var entity in entities
             .Where(e => e.ClassDeclaration is { IsFromReferencedAssembly: false, IsPartial: true, HasParameterlessConstructor: false })
             .OrderBy(e => e.ClassDeclaration.FullyQualifiedName, StringComparer.Ordinal))
         {
@@ -56,7 +51,7 @@ internal sealed class EntityInitializerGenerator : ISourceGenerator
 
             partialEntityInitializer = partialEntityInitializer
                 .AddMembers(ClassDeclaration(entity.ClassDeclaration.ClassName)
-                    .WithModifiers(entity.ClassDeclaration.Modifiers!.Value)
+                    .WithModifiers(TokenList(entity.ClassDeclaration.ModifierKinds.Select(k => Token(k))))
                     .AddMembers(ConstructorDeclaration(entity.ClassDeclaration.ClassName)
                         .WithModifiers(
                             TokenList(
@@ -98,7 +93,7 @@ internal sealed class EntityInitializerGenerator : ISourceGenerator
             .WithMembers(SingletonList<MemberDeclarationSyntax>(ClassDeclaration("EntityInitializer")
                 .WithModifiers(TokenList(
                     Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)))
-                .WithMembers(List<MemberDeclarationSyntax>(receiver.Entities
+                .WithMembers(List<MemberDeclarationSyntax>(entities
                     .Where(e => e.ClassDeclaration.IsFromReferencedAssembly || !e.ClassDeclaration.IsPartial || e.ClassDeclaration.HasParameterlessConstructor)
                     .OrderBy(e => e.ClassDeclaration.FullyQualifiedName, StringComparer.Ordinal)
                     .Select(e => (Entity: e, ClassIdentifier: e.ClassDeclaration.FullyQualifiedName))

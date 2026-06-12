@@ -16,23 +16,20 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace KubeOps.Generator.Generators;
 
 [Generator]
-internal sealed class ControllerRegistrationGenerator : ISourceGenerator
+internal sealed class ControllerRegistrationGenerator : IIncrementalGenerator
 {
-    private readonly EntityControllerSyntaxReceiver _ctrlReceiver = new();
-    private readonly KubernetesEntitySyntaxReceiver _entityReceiver = new();
-
-    public void Initialize(GeneratorInitializationContext context)
+    public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        context.RegisterForSyntaxNotifications(() => new CombinedSyntaxReceiver(_ctrlReceiver, _entityReceiver));
+        context.RegisterSourceOutput(
+            EntityDiscovery.GetControllers(context).Combine(EntityDiscovery.GetEntities(context)),
+            (spc, source) => Execute(spc, source.Left, source.Right));
     }
 
-    public void Execute(GeneratorExecutionContext context)
+    private static void Execute(
+        SourceProductionContext context,
+        EquatableArray<ControllerRegistration> controllers,
+        EquatableArray<AttributedEntity> entities)
     {
-        if (context.SyntaxContextReceiver is not CombinedSyntaxReceiver)
-        {
-            return;
-        }
-
         var declaration = CompilationUnit()
             .WithUsings(
                 List(
@@ -57,11 +54,11 @@ internal sealed class ControllerRegistrationGenerator : ISourceGenerator
                                 .WithType(
                                     IdentifierName("IOperatorBuilder")))))
                     .WithBody(Block(
-                        _ctrlReceiver.Controllers
-                            .Where(c => _entityReceiver.Entities.Exists(e =>
+                        controllers
+                            .Where(c => entities.Any(e =>
                                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))
                             .OrderBy(c => c.FullyQualifiedEntityName, StringComparer.Ordinal)
-                            .Select(c => (c.Controller, Entity: _entityReceiver.Entities.First(e =>
+                            .Select(c => (c.FullyQualifiedController, Entity: entities.First(e =>
                                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName)))
                             .Select(e => ExpressionStatement(
                                 InvocationExpression(
@@ -73,11 +70,7 @@ internal sealed class ControllerRegistrationGenerator : ISourceGenerator
                                                 TypeArgumentList(
                                                     SeparatedList<TypeSyntax>(new[]
                                                     {
-                                                        IdentifierName(context.Compilation
-                                                            .GetSemanticModel(e.Controller.SyntaxTree)
-                                                            .GetDeclaredSymbol(e.Controller)!
-                                                            .ToDisplayString(SymbolDisplayFormat
-                                                                .FullyQualifiedFormat)),
+                                                        IdentifierName(e.FullyQualifiedController),
                                                         IdentifierName(e.Entity.ClassDeclaration.FullyQualifiedName),
                                                     })))))))
                             .Append<StatementSyntax>(ReturnStatement(IdentifierName("builder"))))))))
