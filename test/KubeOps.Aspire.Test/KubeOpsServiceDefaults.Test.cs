@@ -4,8 +4,6 @@
 
 using FluentAssertions;
 
-using KubeOps.Aspire;
-
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
@@ -16,7 +14,7 @@ using OpenTelemetry.Trace;
 
 namespace KubeOps.Aspire.Test;
 
-public class KubeOpsServiceDefaultsTest
+public sealed class KubeOpsServiceDefaultsTest
 {
     [Fact]
     public void Should_Register_OpenTelemetry_Providers()

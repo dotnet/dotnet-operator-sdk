@@ -17,9 +17,9 @@
       "enabled": false
     },
     {
-      "matchManagers": ["dotnet"],
+      "matchManagers": ["nuget"],
       "matchDepNames": ["Microsoft.CodeAnalysis.CSharp"],
-      "matchFileNames": ["KubeOps.Generator.csproj"],
+      "matchFileNames": ["**/KubeOps.Generator.csproj"],
       "enabled": false
     },
     {

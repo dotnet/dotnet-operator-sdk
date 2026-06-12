@@ -4,7 +4,7 @@
 
 using System.Text;
 
-using KubeOps.Generator.SyntaxReceiver;
+using KubeOps.Generator.Discovery;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -16,30 +16,27 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace KubeOps.Generator.Generators;
 
 [Generator]
-internal sealed class FinalizerRegistrationGenerator : ISourceGenerator
+internal sealed class FinalizerRegistrationGenerator : IIncrementalGenerator
 {
     private const byte MaxNameLength = 63;
 
-    private readonly EntityFinalizerSyntaxReceiver _finalizerReceiver = new();
-    private readonly KubernetesEntitySyntaxReceiver _entityReceiver = new();
-
-    public void Initialize(GeneratorInitializationContext context)
+    public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        context.RegisterForSyntaxNotifications(() => new CombinedSyntaxReceiver(_finalizerReceiver, _entityReceiver));
+        context.RegisterSourceOutput(
+            EntityDiscovery.GetFinalizers(context).Combine(EntityDiscovery.GetEntities(context)),
+            (spc, source) => Execute(spc, source.Left, source.Right));
     }
 
-    public void Execute(GeneratorExecutionContext context)
+    private static void Execute(
+        SourceProductionContext context,
+        EquatableArray<FinalizerRegistration> finalizerRegistrations,
+        EquatableArray<AttributedEntity> entities)
     {
-        if (context.SyntaxContextReceiver is not CombinedSyntaxReceiver)
-        {
-            return;
-        }
-
-        var finalizers = _finalizerReceiver.Finalizer
-            .Where(c => _entityReceiver.Entities.Exists(e =>
+        var finalizers = finalizerRegistrations
+            .Where(c => entities.Any(e =>
                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))
             .OrderBy(c => c.FullyQualifiedEntityName, StringComparer.Ordinal)
-            .Select(c => (c.Finalizer, Entity: _entityReceiver.Entities.First(e =>
+            .Select(c => (c.FullyQualifiedFinalizer, c.IdentifierName, Entity: entities.First(e =>
                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))).ToList();
 
         var declaration = CompilationUnit()
@@ -57,7 +54,7 @@ internal sealed class FinalizerRegistrationGenerator : ISourceGenerator
                                         Token(SyntaxKind.StringKeyword)))
                                 .WithVariables(
                                     SingletonSeparatedList(
-                                        VariableDeclarator(Identifier($"{f.Finalizer.Identifier}Identifier"))
+                                        VariableDeclarator(Identifier($"{f.IdentifierName}Identifier"))
                                             .WithInitializer(
                                                 EqualsValueClause(
                                                     LiteralExpression(
@@ -88,18 +85,14 @@ internal sealed class FinalizerRegistrationGenerator : ISourceGenerator
                                                     TypeArgumentList(
                                                         SeparatedList<TypeSyntax>(new[]
                                                         {
-                                                            IdentifierName(context.Compilation
-                                                                .GetSemanticModel(f.Finalizer.SyntaxTree)
-                                                                .GetDeclaredSymbol(f.Finalizer)!
-                                                                .ToDisplayString(SymbolDisplayFormat
-                                                                    .FullyQualifiedFormat)),
+                                                            IdentifierName(f.FullyQualifiedFinalizer),
                                                             IdentifierName(f.Entity.ClassDeclaration.FullyQualifiedName),
                                                         })))))
                                     .WithArgumentList(
                                         ArgumentList(
                                             SingletonSeparatedList(
                                                 Argument(
-                                                    IdentifierName($"{f.Finalizer.Identifier}Identifier")))))))
+                                                    IdentifierName($"{f.IdentifierName}Identifier")))))))
                             .Append<StatementSyntax>(ReturnStatement(IdentifierName("builder"))))))))
             .NormalizeWhitespace();
 
@@ -108,9 +101,9 @@ internal sealed class FinalizerRegistrationGenerator : ISourceGenerator
             SourceText.From(declaration.ToFullString(), Encoding.UTF8, SourceHashAlgorithm.Sha256));
     }
 
-    private static string FinalizerName((ClassDeclarationSyntax Finalizer, AttributedEntity Entity) finalizer)
+    private static string FinalizerName((string FullyQualifiedFinalizer, string IdentifierName, AttributedEntity Entity) finalizer)
     {
-        var finalizerName = finalizer.Finalizer.Identifier.ToString().ToLowerInvariant();
+        var finalizerName = finalizer.IdentifierName.ToLowerInvariant();
         var name =
             $"{finalizer.Entity.Group}/{finalizerName}{(finalizerName.EndsWith("finalizer") ? string.Empty : "finalizer")}"
                 .TrimStart('/');

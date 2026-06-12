@@ -377,7 +377,7 @@ public static class KubeOpsHostingExtensions
         string name,
         KubeOpsKubernetesManifestOptions options)
     {
-        var podSpec = kubernetes.Workload?.PodTemplate?.Spec;
+        var podSpec = kubernetes.Workload?.PodTemplate.Spec;
         if (podSpec is null)
         {
             return;
@@ -626,7 +626,7 @@ public static class KubeOpsHostingExtensions
         }
 
         var generatedPodSpec = generatedSpec["template"]?["spec"] as JsonObject;
-        var podSpec = kubernetes.Workload?.PodTemplate?.Spec;
+        var podSpec = kubernetes.Workload?.PodTemplate.Spec;
         if (generatedPodSpec is null || podSpec is null)
         {
             return;

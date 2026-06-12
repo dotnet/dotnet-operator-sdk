@@ -7,8 +7,6 @@ using System.Text.Json.Serialization;
 
 using k8s;
 
-using KubeOps.Operator.Web.Webhooks.Admission;
-
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 

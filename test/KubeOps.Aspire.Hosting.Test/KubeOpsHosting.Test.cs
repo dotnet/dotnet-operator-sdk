@@ -125,7 +125,7 @@ public class KubeOpsHostingTest
     }
 
     private static IDistributedApplicationTestingBuilder CreateBuilder()
-        => global::Aspire.Hosting.Testing.DistributedApplicationTestingBuilder
+        => DistributedApplicationTestingBuilder
             .CreateAsync<Projects.AspireAppHost>()
             .GetAwaiter()
             .GetResult();

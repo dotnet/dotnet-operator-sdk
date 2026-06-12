@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using System.CommandLine;
-using System.CommandLine.Help;
 
 namespace KubeOps.Cli.Commands.Generator;
 
