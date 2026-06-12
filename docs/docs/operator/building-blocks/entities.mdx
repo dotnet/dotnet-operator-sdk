@@ -152,8 +152,12 @@ public class EntitySpec
 ### Special Attributes
 
 - `[Ignore]`: Excludes a property or entity from CRD generation
-- `[PreserveUnknownFields]`: Preserves unknown fields in the Kubernetes object
-- `[EmbeddedResource]`: Marks a property as an embedded Kubernetes resource
+- `[PreserveUnknownFields]`: Allows unknown fields on the annotated object (`x-kubernetes-preserve-unknown-fields: true`). The known fields are still transpiled and validated, so you keep a structural schema for what you model while permitting extra fields. Works the same whether placed on a property or on a class/type: if the type cannot be represented (it contains a circular reference or an otherwise non-transpilable member), it gracefully falls back to an opaque `type: object` with `x-kubernetes-preserve-unknown-fields: true` instead of failing — making this the recommended way to model complex, externally generated, or self-referencing types.
+- `[EmbeddedResource]`: Marks a property as an embedded Kubernetes resource. The property type is never traversed; the schema is always an opaque embedded `type: object`.
+
+:::note
+The CRD transpiler maps property types recursively. A **circular type reference** that is not opted out via `[PreserveUnknownFields]` or `[Ignore]` cannot be represented as a finite OpenAPI schema and raises a descriptive `TranspilationFailedException` during generation. Annotate the offending property or type with `[PreserveUnknownFields]` or `[Ignore]`, or restructure the type to remove the cycle.
+:::
 
 ## Example with Multiple Attributes
 

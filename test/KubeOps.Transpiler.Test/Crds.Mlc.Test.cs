@@ -15,7 +15,7 @@ using KubeOps.Abstractions.Entities.Attributes;
 
 namespace KubeOps.Transpiler.Test;
 
-public partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
+public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
 {
     [Trait("Area", "General")]
     [Theory]
