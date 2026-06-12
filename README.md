@@ -102,6 +102,7 @@ aspire run --project src/MyApp.AppHost/MyApp.AppHost.csproj
 aspire publish --project src/MyApp.AppHost/MyApp.AppHost.csproj --output-path ./artifacts/k8s
 ```
 
+For further details, see the [Aspire documentation](https://dotnet.github.io/dotnet-operator-sdk/docs/operator/aspire).
 
 ## Packages
 
