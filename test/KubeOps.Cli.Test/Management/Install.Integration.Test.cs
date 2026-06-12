@@ -41,7 +41,6 @@ public class InstallIntegrationTest
     public async Task Should_Generate_Valid_Installers_In_Cluster()
     {
         var console = new TestConsole();
-        var client = new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig());
         var cmd = OperatorGenerator.Command;
         var result = cmd.Parse(["operator", "test", ProjectPath]);
 
@@ -55,7 +54,7 @@ public class InstallIntegrationTest
             if (consoleLine.Equals(separator))
             {
                 groups.Add(sb.ToString());
-                sb = new StringBuilder();
+                sb = new();
             }
             else
             {

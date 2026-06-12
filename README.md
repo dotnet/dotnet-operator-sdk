@@ -1,4 +1,4 @@
-# KubeOps - Kubernetes Operators in .NET
+# KubeOps – Kubernetes Operators in .NET
 
 **Build Kubernetes Operators in .NET with Ease**
 
@@ -16,7 +16,7 @@ The documentation is also provided within the code itself (description of method
 
 - **Define CRDs in C#:** Model your [Custom Resource Definitions (CRDs)](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/) using plain C# classes and attributes.
 - **Controller Logic:** Implement reconciliation logic using the `IEntityController<TEntity>` interface.
-- **Finalizers:** Easily add cleanup logic before resource deletion with `IEntityFinalizer<TEntity>`.
+- **Finalizers:** Add cleanup logic before resource deletion with `IEntityFinalizer<TEntity>`.
 - **Webhooks:** Create [Admission](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/) (validating/mutating) and [Conversion](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#webhook-conversion) webhooks integrated with ASP.NET Core.
 - **Code Generation:** Includes Roslyn source generators and a CLI tool (`kubeops`) to automate boilerplate code for CRDs, controllers, and RBAC rules.
 - **Enhanced Kubernetes Client:** Provides convenience methods built on top of the official client library.
@@ -102,49 +102,7 @@ aspire run --project src/MyApp.AppHost/MyApp.AppHost.csproj
 aspire publish --project src/MyApp.AppHost/MyApp.AppHost.csproj --output-path ./artifacts/k8s
 ```
 
-Common AppHost shapes:
-
-Local development only:
-
-```csharp
-var dev = builder.AddKubernetesEnvironment("dev");
-
-builder.AddKubeOps<Projects.AspireOperator>("operator")
-    .RunWithKubernetes(dev, run => run.WithPersistentCrds());
-```
-
-Azure publish/deploy only:
-
-```csharp
-var aks = builder.AddAzureKubernetesEnvironment("aks");
-
-builder.AddKubeOps<Projects.AspireOperator>("operator")
-    .PublishAsKubernetesOperator(aks, publish => publish.WithServiceAccount("operator"));
-```
-
-Local run and Azure deploy:
-
-```csharp
-var dev = builder.AddKubernetesEnvironment("dev");
-var aks = builder.AddAzureKubernetesEnvironment("aks");
-
-builder.AddKubeOps<Projects.AspireOperator>("operator")
-    .RunWithKubernetes(dev)
-    .PublishAsKubernetesOperator(aks);
-```
-
-Publish only without an Aspire Kubernetes environment:
-
-```csharp
-builder.AddKubeOps<Projects.AspireOperator>("operator")
-    .PublishAsKubernetesOperator(publish =>
-    {
-        publish.Namespace = "operator-system";
-        publish.WithServiceAccount("operator");
-    });
-```
-
-Without `RunWithKubernetes(...)`, `AddKubeOps<TProject>(...)` keeps the operator in explicit-start mode for local Aspire runs. Standalone manifest publish does not require `AddKubernetesEnvironment(...)`, Helm, or a live cluster; publishing with a Kubernetes environment generates an Aspire Helm chart, while `aspire deploy` installs that chart into the selected environment.
+For further details, see the [Aspire documentation](https://dotnet.github.io/dotnet-operator-sdk/docs/operator/aspire).
 
 ## Packages
 
@@ -153,10 +111,10 @@ The runtime libraries target [.NET 8.0](https://learn.microsoft.com/en-us/dotnet
 The SDK is designed to be modular. You can include only the packages you need:
 
 | Package                                                              | Description                                                                                                                                                                                                                                                                               |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | [KubeOps.Abstractions](./src/KubeOps.Abstractions/README.md)         | Defines core interfaces, attributes (like `[KubernetesEntity]`), and base classes used across the SDK. Essential for defining your custom resources and controllers.                                                                                                                      |
-| [KubeOps.Aspire](./src/KubeOps.Aspire/README.md)                     | [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) service defaults for an operator: a single `AddKubeOpsServiceDefaults()` call wiring up OpenTelemetry, service discovery, HTTP resilience, and health checks.                                                                    |
-| [KubeOps.Aspire.Hosting](./src/KubeOps.Aspire.Hosting/README.md)     | [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) hosting integration. Adds `AddKubeOps<TProject>(...)` so a KubeOps operator can be orchestrated as a resource inside an Aspire AppHost.                                                                                          |
+| [KubeOps.Aspire](./src/KubeOps.Aspire/README.md)                     | [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) service defaults for an operator: a single `AddKubeOpsServiceDefaults()` call wiring up OpenTelemetry, service discovery, HTTP resilience, and health checks.                                                                   |
+| [KubeOps.Aspire.Hosting](./src/KubeOps.Aspire.Hosting/README.md)     | [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) hosting integration. Adds `AddKubeOps<TProject>(...)` so a KubeOps operator can be orchestrated as a resource inside an Aspire AppHost.                                                                                         |
 | [KubeOps.Cli](./src/KubeOps.Cli/README.md)                           | A [.NET Tool](https://docs.microsoft.com/en-us/dotnet/core/tools/global-tools) providing commands for scaffolding projects, generating [Custom Resource Definitions (CRDs)](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/), and more.  |
 | [KubeOps.Generator](./src/KubeOps.Generator/README.md)               | Contains [Roslyn Source Generators](https://docs.microsoft.com/en-us/dotnet/csharp/roslyn-sdk/source-generators-overview) to automate boilerplate code generation for CRDs and controllers based on your definitions.                                                                     |
 | [KubeOps.KubernetesClient](./src/KubeOps.KubernetesClient/README.md) | Provides an enhanced client for interacting with the [Kubernetes API](https://kubernetes.io/docs/reference/kubernetes-api/), built on top of the official `KubernetesClient` library. Offers convenience methods for common operator tasks.                                               |
@@ -171,7 +129,7 @@ You can find various example operators demonstrating different features in the [
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details. This license applies to all packages in the KubeOps SDK.
+This project is licensed under the Apache License 2.0 – see the [LICENSE](LICENSE) file for details. This license applies to all packages in the KubeOps SDK.
 
 ## .NET Foundation
 
@@ -185,7 +143,7 @@ KubeOps is maintained by the repository collaborators and maintainers. We welcom
 
 If you want to contribute, feel free to open a pull request or write issues :-)
 Please note that this project is released with a [Contributor Code of Conduct](./CODE_OF_CONDUCT.md).
-By participating in this project you agree to abide by its terms.
+By participating in this project, you agree to abide by its terms.
 
 Read more about contribution (especially for setting up your local environment)
 in the [CONTRIBUTING file](./CONTRIBUTING.md).

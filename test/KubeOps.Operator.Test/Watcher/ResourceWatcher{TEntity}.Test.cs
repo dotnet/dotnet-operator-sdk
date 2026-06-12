@@ -303,15 +303,24 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
-    public async Task OnEvent_Should_Enqueue_When_Entity_Has_DeletionTimestamp_And_Strategy_Is_ByGeneration()
+    public async Task OnEvent_Should_Enqueue_When_Finalizers_Changed_During_Deletion_And_Strategy_Is_ByGeneration()
     {
         // Arrange
         var entity = CreateTestEntity();
-        entity.Metadata.DeletionTimestamp = DateTime.UtcNow;
+        entity.Metadata.DeletionTimestamp = new DateTime(2026, 05, 28, 10, 00, 00, DateTimeKind.Utc);
+        entity.Metadata.DeletionGracePeriodSeconds = 30;
+        entity.Metadata.Finalizers = ["operator.test/second-finalizer"];
 
         var mockCache = new Mock<IFusionCache>();
         var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
         var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object);
+
+        mockCache
+            .Setup(c => c.TryGetAsync<string>(
+                It.Is<string>(s => s == $"{entity.Uid()}:deletion"),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MaybeValue<string>.FromValue("deleting:2026-05-28T10:00:00.0000000Z:30:1:operator.test/first-finalizer"));
 
         // Act
         await watcher.InvokeOnEventAsync(
@@ -319,7 +328,7 @@ public sealed class ResourceWatcherTest
             entity,
             TestContext.Current.CancellationToken);
 
-        // Assert – enqueued without any cache read (generation check bypassed)
+        // Assert
         mockQueue.Verify(
             q => q.Enqueue(
                 entity,
@@ -330,9 +339,57 @@ public sealed class ResourceWatcherTest
                 It.IsAny<CancellationToken>()),
             Times.Once);
         mockCache.Verify(
-            c => c.TryGetAsync<long>(
+            c => c.SetAsync(
+                It.Is<string>(key => key == $"{entity.Uid()}:deletion"),
+                It.Is<string>(token => token == "deleting:2026-05-28T10:00:00.0000000Z:30:1:operator.test/second-finalizer"),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<IEnumerable<string>?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task OnEvent_Should_Skip_Enqueue_When_Deletion_Token_Is_Unchanged_And_Strategy_Is_ByGeneration()
+    {
+        // Arrange
+        var entity = CreateTestEntity();
+        entity.Metadata.DeletionTimestamp = new DateTime(2026, 05, 28, 10, 00, 00, DateTimeKind.Utc);
+        entity.Metadata.DeletionGracePeriodSeconds = 30;
+        entity.Metadata.Finalizers = ["operator.test/finalizer"];
+
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object);
+
+        mockCache
+            .Setup(c => c.TryGetAsync<string>(
+                It.Is<string>(s => s == $"{entity.Uid()}:deletion"),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MaybeValue<string>.FromValue("deleting:2026-05-28T10:00:00.0000000Z:30:1:operator.test/finalizer"));
+
+        // Act
+        await watcher.InvokeOnEventAsync(
+            WatchEventType.Modified,
+            entity,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        mockQueue.Verify(
+            q => q.Enqueue(
+                It.IsAny<V1OperatorIntegrationTestEntity>(),
+                It.IsAny<ReconciliationType>(),
+                It.IsAny<ReconciliationTriggerSource>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        mockCache.Verify(
+            c => c.SetAsync(
+                It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<IEnumerable<string>?>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }
