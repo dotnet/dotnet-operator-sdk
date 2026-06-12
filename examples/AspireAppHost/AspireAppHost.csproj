@@ -14,11 +14,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Hosting.AppHost" Version="13.3.5" />
-        <PackageReference Include="Aspire.Hosting.Kubernetes" Version="13.3.5-preview.1.26270.6" />
-    </ItemGroup>
-
-    <ItemGroup>
         <ProjectReference Include="..\AspireOperator\AspireOperator.csproj" />
         <ProjectReference Include="..\..\src\KubeOps.Aspire.Hosting\KubeOps.Aspire.Hosting.csproj"
                           IsAspireProjectResource="false" />

@@ -64,6 +64,13 @@
     {
       "matchPackageNames": ["JsonPatch.Net"],
       "allowedVersions": "<=4.0.1"
+    },
+    {
+      "description": ["Aspire.Hosting.Kubernetes only ships prerelease versions, so allow unstable updates for it."],
+      "matchManagers": ["nuget"],
+      "matchPackageNames": ["Aspire.Hosting.Kubernetes"],
+      "ignoreUnstable": false,
+      "respectLatest": false
     }
   ]
 }
