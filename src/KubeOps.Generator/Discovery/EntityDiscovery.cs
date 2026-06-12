@@ -19,7 +19,7 @@ internal static class EntityDiscovery
 
     private const string KindName = "Kind";
     private const string GroupName = "Group";
-    private const string PluralName = "Plural";
+    private const string PluralName = "PluralName";
     private const string VersionName = "ApiVersion";
     private const string DefaultVersion = "v1";
 
@@ -82,7 +82,7 @@ internal static class EntityDiscovery
             .OrderBy(e => e.ClassDeclaration.FullyQualifiedName, StringComparer.Ordinal)
             .ToImmutableArray();
 
-        return new EquatableArray<AttributedEntity>(ordered);
+        return new(ordered);
     }
 
     private static AttributedEntity? GetLocalEntity(GeneratorSyntaxContext context)
@@ -105,13 +105,13 @@ internal static class EntityDiscovery
         }
 
         return new AttributedEntity(
-            new ClassDeclarationMetaData(
+            new(
                 ClassName: cls.Identifier.Text,
                 FullyQualifiedName: symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 Namespace: symbol.ContainingNamespace.IsGlobalNamespace
                     ? null
                     : symbol.ContainingNamespace.ToDisplayString(),
-                ModifierKinds: new EquatableArray<SyntaxKind>(
+                ModifierKinds: new(
                     cls.Modifiers.Select(m => m.Kind()).ToImmutableArray()),
                 IsPartial: cls.Modifiers.Any(SyntaxKind.PartialKeyword),
                 HasParameterlessConstructor: cls.Members.Any(m
@@ -181,7 +181,7 @@ internal static class EntityDiscovery
         }
 
         return new AttributedEntity(
-            new ClassDeclarationMetaData(
+            new(
                 ClassName: symbol.Name,
                 FullyQualifiedName: symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 Namespace: symbol.ContainingNamespace.IsGlobalNamespace

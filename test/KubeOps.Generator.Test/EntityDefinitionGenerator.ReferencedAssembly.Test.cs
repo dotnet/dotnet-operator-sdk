@@ -40,7 +40,7 @@ public sealed partial class EntityDefinitionGeneratorTest
 
         public static class EntityDefinitions
         {
-            public static readonly EntityMetadata V1TestEntityFromReferencedAssemblyWithConstantValues = new("TestEntity", "v1", "testing.dev", null);
+            public static readonly EntityMetadata V1TestEntityFromReferencedAssemblyWithConstantValues = new("TestEntity", "v1", "testing.dev", "testentities");
         }
         """,
         TestDisplayName = "Test single entity (with controller as entity resolver reference)")]
@@ -71,7 +71,7 @@ public sealed partial class EntityDefinitionGeneratorTest
 
         public static class EntityDefinitions
         {
-            public static readonly EntityMetadata V1TestEntityFromReferencedAssemblyWithConstantValues = new("TestEntity", "v1", "testing.dev", null);
+            public static readonly EntityMetadata V1TestEntityFromReferencedAssemblyWithConstantValues = new("TestEntity", "v1", "testing.dev", "testentities");
         }
         """,
         TestDisplayName = "Test single entity (with controller and finalizer as entity resolver reference)")]
@@ -102,7 +102,7 @@ public sealed partial class EntityDefinitionGeneratorTest
 
         public static class EntityDefinitions
         {
-            public static readonly EntityMetadata V1TestEntityFromReferencedAssemblyWithConstantValues = new("TestEntity", "v1", "testing.dev", null);
+            public static readonly EntityMetadata V1TestEntityFromReferencedAssemblyWithConstantValues = new("TestEntity", "v1", "testing.dev", "testentities");
             public static readonly EntityMetadata V1TestEntityFromReferencedAssemblyInGlobalNamespace = new("TestEntity", "v1", "testing.dev", null);
         }
         """,
