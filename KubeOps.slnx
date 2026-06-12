@@ -9,7 +9,6 @@
   <Folder Name="/solution/">
     <File Path=".editorconfig" />
     <File Path=".gitignore" />
-    <File Path=".releaserc.json" />
     <File Path="renovate.json" />
     <File Path="README.md" />
     <File Path="CONTRIBUTING.md" />
