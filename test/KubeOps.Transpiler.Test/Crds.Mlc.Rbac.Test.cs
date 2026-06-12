@@ -11,8 +11,9 @@ using KubeOps.Abstractions.Rbac;
 
 namespace KubeOps.Transpiler.Test;
 
-public class RbacMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
+public sealed partial class CrdsMlcTest
 {
+    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Create_Generic_Policy()
     {
@@ -23,9 +24,10 @@ public class RbacMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
         role.Resources.Should().Contain("configmaps");
         role.NonResourceURLs.Should().Contain("url");
         role.NonResourceURLs.Should().Contain("foobar");
-        role.Verbs.Should().Contain(new[] { "get", "delete" });
+        role.Verbs.Should().Contain(["get", "delete"]);
     }
 
+    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Calculate_Max_Verbs_For_Types()
     {
@@ -33,9 +35,10 @@ public class RbacMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
             .Transpile(_mlc.GetContextType<RbacTest1>().GetCustomAttributesData<EntityRbacAttribute>()).ToList()
             .First();
         role.Resources.Should().Contain("rbactest1s");
-        role.Verbs.Should().Contain(new[] { "get", "update", "delete" });
+        role.Verbs.Should().Contain(["get", "update", "delete"]);
     }
 
+    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Correctly_Calculate_All_Verb()
     {
@@ -46,6 +49,7 @@ public class RbacMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
         role.Verbs.Should().Contain("*").And.HaveCount(1);
     }
 
+    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Group_Same_Types_Together()
     {
@@ -60,6 +64,7 @@ public class RbacMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
         roles.Should().HaveCount(2);
     }
 
+    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Group_Types_With_Same_Verbs_Together()
     {
@@ -79,6 +84,7 @@ public class RbacMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
         roles.Should().HaveCount(2);
     }
 
+    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Not_Mix_ApiGroups()
     {
@@ -87,14 +93,47 @@ public class RbacMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
         roles.Should().HaveCount(5);
     }
 
+    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Correctly_Calculate_All_Verbs_Explicitly()
     {
         var role = _mlc
             .Transpile(_mlc.GetContextType<RbacTest6>().GetCustomAttributesData<EntityRbacAttribute>()).ToList().First();
         role.Resources.Should().Contain("leases");
-        role.Verbs.Should().Contain(new[] { "get", "list", "watch", "create", "update", "patch", "delete" });
+        role.Verbs.Should().Contain(["get", "list", "watch", "create", "update", "patch", "delete"]);
     }
+
+    [Trait("Area", "Rbac")]
+    [Fact]
+    public void Should_Inherit_EntityRbac_From_Base_Class()
+    {
+        var rules = _mlc
+            .Transpile(_mlc.GetContextType<RbacInheritanceDerivedController>()
+                .GetInheritedCustomAttributesData<EntityRbacAttribute>())
+            .ToList();
+
+        rules.Should().ContainSingle(r =>
+            r.Resources.Contains("rbacbaseentitys") &&
+            r.Verbs.Contains("get"));
+    }
+
+    [Trait("Area", "Rbac")]
+    [Fact]
+    public void Should_Merge_EntityRbac_From_Full_Inheritance_Chain()
+    {
+        var rules = _mlc
+            .Transpile(_mlc.GetContextType<RbacInheritanceDeepDerivedController>()
+                .GetInheritedCustomAttributesData<EntityRbacAttribute>())
+            .ToList();
+
+        // get+update are on the same entity → transpiler merges them into one rule
+        rules.Should().ContainSingle(r =>
+            r.Resources.Contains("rbacbaseentitys") &&
+            r.Verbs.Contains("get") &&
+            r.Verbs.Contains("update"));
+    }
+
+    #region Test Entity Classes
 
     [KubernetesEntity(Group = "test", ApiVersion = "v1")]
     [EntityRbac(typeof(RbacTest1), Verbs = RbacVerb.Get)]
@@ -136,4 +175,19 @@ public class RbacMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
     [GenericRbac(Urls = ["url", "foobar"], Resources = ["configmaps"], Groups = ["group"],
         Verbs = RbacVerb.Delete | RbacVerb.Get)]
     public class GenericRbacTest : CustomKubernetesEntity;
+
+    [KubernetesEntity(Group = "test", ApiVersion = "v1")]
+    public class RbacBaseEntity : CustomKubernetesEntity;
+
+    [EntityRbac(typeof(RbacBaseEntity), Verbs = RbacVerb.Get)]
+    public abstract class RbacBaseController;
+
+    public class RbacInheritanceDerivedController : RbacBaseController;
+
+    [EntityRbac(typeof(RbacBaseEntity), Verbs = RbacVerb.Update)]
+    public abstract class RbacMidController : RbacBaseController;
+
+    public class RbacInheritanceDeepDerivedController : RbacMidController;
+
+    #endregion
 }

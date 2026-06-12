@@ -46,8 +46,16 @@ public static class Crds
     /// </summary>
     /// <param name="context">The <see cref="MetadataLoadContext"/>.</param>
     /// <param name="type">The type to convert.</param>
+    /// <param name="inheritedAttributeResolver">
+    /// Resolver for inherited attribute property values produced inside a constructor. Defaults to
+    /// <see cref="ReflectionInheritedAttributeResolver"/>; the CLI supplies a Roslyn-based
+    /// resolver so that no user code is executed during build-time transpilation.
+    /// </param>
     /// <returns>The converted custom resource definition.</returns>
-    public static V1CustomResourceDefinition Transpile(this MetadataLoadContext context, Type type)
+    public static V1CustomResourceDefinition Transpile(
+        this MetadataLoadContext context,
+        Type type,
+        IInheritedAttributeResolver? inheritedAttributeResolver = null)
     {
         type = context.GetContextType(type);
         try
@@ -117,11 +125,11 @@ public static class Crds
                         _ => null,
                     },
                     XKubernetesValidations = context.MapValidationRules(
-                        type.GetCustomAttributesData<ValidationRuleAttribute>()),
+                        type.GetInheritedCustomAttributesData<ValidationRuleAttribute>()),
                 },
             };
 
-            version.AdditionalPrinterColumns = context.MapPrinterColumns(type).ToList() switch
+            version.AdditionalPrinterColumns = context.MapPrinterColumns(type, inheritedAttributeResolver).ToList() switch
             {
                 { Count: > 0 } l => l,
                 _ => null,
@@ -142,16 +150,22 @@ public static class Crds
     /// </summary>
     /// <param name="context">The <see cref="MetadataLoadContext"/>.</param>
     /// <param name="types">The types to convert.</param>
+    /// <param name="inheritedAttributeResolver">
+    /// Resolver for inherited attribute property values produced inside a constructor. Defaults to
+    /// <see cref="ReflectionInheritedAttributeResolver"/>; the CLI supplies a Roslyn-based
+    /// resolver so that no user code is executed during build-time transpilation.
+    /// </param>
     /// <returns>The converted custom resource definitions.</returns>
     public static IEnumerable<V1CustomResourceDefinition> Transpile(
         this MetadataLoadContext context,
-        IEnumerable<Type> types)
+        IEnumerable<Type> types,
+        IInheritedAttributeResolver? inheritedAttributeResolver = null)
         => types
             .Select(context.GetContextType)
             .Where(type => type.Assembly != context.GetContextType<KubernetesEntityAttribute>().Assembly
                            && type.GetCustomAttributesData<KubernetesEntityAttribute>().Any()
                            && !type.GetCustomAttributesData<IgnoreAttribute>().Any())
-            .Select(type => (Props: context.Transpile(type),
+            .Select(type => (Props: context.Transpile(type, inheritedAttributeResolver),
                 IsStorage: type.GetCustomAttributesData<StorageVersionAttribute>().Any()))
             .GroupBy(grp => grp.Props.Metadata.Name)
             .Select(group =>
@@ -195,8 +209,11 @@ public static class Crds
 
     private static IEnumerable<V1CustomResourceColumnDefinition> MapPrinterColumns(
         this MetadataLoadContext context,
-        Type type)
+        Type type,
+        IInheritedAttributeResolver? inheritedAttributeResolver)
     {
+        inheritedAttributeResolver ??= ReflectionInheritedAttributeResolver.Default;
+
         var props = type.GetProperties()
             .Select(p => (Prop: p, Path: string.Empty, Ancestors: (IReadOnlySet<Type>)new HashSet<Type> { type }))
             .ToList();
@@ -235,16 +252,47 @@ public static class Crds
             };
         }
 
-        foreach (var attr in type.GetCustomAttributesData<GenericAdditionalPrinterColumnAttribute>())
+        foreach (var attr in type.GetInheritedCustomAttributesData<GenericAdditionalPrinterColumnAttribute>())
         {
+            string? jsonPath, colName, colType;
+            string? description, format;
+            PrinterColumnPriority priority;
+
+            if (attr.ConstructorArguments.Count >= 3)
+            {
+                jsonPath = attr.GetCustomAttributeCtorArg<string>(context, 0);
+                colName = attr.GetCustomAttributeCtorArg<string>(context, 1);
+                colType = attr.GetCustomAttributeCtorArg<string>(context, 2);
+                description = attr.GetCustomAttributeNamedArg<string>(context, "Description");
+                format = attr.GetCustomAttributeNamedArg<string>(context, "Format");
+                priority = attr.GetCustomAttributeNamedArg<PrinterColumnPriority>(context, "Priority");
+            }
+            else if (inheritedAttributeResolver.TryResolve(attr.AttributeType, out var values))
+            {
+                jsonPath = values.GetValueOrDefault("JsonPath") as string;
+                colName = values.GetValueOrDefault("Name") as string;
+                colType = values.GetValueOrDefault("Type") as string;
+                description = values.GetValueOrDefault("Description") as string;
+                format = values.GetValueOrDefault("Format") as string;
+                priority = values.GetValueOrDefault("Priority") as PrinterColumnPriority? ?? default;
+                if (jsonPath is null || colName is null || colType is null)
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                continue;
+            }
+
             yield return new()
             {
-                Name = attr.GetCustomAttributeCtorArg<string>(context, 1),
-                JsonPath = attr.GetCustomAttributeCtorArg<string>(context, 0),
-                Type = attr.GetCustomAttributeCtorArg<string>(context, 2),
-                Description = attr.GetCustomAttributeNamedArg<string>(context, "Description"),
-                Format = attr.GetCustomAttributeNamedArg<string>(context, "Format"),
-                Priority = attr.GetCustomAttributeNamedArg<PrinterColumnPriority>(context, "Priority") switch
+                Name = colName,
+                JsonPath = jsonPath,
+                Type = colType,
+                Description = description,
+                Format = format,
+                Priority = priority switch
                 {
                     PrinterColumnPriority.StandardView => 0,
                     _ => 1,
@@ -556,7 +604,7 @@ public static class Crds
                         },
                         XKubernetesPreserveUnknownFields = preservesUnknownFields ? true : null,
                         XKubernetesValidations = context.MapValidationRules(
-                            type.GetCustomAttributesData<ValidationRuleAttribute>()),
+                            type.GetInheritedCustomAttributesData<ValidationRuleAttribute>()),
                     };
                 }
                 catch (Exception ex) when (preservesUnknownFields

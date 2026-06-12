@@ -137,7 +137,7 @@ public class EntitySpec
 - `[RangeMinimum]` and `[RangeMaximum]`: Defines numeric value ranges
 - `[MultipleOf]`: Specifies that a number must be a multiple of a given value
 - `[Items]`: Defines minimum and maximum items for arrays
-- `[ValidationRule]`: Defines custom validation rules using CEL expressions. Can be applied to properties and to class types — in both cases it emits `x-kubernetes-validations` on the corresponding schema node. When applied to both a class and a property of that type, the rules are merged (class rules first, then property rules)
+- `[ValidationRule]`: Defines custom validation rules using CEL expressions. Can be applied to properties and to class types — in both cases it emits `x-kubernetes-validations` on the corresponding schema node. When applied to both a class and a property of that type, the rules are merged (class rules first, then property rules). Class-level rules are also collected across the **class inheritance chain**: a rule placed on a base class is inherited by every derived entity or nested type, and all rules found along the chain are merged onto the schema node
 
 ### Documentation Attributes
 
@@ -194,6 +194,25 @@ public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec
         public DateTime LastUpdated { get; set; }
     }
 }
+```
+
+## Attribute Inheritance
+
+CRD-shaping attributes are collected across the **class inheritance chain**. An attribute placed on a base class is picked up by every derived entity, so shared CRD configuration can live on a common base type.
+
+You can also create **reusable, named attributes** by subclassing an existing attribute and forwarding the values to its base constructor:
+
+```csharp
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+public sealed class ReadyPrinterColumnAttribute : GenericAdditionalPrinterColumnAttribute
+{
+    public ReadyPrinterColumnAttribute()
+        : base(".status.conditions[?(@.type==\"Ready\")].status", "Ready", "string") { }
+}
+
+[KubernetesEntity(Group = "demo.kubeops.dev", ApiVersion = "v1", Kind = "DemoEntity")]
+[ReadyPrinterColumn]
+public class V1DemoEntity : CustomKubernetesEntity { }
 ```
 
 ## Scale Subresource

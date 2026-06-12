@@ -14,6 +14,7 @@ public static class Utilities
 {
     /// <summary>
     /// Load a custom attribute from a read-only-reflected type.
+    /// Also matches attributes whose attribute type inherits from <typeparamref name="TAttribute"/>.
     /// </summary>
     /// <param name="type">The type.</param>
     /// <typeparam name="TAttribute">The type of the attribute to load.</typeparam>
@@ -22,7 +23,7 @@ public static class Utilities
         where TAttribute : Attribute
         => CustomAttributeData
             .GetCustomAttributes(type)
-            .FirstOrDefault(a => a.AttributeType.Name == typeof(TAttribute).Name);
+            .FirstOrDefault(a => IsOrInheritsFromAttribute(a.AttributeType, typeof(TAttribute).Name));
 
     /// <summary>
     /// Load a custom attribute from a read-only-reflected field.
@@ -50,6 +51,9 @@ public static class Utilities
 
     /// <summary>
     /// Load an enumerable of custom attributes from a read-only-reflected type.
+    /// Also includes attributes whose attribute type inherits from <typeparamref name="TAttribute"/>.
+    /// Does <b>not</b> walk the declaring type's inheritance chain; use
+    /// <see cref="GetInheritedCustomAttributesData{TAttribute}(Type)"/> for that.
     /// </summary>
     /// <param name="type">The type.</param>
     /// <typeparam name="TAttribute">The type of the attribute to load.</typeparam>
@@ -58,7 +62,7 @@ public static class Utilities
         where TAttribute : Attribute
         => CustomAttributeData
             .GetCustomAttributes(type)
-            .Where(a => a.AttributeType.Name == typeof(TAttribute).Name);
+            .Where(a => IsOrInheritsFromAttribute(a.AttributeType, typeof(TAttribute).Name));
 
     /// <summary>
     /// Load an enumerable of custom attributes from a read-only-reflected property.
@@ -71,6 +75,30 @@ public static class Utilities
         => CustomAttributeData
             .GetCustomAttributes(prop)
             .Where(a => a.AttributeType.Name == typeof(TAttribute).Name);
+
+    /// <summary>
+    /// Load an enumerable of custom attributes from a read-only-reflected type and all its base types.
+    /// Also includes attributes whose attribute type inherits from <typeparamref name="TAttribute"/>.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    /// <typeparam name="TAttribute">The type of the attribute to load.</typeparam>
+    /// <returns>The custom attribute data list from the full class inheritance chain.</returns>
+    public static IEnumerable<CustomAttributeData> GetInheritedCustomAttributesData<TAttribute>(this Type type)
+        where TAttribute : Attribute
+    {
+        var current = (Type?)type;
+        while (current is not null
+               && current.FullName is not (null or "System.Object" or "System.ValueType" or "System.Enum"))
+        {
+            foreach (var attr in CustomAttributeData.GetCustomAttributes(current)
+                .Where(a => IsOrInheritsFromAttribute(a.AttributeType, typeof(TAttribute).Name)))
+            {
+                yield return attr;
+            }
+
+            current = current.BaseType;
+        }
+    }
 
     /// <summary>
     /// Load a specific named argument from a custom attribute.
@@ -220,4 +248,26 @@ public static class Utilities
     public static bool IsNullable(this PropertyInfo prop)
         => new NullabilityInfoContext().Create(prop).ReadState == NullabilityState.Nullable ||
            prop.PropertyType.FullName?.Contains("Nullable") == true;
+
+    /// <summary>
+    /// Returns <see langword="true"/> if <paramref name="attributeType"/> is, or inherits from, an
+    /// attribute type whose simple name matches <paramref name="targetTypeName"/>.
+    /// Used to support attribute-type inheritance in <see cref="MetadataLoadContext"/>-reflected types,
+    /// where cross-context type identity cannot be compared by reference.
+    /// </summary>
+    /// <param name="attributeType">The attribute type to inspect.</param>
+    /// <param name="targetTypeName">The simple (<c>Type.Name</c>) name of the target attribute.</param>
+    /// <returns><see langword="true"/> when a match is found in the inheritance chain.</returns>
+    internal static bool IsOrInheritsFromAttribute(Type attributeType, string targetTypeName)
+    {
+        var current = (Type?)attributeType;
+        while (current is not null)
+        {
+            if (current.Name == targetTypeName)
+                return true;
+            current = current.BaseType;
+        }
+
+        return false;
+    }
 }
