@@ -285,14 +285,13 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                         entry.Entity.ToIdentifierString());
 
                 var result = await ReconcileSingleAsync(entry, cancellationToken);
-                stopwatch.Stop();
 
                 metrics?.RecordReconciliation(
                     typeof(TEntity).Name,
                     entry.ReconciliationType.ToMetricString(),
                     result.IsSuccess ? "success" : "failure",
                     stopwatch.Elapsed.TotalSeconds,
-                    result.IsSuccess ? null : result.Error?.GetType().FullName ?? "unknown");
+                    result.IsSuccess ? null : result.Error?.GetType().FullName ?? "_OTHER");
 
                 logger
                     .LogInformation(

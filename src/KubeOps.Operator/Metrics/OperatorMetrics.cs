@@ -77,10 +77,17 @@ public sealed class OperatorMetrics
             "operator.reconciliation",
             "{reconciliations}",
             "Total number of reconciliations executed.");
-        _reconciliationDuration = meter.CreateHistogram<double>(
+        _reconciliationDuration = meter.CreateHistogram(
             "operator.reconciliation.duration",
             "s",
-            "Duration of a single reconciliation, including the entity fetch.");
+            "Duration of a single reconciliation, including the entity fetch.",
+            advice: new InstrumentAdvice<double>
+            {
+                // Reconciliations are typically sub-second to a few seconds. The OpenTelemetry default
+                // buckets are sized for milliseconds, so override them with second-scale boundaries to
+                // get usable latency percentiles.
+                HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60],
+            });
         _watcherEvents = meter.CreateCounter<long>(
             "operator.watcher.events",
             "{events}",

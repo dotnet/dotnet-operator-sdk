@@ -60,6 +60,32 @@ queue instruments give a good — but not exhaustive — view of throughput. See
 [issue #1037](https://github.com/dotnet/dotnet-operator-sdk/issues/1037) for context.
 :::
 
+The `error.type` attribute is only present on **failed** reconciliations and carries the failing
+exception's full type name (or `_OTHER` when a reconciliation reports failure without an exception).
+It follows the OpenTelemetry `error.type` convention and is bounded by the set of exception types your
+controllers throw.
+
+The `operator.reconciliation.duration` histogram uses second-scale bucket boundaries
+(`5ms … 60s`) tuned for typical reconcile latencies, so `histogram_quantile()` over
+`operator_reconciliation_duration_seconds_bucket` yields meaningful percentiles out of the box.
+
+### Prometheus exposition names
+
+The instrument names above are the OpenTelemetry names. The Prometheus exporter translates them
+(dots → underscores, `_total` suffix for counters, unit suffix for the histogram, UCUM annotation
+units such as `{items}` dropped). The scrape endpoint therefore exposes:
+
+| OpenTelemetry instrument | Prometheus time series |
+|---|---|
+| `operator.queue.depth` | `operator_queue_depth` |
+| `operator.queue.enqueued` | `operator_queue_enqueued_total` |
+| `operator.queue.requeued` | `operator_queue_requeued_total` |
+| `operator.queue.discarded` | `operator_queue_discarded_total` |
+| `operator.reconciliation` | `operator_reconciliation_total` |
+| `operator.reconciliation.duration` | `operator_reconciliation_duration_seconds` (`_bucket` / `_sum` / `_count`) |
+| `operator.watcher.events` | `operator_watcher_events_total` |
+| `operator.watcher.reconnections` | `operator_watcher_reconnections_total` |
+
 ## Exposing a Prometheus endpoint (KubeOps.Operator.Web)
 
 When using `KubeOps.Operator.Web`, two convenience helpers wire up the Prometheus exporter and the
