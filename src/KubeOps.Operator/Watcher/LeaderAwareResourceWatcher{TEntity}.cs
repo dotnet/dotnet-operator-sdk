@@ -11,6 +11,7 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 
 using Microsoft.Extensions.Hosting;
@@ -30,7 +31,8 @@ public class LeaderAwareResourceWatcher<TEntity>(
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     IHostApplicationLifetime hostApplicationLifetime,
-    LeaderElector elector)
+    LeaderElector elector,
+    OperatorMetrics? metrics = null)
     : ResourceWatcher<TEntity>(
         activitySource,
         logger,
@@ -39,7 +41,8 @@ public class LeaderAwareResourceWatcher<TEntity>(
         settings,
         labelSelector,
         fieldSelector,
-        client)
+        client,
+        metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private CancellationTokenSource _cts = new();

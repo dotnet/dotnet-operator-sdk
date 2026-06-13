@@ -9,6 +9,7 @@ using k8s.Models;
 
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Operator.Logging;
+using KubeOps.Operator.Metrics;
 
 using Microsoft.Extensions.Logging;
 
@@ -41,6 +42,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
     private const int TimerIntervalMilliseconds = 100;
 
     private readonly ILogger<TimedEntityQueue<TEntity>> _logger;
+    private readonly OperatorMetrics? _metrics;
 
     // Used for managing all scheduled entries that should be added to the queue in the future.
     private readonly ConcurrentDictionary<string, TimedQueueEntry<TEntity>> _management = new();
@@ -57,12 +59,23 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
     // Task that runs the timer loop.
     private readonly Task _timerTask;
 
-    private bool _disposed;
+    // Read by the meter's observation thread (queue-depth gauge) and written on the dispose thread,
+    // hence volatile to ensure the disposed state is observed promptly across threads.
+    private volatile bool _disposed;
 
-    public TimedEntityQueue(ILogger<TimedEntityQueue<TEntity>> logger)
+    public TimedEntityQueue(ILogger<TimedEntityQueue<TEntity>> logger, OperatorMetrics? metrics = null)
     {
         _logger = logger;
+        _metrics = metrics;
         _timerTask = Task.Run(ProcessScheduledEntriesAsync);
+
+        // The gauge callbacks are invoked by the (long-lived) meter for its whole lifetime, which
+        // outlives this queue. After Dispose() the BlockingCollection would throw
+        // ObjectDisposedException on Count, so the callbacks short-circuit once disposed.
+        _metrics?.RegisterQueueDepthGauge(
+            typeof(TEntity).Name,
+            () => _disposed ? 0 : _management.Count,
+            () => _disposed ? 0 : _queue.Count);
     }
 
     internal int Count => _management.Count;
@@ -118,6 +131,8 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                     oldEntry.Cancel();
                     return new(entity, newReconciliationType, reconciliationTriggerSource, newQueueIn, retryCount);
                 });
+
+        _metrics?.RecordEnqueue(typeof(TEntity).Name, reconciliationTriggerSource.ToMetricString());
 
         return Task.CompletedTask;
     }

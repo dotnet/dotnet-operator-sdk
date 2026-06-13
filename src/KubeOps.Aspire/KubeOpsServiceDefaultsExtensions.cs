@@ -93,7 +93,11 @@ public static class KubeOpsServiceDefaultsExtensions
             .ConfigureResource(resource => resource.AddService(serviceName))
             .WithMetrics(metrics => metrics
                 .AddRuntimeInstrumentation()
-                .AddHttpClientInstrumentation())
+                .AddHttpClientInstrumentation()
+
+                // KubeOps records its operator metrics on a Meter named after the operator
+                // (OperatorSettings.Name); subscribe to it so they flow through Aspire/OTLP.
+                .AddMeter(serviceName))
             .WithTracing(tracing => tracing
                 .AddHttpClientInstrumentation()
 

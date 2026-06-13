@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 using k8s;
 using k8s.Models;
@@ -20,6 +21,7 @@ using KubeOps.Operator.Crds;
 using KubeOps.Operator.Events;
 using KubeOps.Operator.Finalizer;
 using KubeOps.Operator.LeaderElection;
+using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Reconciliation;
 using KubeOps.Operator.Watcher;
@@ -123,6 +125,13 @@ internal sealed class OperatorBuilder : IOperatorBuilder
     {
         Services.AddSingleton(Settings);
         Services.AddSingleton(new ActivitySource(Settings.Name));
+
+        if (Settings.EnableMetrics)
+        {
+            Services.AddMetrics();
+            Services.AddSingleton(sp =>
+                new OperatorMetrics(sp.GetRequiredService<IMeterFactory>(), Settings.Name));
+        }
 
         // add and configure resource watcher entity cache
         Services.WithResourceWatcherEntityCaching(Settings);
