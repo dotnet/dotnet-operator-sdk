@@ -117,4 +117,15 @@ public sealed record OperatorSettings
     /// <seealso cref="ParallelReconciliationSettings"/>
     /// <seealso cref="ParallelReconciliationConflictStrategy"/>
     public required ParallelReconciliationSettings ParallelReconciliation { get; init; }
+
+    /// <summary>
+    /// Indicates whether the operator collects OpenTelemetry metrics (queue, watcher, and
+    /// reconciliation instruments) via a <see cref="System.Diagnostics.Metrics.Meter"/> named
+    /// after <see cref="Name"/>.
+    /// </summary>
+    /// <remarks>
+    /// Collecting metrics is virtually free when no listener/exporter is attached. To actually
+    /// scrape the metrics, register an OpenTelemetry exporter for the meter named <see cref="Name"/>.
+    /// </remarks>
+    public required bool EnableMetrics { get; init; }
 }

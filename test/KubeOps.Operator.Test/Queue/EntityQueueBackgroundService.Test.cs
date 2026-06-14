@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics.Metrics;
+
 using FluentAssertions;
 
 using k8s.Models;
@@ -9,8 +11,10 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Moq;
@@ -77,7 +81,8 @@ public sealed class EntityQueueBackgroundServiceTest
         Mock<IReconciler<V1ConfigMap>> reconcilerMock,
         Mock<IKubernetesClient> clientMock,
         V1ConfigMap? entity,
-        OperatorSettings? settings = null)
+        OperatorSettings? settings = null,
+        OperatorMetrics? metrics = null)
     {
         var effectiveSettings = settings ?? new OperatorSettingsBuilder().Build();
 
@@ -94,7 +99,84 @@ public sealed class EntityQueueBackgroundServiceTest
             effectiveSettings,
             queue,
             reconcilerMock.Object,
-            Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>());
+            Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>(),
+            metrics);
+    }
+
+    [Trait("Area", "Otel")]
+    [Fact]
+    public async Task Throwing_Reconciler_Records_Failure_Reconciliation_Metric()
+    {
+        const string meterName = "test-failure-metrics";
+        using var meterFactory = new ServiceCollection().AddMetrics().BuildServiceProvider()
+            .GetRequiredService<IMeterFactory>();
+        var metrics = new OperatorMetrics(meterFactory, meterName);
+
+        var captured = new List<(string Status, string? ErrorType)>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == meterName && instrument.Name == "operator.reconciliation")
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            string? status = null;
+            string? errorType = null;
+            foreach (var tag in tags)
+            {
+                if (tag.Key == "status")
+                {
+                    status = tag.Value as string;
+                }
+                else if (tag.Key == "error.type")
+                {
+                    errorType = tag.Value as string;
+                }
+            }
+
+            lock (captured)
+            {
+                captured.Add((status!, errorType));
+            }
+        });
+        listener.Start();
+
+        var queue = new ControllableQueue<V1ConfigMap>();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+        var entity = CreateEntity();
+
+        reconcilerMock
+            .Setup(r => r.Reconcile(
+                It.IsAny<ReconciliationContext<V1ConfigMap>>(),
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
+
+        // No retries so the failure path resolves deterministically to a single dropped attempt.
+        var settings = new OperatorSettingsBuilder()
+            .WithParallelReconciliation(p => p.MaxErrorRetries = 0)
+            .Build();
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings, metrics);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        queue.Push(entity, ReconciliationType.Added, ReconciliationTriggerSource.ApiServer);
+        queue.Complete();
+
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        lock (captured)
+        {
+            captured.Should().ContainSingle();
+            captured[0].Status.Should().Be("failure");
+            captured[0].ErrorType.Should().Be("System.InvalidOperationException");
+        }
     }
 
     [Fact]

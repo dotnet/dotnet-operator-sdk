@@ -16,6 +16,7 @@ using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Constants;
 using KubeOps.Operator.Logging;
+using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Reconciliation;
 using KubeOps.Operator.Retry;
@@ -35,7 +36,8 @@ public class ResourceWatcher<TEntity>(
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
     IEntityFieldSelector<TEntity> fieldSelector,
-    IKubernetesClient client)
+    IKubernetesClient client,
+    OperatorMetrics? metrics = null)
     : IHostedService, IAsyncDisposable, IDisposable
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
@@ -299,6 +301,8 @@ public class ResourceWatcher<TEntity>(
                     using var activity = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
                     using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(type, entity));
 
+                    metrics?.RecordWatchEvent(typeof(TEntity).Name, type.ToMetricString());
+
                     logger
                         .LogInformation(
                             """Received watch event "{EventType}" for "{Identifier}", last observed resource version: {ResourceVersion}.""",
@@ -379,6 +383,7 @@ public class ResourceWatcher<TEntity>(
 
         logger.LogError(e, """There was an error while watching the resource "{Resource}".""", typeof(TEntity));
         _watcherReconnectRetries++;
+        metrics?.RecordWatcherReconnection(typeof(TEntity).Name);
 
         var delay = ExponentialRetryBackoff.GetDelayWithJitter(_watcherReconnectRetries);
         logger.LogWarning(

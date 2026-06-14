@@ -11,6 +11,7 @@ using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Logging;
+using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -37,7 +38,8 @@ internal sealed class Reconciler<TEntity>(
     IServiceProvider serviceProvider,
     OperatorSettings operatorSettings,
     ITimedEntityQueue<TEntity> entityQueue,
-    IKubernetesClient client)
+    IKubernetesClient client,
+    OperatorMetrics? metrics = null)
     : IReconciler<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
@@ -69,6 +71,8 @@ internal sealed class Reconciler<TEntity>(
                     queueIn: result.RequeueAfter.Value,
                     retryCount: 0,
                     cancellationToken);
+
+            metrics?.RecordRequeue(typeof(TEntity).Name, "operator_requeue");
         }
 
         return result;
