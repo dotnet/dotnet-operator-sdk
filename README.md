@@ -21,6 +21,7 @@ The documentation is also provided within the code itself (description of method
 - **Code Generation:** Includes Roslyn source generators and a CLI tool (`kubeops`) to automate boilerplate code for CRDs, controllers, and RBAC rules.
 - **Enhanced Kubernetes Client:** Provides convenience methods built on top of the official client library.
 - **Leader Election:** Automatic handling for high-availability operator deployments.
+- **Metrics:** Built-in [OpenTelemetry](https://opentelemetry.io/) metrics for the reconciliation queue, reconciler, and watchers, exportable via any OpenTelemetry exporter.
 
 ## Getting Started
 
