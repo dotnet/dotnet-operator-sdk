@@ -10,6 +10,7 @@ using KubeOps.Operator.Metrics;
 
 namespace KubeOps.Operator.Test.Metrics;
 
+[Trait("Area", "Otel")]
 public sealed class OperatorMetricsTest
 {
     private const string MeterName = "test-operator";

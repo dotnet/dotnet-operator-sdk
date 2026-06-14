@@ -103,6 +103,7 @@ public sealed class EntityQueueBackgroundServiceTest
             metrics);
     }
 
+    [Trait("Area", "Otel")]
     [Fact]
     public async Task Throwing_Reconciler_Records_Failure_Reconciliation_Metric()
     {
