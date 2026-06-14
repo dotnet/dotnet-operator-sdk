@@ -133,7 +133,6 @@ internal sealed class OperatorBuilder : IOperatorBuilder
                 new OperatorMetrics(sp.GetRequiredService<IMeterFactory>(), Settings.Name));
         }
 
-        // add and configure resource watcher entity cache
         Services.WithResourceWatcherEntityCaching(Settings);
 
         // Add the default configuration and the client separately. This allows external users to override either

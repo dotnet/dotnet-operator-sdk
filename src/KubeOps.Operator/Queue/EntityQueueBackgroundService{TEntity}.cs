@@ -274,8 +274,6 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                 await uidEntry.Semaphore.WaitAsync(cancellationToken);
             }
 
-            // Started before the try so the duration (and a failure measurement) can also be recorded
-            // when the reconciliation throws, not only when it returns a result.
             var stopwatch = Stopwatch.StartNew();
             try
             {
@@ -303,8 +301,6 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
             }
             catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
-                // Record the failed attempt (the noisy path) before re-throwing to the retry/drop
-                // handler below. Shutdown cancellations are excluded by the filter and not recorded.
                 metrics?.RecordReconciliation(
                     typeof(TEntity).Name,
                     entry.ReconciliationType.ToMetricString(),
