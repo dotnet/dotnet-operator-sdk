@@ -10,7 +10,7 @@ namespace KubeOps.Operator.Metrics;
 
 /// <summary>
 /// Owns the operator's OpenTelemetry instruments. A single instance is registered as a singleton
-/// and shared across all entity types; the <c>entity.type</c> tag distinguishes measurements per
+/// and shared across all entity types; the <c>kubeops.entity.type</c> tag distinguishes measurements per
 /// watched resource.
 /// </summary>
 /// <remarks>
@@ -26,7 +26,7 @@ namespace KubeOps.Operator.Metrics;
 /// </remarks>
 public sealed class OperatorMetrics
 {
-    private const string EntityTypeTag = "entity.type";
+    private const string EntityTypeTag = "kubeops.entity.type";
 
     private readonly Counter<long> _queueEnqueued;
     private readonly Counter<long> _queueRequeued;
@@ -56,29 +56,29 @@ public sealed class OperatorMetrics
         });
 
         meter.CreateObservableGauge(
-            "operator.queue.depth",
+            "kubeops.operator.queue.depth",
             ObserveQueueDepth,
             "{items}",
             "Current number of entities in the queue, split by scheduled and ready state.");
 
         _queueEnqueued = meter.CreateCounter<long>(
-            "operator.queue.enqueued",
+            "kubeops.operator.queue.enqueued",
             "{items}",
             "Total number of entities enqueued for reconciliation.");
         _queueRequeued = meter.CreateCounter<long>(
-            "operator.queue.requeued",
+            "kubeops.operator.queue.requeued",
             "{items}",
             "Total number of entities requeued (conflict, error-retry, or operator requeue).");
         _queueDiscarded = meter.CreateCounter<long>(
-            "operator.queue.discarded",
+            "kubeops.operator.queue.discarded",
             "{items}",
             "Total number of reconciliation requests discarded due to a locking conflict.");
         _reconciliationTotal = meter.CreateCounter<long>(
-            "operator.reconciliation",
+            "kubeops.operator.reconciliation",
             "{reconciliations}",
             "Total number of reconciliations executed.");
         _reconciliationDuration = meter.CreateHistogram(
-            "operator.reconciliation.duration",
+            "kubeops.operator.reconciliation.duration",
             "s",
             "Duration of a single reconciliation, including the entity fetch.",
             advice: new InstrumentAdvice<double>
@@ -89,11 +89,11 @@ public sealed class OperatorMetrics
                 HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60],
             });
         _watcherEvents = meter.CreateCounter<long>(
-            "operator.watcher.events",
+            "kubeops.operator.watcher.events",
             "{events}",
             "Total number of Kubernetes watch events received.");
         _watcherReconnections = meter.CreateCounter<long>(
-            "operator.watcher.reconnections",
+            "kubeops.operator.watcher.reconnections",
             "{reconnections}",
             "Total number of watcher reconnection attempts after an error.");
     }
@@ -104,7 +104,7 @@ public sealed class OperatorMetrics
     public void RecordEnqueue(string entityType, string triggerSource)
         => _queueEnqueued.Add(
             1,
-            new TagList { { EntityTypeTag, entityType }, { "trigger.source", triggerSource } });
+            new TagList { { EntityTypeTag, entityType }, { "kubeops.trigger.source", triggerSource } });
 
     /// <summary>Records that an entity was requeued.</summary>
     /// <param name="entityType">The watched entity type name.</param>
@@ -112,7 +112,7 @@ public sealed class OperatorMetrics
     public void RecordRequeue(string entityType, string reason)
         => _queueRequeued.Add(
             1,
-            new TagList { { EntityTypeTag, entityType }, { "requeue.reason", reason } });
+            new TagList { { EntityTypeTag, entityType }, { "kubeops.requeue.reason", reason } });
 
     /// <summary>Records that a reconciliation request was discarded due to a locking conflict.</summary>
     /// <param name="entityType">The watched entity type name.</param>
@@ -135,8 +135,8 @@ public sealed class OperatorMetrics
         var tags = new TagList
         {
             { EntityTypeTag, entityType },
-            { "reconciliation.type", reconciliationType },
-            { "status", status },
+            { "kubeops.reconciliation.type", reconciliationType },
+            { "kubeops.reconciliation.status", status },
         };
 
         if (errorType is not null)
@@ -154,7 +154,7 @@ public sealed class OperatorMetrics
     public void RecordWatchEvent(string entityType, string eventType)
         => _watcherEvents.Add(
             1,
-            new TagList { { EntityTypeTag, entityType }, { "event.type", eventType } });
+            new TagList { { EntityTypeTag, entityType }, { "kubeops.watcher.event.type", eventType } });
 
     /// <summary>Records a watcher reconnection attempt.</summary>
     /// <param name="entityType">The watched entity type name.</param>
@@ -163,8 +163,8 @@ public sealed class OperatorMetrics
 
     /// <summary>
     /// Registers a depth provider for the given entity type. All providers are observed by a single
-    /// shared <c>operator.queue.depth</c> gauge that emits one measurement per entity type and
-    /// <c>state</c> (<c>scheduled</c> = delayed, not yet ready; <c>ready</c> = ready to reconcile).
+    /// shared <c>kubeops.operator.queue.depth</c> gauge that emits one measurement per entity type and
+    /// <c>kubeops.queue.state</c> (<c>scheduled</c> = delayed, not yet ready; <c>ready</c> = ready to reconcile).
     /// </summary>
     /// <param name="entityType">The watched entity type name.</param>
     /// <param name="scheduledDepth">A callback returning the number of scheduled (delayed) entries.</param>
@@ -191,10 +191,10 @@ public sealed class OperatorMetrics
 
             yield return new Measurement<int>(
                 scheduled,
-                new TagList { { EntityTypeTag, entityType }, { "state", "scheduled" } });
+                new TagList { { EntityTypeTag, entityType }, { "kubeops.queue.state", "scheduled" } });
             yield return new Measurement<int>(
                 ready,
-                new TagList { { EntityTypeTag, entityType }, { "state", "ready" } });
+                new TagList { { EntityTypeTag, entityType }, { "kubeops.queue.state", "ready" } });
         }
     }
 

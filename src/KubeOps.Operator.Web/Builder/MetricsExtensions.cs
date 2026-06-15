@@ -13,42 +13,45 @@ using OpenTelemetry.Metrics;
 namespace KubeOps.Operator.Web.Builder;
 
 /// <summary>
-/// Convenience extensions that wire up an OpenTelemetry Prometheus exporter for the operator's
-/// metrics and expose the scraping endpoint via ASP.NET Core.
+/// Convenience extensions that subscribe an OpenTelemetry meter provider to the operator's metrics
+/// and expose the Prometheus scraping endpoint via ASP.NET Core. The operator records its metrics on
+/// a <see cref="System.Diagnostics.Metrics.Meter"/> named after <see cref="OperatorSettings.Name"/>.
 /// </summary>
 public static class MetricsExtensions
 {
     /// <summary>
-    /// Registers an OpenTelemetry meter provider that exports the operator's metrics
-    /// (meter named after <see cref="OperatorSettings.Name"/>) via the Prometheus exporter.
-    /// Call <see cref="MapOperatorMetricsEndpoint"/> on the web application to expose the
-    /// scraping endpoint.
+    /// Subscribes the meter provider to the operator's metrics. The operator name is resolved from
+    /// the registered <see cref="OperatorSettings"/>, so <c>AddKubernetesOperator()</c> must have run
+    /// on the same service collection. Use <see cref="AddKubeOpsInstrumentation(MeterProviderBuilder, string)"/>
+    /// to pass the name explicitly.
     /// </summary>
-    /// <param name="builder">The operator builder.</param>
+    /// <param name="builder">The meter provider builder.</param>
     /// <returns>The builder for chaining.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when <c>OperatorSettings.EnableMetrics</c> is disabled. Wiring up the exporter while the
-    /// operator records no measurements is a misconfiguration, so this fails fast.
-    /// </exception>
-    public static IOperatorBuilder AddOperatorMetrics(this IOperatorBuilder builder)
+    public static MeterProviderBuilder AddKubeOpsInstrumentation(this MeterProviderBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        if (!builder.Settings.EnableMetrics)
+        if (builder is IDeferredMeterProviderBuilder deferred)
         {
-            throw new InvalidOperationException(
-                "AddOperatorMetrics() requires metrics collection to be enabled, but " +
-                "OperatorSettings.EnableMetrics is false. Enable it via WithMetrics() (the default) " +
-                "or remove the AddOperatorMetrics() call.");
+            return deferred.Configure((sp, b) =>
+                b.AddMeter(sp.GetRequiredService<OperatorSettings>().Name));
         }
 
-        builder.Services
-            .AddOpenTelemetry()
-            .WithMetrics(metrics => metrics
-                .AddMeter(builder.Settings.Name)
-                .AddPrometheusExporter());
-
         return builder;
+    }
+
+    /// <summary>
+    /// Subscribes the meter provider to the operator's metrics using an explicit operator name.
+    /// </summary>
+    /// <param name="builder">The meter provider builder.</param>
+    /// <param name="operatorName">The operator name (must equal <see cref="OperatorSettings.Name"/>).</param>
+    /// <returns>The builder for chaining.</returns>
+    public static MeterProviderBuilder AddKubeOpsInstrumentation(this MeterProviderBuilder builder, string operatorName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(operatorName);
+
+        return builder.AddMeter(operatorName);
     }
 
     /// <summary>

@@ -23,10 +23,10 @@ public sealed class OperatorMetricsTest
         harness.Metrics.RecordEnqueue("V1Secret", "api_server");
 
         var measurement = harness.LongMeasurements.Should().ContainSingle().Subject;
-        measurement.Instrument.Should().Be("operator.queue.enqueued");
+        measurement.Instrument.Should().Be("kubeops.operator.queue.enqueued");
         measurement.Value.Should().Be(1);
-        measurement.Tags.Should().Contain("entity.type", "V1Secret");
-        measurement.Tags.Should().Contain("trigger.source", "api_server");
+        measurement.Tags.Should().Contain("kubeops.entity.type", "V1Secret");
+        measurement.Tags.Should().Contain("kubeops.trigger.source", "api_server");
     }
 
     [Theory]
@@ -40,8 +40,8 @@ public sealed class OperatorMetricsTest
         harness.Metrics.RecordRequeue("V1Secret", reason);
 
         var measurement = harness.LongMeasurements.Should().ContainSingle().Subject;
-        measurement.Instrument.Should().Be("operator.queue.requeued");
-        measurement.Tags.Should().Contain("requeue.reason", reason);
+        measurement.Instrument.Should().Be("kubeops.operator.queue.requeued");
+        measurement.Tags.Should().Contain("kubeops.requeue.reason", reason);
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class OperatorMetricsTest
         harness.Metrics.RecordDiscard("V1Secret");
 
         harness.LongMeasurements.Should().ContainSingle()
-            .Which.Instrument.Should().Be("operator.queue.discarded");
+            .Which.Instrument.Should().Be("kubeops.operator.queue.discarded");
     }
 
     [Fact]
@@ -63,13 +63,13 @@ public sealed class OperatorMetricsTest
         harness.Metrics.RecordReconciliation("V1Secret", "modified", "success", 1.5);
 
         harness.LongMeasurements.Should().ContainSingle()
-            .Which.Instrument.Should().Be("operator.reconciliation");
+            .Which.Instrument.Should().Be("kubeops.operator.reconciliation");
 
         var duration = harness.DoubleMeasurements.Should().ContainSingle().Subject;
-        duration.Instrument.Should().Be("operator.reconciliation.duration");
+        duration.Instrument.Should().Be("kubeops.operator.reconciliation.duration");
         duration.Value.Should().Be(1.5);
-        duration.Tags.Should().Contain("reconciliation.type", "modified");
-        duration.Tags.Should().Contain("status", "success");
+        duration.Tags.Should().Contain("kubeops.reconciliation.type", "modified");
+        duration.Tags.Should().Contain("kubeops.reconciliation.status", "success");
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public sealed class OperatorMetricsTest
         harness.Metrics.RecordReconciliation("V1Secret", "added", "failure", 0.2, "System.TimeoutException");
 
         var measurement = harness.LongMeasurements.Should().ContainSingle().Subject;
-        measurement.Tags.Should().Contain("status", "failure");
+        measurement.Tags.Should().Contain("kubeops.reconciliation.status", "failure");
         measurement.Tags.Should().Contain("error.type", "System.TimeoutException");
     }
 
@@ -105,12 +105,12 @@ public sealed class OperatorMetricsTest
         harness.Listener.RecordObservableInstruments();
 
         var depth = harness.IntMeasurements
-            .Where(m => m.Instrument == "operator.queue.depth")
+            .Where(m => m.Instrument == "kubeops.operator.queue.depth")
             .ToList();
 
         // 2 entity types x 2 states, all on the single shared instrument.
         depth.Should().HaveCount(4);
-        depth.Select(m => (string?)m.Tags["entity.type"]).Distinct().Should()
+        depth.Select(m => (string?)m.Tags["kubeops.entity.type"]).Distinct().Should()
             .BeEquivalentTo("V1Secret", "V1ConfigMap");
     }
 
@@ -127,12 +127,12 @@ public sealed class OperatorMetricsTest
         harness.Listener.RecordObservableInstruments();
 
         var depth = harness.IntMeasurements
-            .Where(m => m.Instrument == "operator.queue.depth")
+            .Where(m => m.Instrument == "kubeops.operator.queue.depth")
             .ToList();
 
         // Only the healthy provider's two measurements are reported; the disposed one is skipped.
         depth.Should().HaveCount(2);
-        depth.Should().OnlyContain(m => (string?)m.Tags["entity.type"] == "V1Healthy");
+        depth.Should().OnlyContain(m => (string?)m.Tags["kubeops.entity.type"] == "V1Healthy");
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public sealed class OperatorMetricsTest
         harness.Metrics.RecordWatcherReconnection("V1Secret");
 
         harness.LongMeasurements.Select(m => m.Instrument).Should()
-            .BeEquivalentTo("operator.watcher.events", "operator.watcher.reconnections");
+            .BeEquivalentTo("kubeops.operator.watcher.events", "kubeops.operator.watcher.reconnections");
     }
 
     [Fact]
@@ -156,14 +156,14 @@ public sealed class OperatorMetricsTest
         harness.Listener.RecordObservableInstruments();
 
         var depthMeasurements = harness.IntMeasurements
-            .Where(m => m.Instrument == "operator.queue.depth")
+            .Where(m => m.Instrument == "kubeops.operator.queue.depth")
             .ToList();
 
         depthMeasurements.Should().HaveCount(2);
         depthMeasurements.Should().ContainSingle(m =>
-            m.Value == 3 && (string?)m.Tags["state"] == "scheduled");
+            m.Value == 3 && (string?)m.Tags["kubeops.queue.state"] == "scheduled");
         depthMeasurements.Should().ContainSingle(m =>
-            m.Value == 5 && (string?)m.Tags["state"] == "ready");
+            m.Value == 5 && (string?)m.Tags["kubeops.queue.state"] == "ready");
     }
 
     private sealed record CapturedMeasurement<T>(string Instrument, T Value, IReadOnlyDictionary<string, object?> Tags);

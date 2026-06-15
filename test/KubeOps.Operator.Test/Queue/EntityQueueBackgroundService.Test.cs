@@ -117,7 +117,7 @@ public sealed class EntityQueueBackgroundServiceTest
         {
             InstrumentPublished = (instrument, l) =>
             {
-                if (instrument.Meter.Name == meterName && instrument.Name == "operator.reconciliation")
+                if (instrument.Meter.Name == meterName && instrument.Name == "kubeops.operator.reconciliation")
                 {
                     l.EnableMeasurementEvents(instrument);
                 }
@@ -129,7 +129,7 @@ public sealed class EntityQueueBackgroundServiceTest
             string? errorType = null;
             foreach (var tag in tags)
             {
-                if (tag.Key == "status")
+                if (tag.Key == "kubeops.reconciliation.status")
                 {
                     status = tag.Value as string;
                 }
