@@ -19,8 +19,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Hosting" Version="13.4.3" />
-        <PackageReference Include="Aspire.Hosting.Kubernetes" Version="13.4.3-preview.1.26305.13" />
+        <PackageReference Include="Aspire.Hosting" Version="13.4.4" />
+        <PackageReference Include="Aspire.Hosting.Kubernetes" Version="13.4.4-preview.1.26314.3" />
         <PackageReference Include="YamlDotNet" Version="18.0.0" />
         <!-- Pin transitive MessagePack (via Aspire.Hosting -> StreamJsonRpc) to a version
              without GHSA-hv8m-jj95-wg3x. Remove once Aspire ships a fixed StreamJsonRpc. -->
