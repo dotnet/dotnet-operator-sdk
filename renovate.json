@@ -71,6 +71,13 @@
       "matchPackageNames": ["Aspire.Hosting.Kubernetes"],
       "ignoreUnstable": false,
       "respectLatest": false
+    },
+    {
+      "description": ["OpenTelemetry.Exporter.Prometheus.AspNetCore only ships prerelease versions, so allow unstable updates for it."],
+      "matchManagers": ["nuget"],
+      "matchPackageNames": ["OpenTelemetry.Exporter.Prometheus.AspNetCore"],
+      "ignoreUnstable": false,
+      "respectLatest": false
     }
   ]
 }

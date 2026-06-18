@@ -12,6 +12,7 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Logging;
+using KubeOps.Operator.Metrics;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -65,7 +66,8 @@ public class EntityQueueBackgroundService<TEntity>(
     OperatorSettings operatorSettings,
     ITimedEntityQueue<TEntity> queue,
     IReconciler<TEntity> reconciler,
-    ILogger<EntityQueueBackgroundService<TEntity>> logger) : IHostedService, IDisposable, IAsyncDisposable
+    ILogger<EntityQueueBackgroundService<TEntity>> logger,
+    OperatorMetrics? metrics = null) : IHostedService, IDisposable, IAsyncDisposable
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private readonly ConcurrentDictionary<string, UidEntry> _uidEntries = new();
@@ -295,6 +297,7 @@ public class EntityQueueBackgroundService<TEntity>(
                 await uidEntry.Semaphore.WaitAsync(cancellationToken);
             }
 
+            var stopwatch = Stopwatch.StartNew();
             try
             {
                 logger
@@ -304,6 +307,13 @@ public class EntityQueueBackgroundService<TEntity>(
 
                 var result = await ReconcileSingleAsync(entry, cancellationToken);
 
+                metrics?.RecordReconciliation(
+                    typeof(TEntity).Name,
+                    entry.ReconciliationType.ToMetricString(),
+                    result.IsSuccess ? "success" : "failure",
+                    stopwatch.Elapsed.TotalSeconds,
+                    result.IsSuccess ? null : result.Error?.GetType().FullName ?? "_OTHER");
+
                 logger
                     .LogInformation(
                         """Completed reconciliation for "{Identifier}" {State}.""",
@@ -311,6 +321,16 @@ public class EntityQueueBackgroundService<TEntity>(
                         result.IsSuccess
                             ? "successfully"
                             : "with failures");
+            }
+            catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                metrics?.RecordReconciliation(
+                    typeof(TEntity).Name,
+                    entry.ReconciliationType.ToMetricString(),
+                    "failure",
+                    stopwatch.Elapsed.TotalSeconds,
+                    e.GetType().FullName);
+                throw;
             }
             finally
             {
@@ -358,6 +378,8 @@ public class EntityQueueBackgroundService<TEntity>(
                     delay,
                     nextRetryCount,
                     CancellationToken.None);
+
+                metrics?.RecordRequeue(typeof(TEntity).Name, "error_retry");
             }
             else
             {
@@ -388,6 +410,7 @@ public class EntityQueueBackgroundService<TEntity>(
                     .LogDebug(
                         """Entity "{Identifier}" is already being reconciled. Discarding request.""",
                         entry.Entity.ToIdentifierString());
+                metrics?.RecordDiscard(typeof(TEntity).Name);
                 break;
 
             case ParallelReconciliationConflictStrategy.RequeueAfterDelay:
@@ -405,6 +428,8 @@ public class EntityQueueBackgroundService<TEntity>(
                     requeueDelay,
                     retryCount: 0,
                     cancellationToken);
+
+                metrics?.RecordRequeue(typeof(TEntity).Name, "conflict");
                 break;
 
             default:
