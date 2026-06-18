@@ -85,6 +85,11 @@ To enable scopes with OpenTelemetry, configure it as follows:
 The scope state must be an `IReadOnlyDictionary<string, object?>` to ensure correct serialization and inclusion in log entries.
 :::
 
+:::tip
+Besides tracing, the operator also emits OpenTelemetry **metrics** for its reconciliation pipeline
+(queue depth, reconciliation count/duration, watch events, and more). See [Metrics](./metrics).
+:::
+
 ## Tracing with `System.Diagnostics` and `ActivitySource`
 
 For [distributed tracing](https://learn.microsoft.com/en-us/dotnet/core/diagnostics/distributed-tracing-concepts), this project uses `System.Diagnostics` in combination with `ActivitySource`.

@@ -1,0 +1,147 @@
+---
+title: Metrics
+description: OpenTelemetry metrics for the operator pipeline
+sidebar_position: 6.5
+---
+
+# Metrics
+
+KubeOps emits [OpenTelemetry](https://opentelemetry.io/) metrics for its reconciliation pipeline
+through a [`Meter`](https://learn.microsoft.com/dotnet/core/diagnostics/metrics) named after the
+operator (`OperatorSettings.Name`) — the same identifier used for the tracing `ActivitySource`.
+
+Collecting metrics is enabled by default and is virtually free when no exporter is attached. To
+actually scrape the data you register an OpenTelemetry exporter for the meter.
+
+## Enabling / disabling
+
+Metrics collection is controlled by `OperatorSettings.EnableMetrics` (default `true`). Disable it via
+the fluent builder:
+
+```csharp
+builder.Services.AddKubernetesOperator(settings => settings
+    .WithMetrics(false));
+```
+
+When disabled, the metrics infrastructure is not registered and the instrumentation in the watcher,
+queue, and reconciler is skipped entirely.
+
+## Instruments
+
+All instruments carry a `kubeops.entity.type` tag (the watched entity's type name, e.g. `V1MyResource`).
+
+| Name | Type | Unit | Additional tags |
+|------|------|------|-----------------|
+| `kubeops.operator.queue.depth` | ObservableGauge | `{items}` | `kubeops.queue.state` (`scheduled` \| `ready`) |
+| `kubeops.operator.queue.enqueued` | Counter | `{items}` | `kubeops.trigger.source` (`api_server` \| `operator`) |
+| `kubeops.operator.queue.requeued` | Counter | `{items}` | `kubeops.requeue.reason` (`conflict` \| `error_retry` \| `operator_requeue`) |
+| `kubeops.operator.queue.discarded` | Counter | `{items}` | — |
+| `kubeops.operator.reconciliation` | Counter | `{reconciliations}` | `kubeops.reconciliation.type` (`added` \| `modified` \| `deleted`), `kubeops.reconciliation.status` (`success` \| `failure`), `error.type` (on failure) |
+| `kubeops.operator.reconciliation.duration` | Histogram | `s` | `kubeops.reconciliation.type`, `kubeops.reconciliation.status`, `error.type` (on failure) |
+| `kubeops.operator.watcher.events` | Counter | `{events}` | `kubeops.watcher.event.type` (`added` \| `modified` \| `deleted` \| `bookmark`) |
+| `kubeops.operator.watcher.reconnections` | Counter | `{reconnections}` | — |
+
+The `kubeops.operator.queue.depth` gauge reports two series: `scheduled` (entries waiting for a delayed
+requeue) and `ready` (entries waiting to be picked up by the reconciliation loop).
+
+:::note
+`kubeops.operator.queue.requeued` is a **subset** of `kubeops.operator.queue.enqueued`: every requeue (conflict,
+error-retry, or operator requeue) also increments the enqueued counter. Do not add the two together
+when building dashboards — use `requeued` for the per-reason breakdown of requeues only.
+
+The `kubeops.trigger.source` tag on `kubeops.operator.queue.enqueued` reflects the *original* event source. An
+error-retry therefore keeps its original source (e.g. `api_server`) rather than `operator`; use
+`kubeops.operator.queue.requeued{kubeops.requeue.reason="error_retry"}` to count retries explicitly.
+:::
+
+:::note
+The queue runs side-by-side with the watcher rather than strictly in front of the reconciler, so the
+queue instruments give a good — but not exhaustive — view of throughput. See
+[issue #1037](https://github.com/dotnet/dotnet-operator-sdk/issues/1037) for context.
+:::
+
+The `error.type` attribute is only present on **failed** reconciliations and carries the failing
+exception's full type name (or `_OTHER` when a reconciliation reports failure without an exception).
+It follows the OpenTelemetry `error.type` convention and is bounded by the set of exception types your
+controllers throw.
+
+The `kubeops.operator.reconciliation.duration` histogram uses second-scale bucket boundaries
+(`5ms … 60s`) tuned for typical reconcile latencies, so `histogram_quantile()` over
+`kubeops_operator_reconciliation_duration_seconds_bucket` yields meaningful percentiles out of the box.
+
+### Prometheus exposition names
+
+The instrument names above are the OpenTelemetry names. The Prometheus exporter translates them
+(dots → underscores, `_total` suffix for counters, unit suffix for the histogram, UCUM annotation
+units such as `{items}` dropped). The scrape endpoint therefore exposes:
+
+| OpenTelemetry instrument | Prometheus time series |
+|---|---|
+| `kubeops.operator.queue.depth` | `kubeops_operator_queue_depth` |
+| `kubeops.operator.queue.enqueued` | `kubeops_operator_queue_enqueued_total` |
+| `kubeops.operator.queue.requeued` | `kubeops_operator_queue_requeued_total` |
+| `kubeops.operator.queue.discarded` | `kubeops_operator_queue_discarded_total` |
+| `kubeops.operator.reconciliation` | `kubeops_operator_reconciliation_total` |
+| `kubeops.operator.reconciliation.duration` | `kubeops_operator_reconciliation_duration_seconds` (`_bucket` / `_sum` / `_count`) |
+| `kubeops.operator.watcher.events` | `kubeops_operator_watcher_events_total` |
+| `kubeops.operator.watcher.reconnections` | `kubeops_operator_watcher_reconnections_total` |
+
+## Exposing a Prometheus endpoint (KubeOps.Operator.Web)
+
+Metrics export is configured through the standard OpenTelemetry pipeline, separate from the operator
+registration chain. `KubeOps.Operator.Web` provides two helpers: `AddKubeOpsInstrumentation()` on the
+`MeterProviderBuilder` subscribes to the operator's meter (the operator name is resolved from the
+registered `OperatorSettings`, so you don't have to repeat it), and `MapOperatorMetricsEndpoint()`
+exposes the Prometheus scraping endpoint:
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services
+    .AddKubernetesOperator()
+    .RegisterComponents();
+
+// NuGet: OpenTelemetry.Extensions.Hosting
+builder.Services
+    .AddOpenTelemetry()
+    .WithMetrics(m => m
+        .AddKubeOpsInstrumentation()    // subscribes to the operator meter
+        .AddPrometheusExporter());
+
+var app = builder.Build();
+app.UseRouting();
+app.MapControllers();
+app.MapOperatorMetricsEndpoint();       // exposes GET /metrics
+
+app.Run();
+```
+
+Pass the name explicitly with `AddKubeOpsInstrumentation(operatorName)` if `AddKubernetesOperator()`
+has not run yet on the same service collection.
+
+## Manual exporter configuration
+
+Without `KubeOps.Operator.Web` you can register any OpenTelemetry exporter yourself. Add the meter by
+the operator name (`== OperatorSettings.Name`) and pick an exporter:
+
+```csharp
+// Standalone HttpListener (no ASP.NET Core)
+// NuGet: OpenTelemetry.Exporter.Prometheus.HttpListener
+.WithMetrics(m => m
+    .AddMeter(operatorName)
+    .AddPrometheusHttpListener(o => o.UriPrefixes = ["http://+:9464/"]));
+// 9464 is the Prometheus convention for the metrics scrape port.
+```
+
+```csharp
+// OTLP to an OpenTelemetry Collector
+// NuGet: OpenTelemetry.Exporter.OpenTelemetryProtocol
+.WithMetrics(m => m
+    .AddMeter(operatorName)
+    .AddOtlpExporter());
+```
+
+:::tip
+If you already use [.NET Aspire](./aspire) via `KubeOps.Aspire`, the meter is picked up automatically
+by `AddKubeOpsServiceDefaults`, which configures OpenTelemetry with OTLP export.
+:::

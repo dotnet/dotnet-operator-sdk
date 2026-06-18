@@ -150,6 +150,17 @@ public static class OperatorSettingsBuilderExtensions
         return builder;
     }
 
+    /// <summary>Sets whether the operator collects OpenTelemetry metrics.</summary>
+    /// <param name="builder">The builder to configure.</param>
+    /// <param name="value"><c>true</c> to collect metrics (default); <c>false</c> to disable.</param>
+    /// <returns>The same <paramref name="builder"/> instance for chaining.</returns>
+    public static OperatorSettingsBuilder WithMetrics(
+        this OperatorSettingsBuilder builder, bool value = true)
+    {
+        builder.EnableMetrics = value;
+        return builder;
+    }
+
     /// <summary>Configures parallel reconciliation settings inline via a delegate.</summary>
     /// <param name="builder">The builder to configure.</param>
     /// <param name="configure">An action that configures the <see cref="ParallelReconciliationSettingsBuilder"/>.</param>

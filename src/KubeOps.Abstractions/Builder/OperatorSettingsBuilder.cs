@@ -107,6 +107,13 @@ public sealed partial class OperatorSettingsBuilder
     public ParallelReconciliationSettingsBuilder ParallelReconciliation { get; set; } = new();
 
     /// <summary>
+    /// Indicates whether the operator collects OpenTelemetry metrics. Defaults to <c>true</c>.
+    /// Collecting is virtually free without an attached listener/exporter; set to <c>false</c> to
+    /// skip registering the metrics infrastructure entirely.
+    /// </summary>
+    public bool EnableMetrics { get; set; } = true;
+
+    /// <summary>
     /// Produces an immutable <see cref="OperatorSettings"/> record from the current configuration.
     /// </summary>
     /// <returns>A fully initialised <see cref="OperatorSettings"/> record.</returns>
@@ -124,6 +131,7 @@ public sealed partial class OperatorSettingsBuilder
         AutoDetachFinalizers = AutoDetachFinalizers,
         ReconcileStrategy = ReconcileStrategy,
         ParallelReconciliation = ParallelReconciliation.Build(),
+        EnableMetrics = EnableMetrics,
     };
 
     [GeneratedRegex(@"(\W|_)", RegexOptions.CultureInvariant)]
