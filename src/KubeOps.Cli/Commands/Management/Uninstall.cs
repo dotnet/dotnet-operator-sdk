@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using System.CommandLine;
-using System.CommandLine.Invocation;
 
 using k8s;
 using k8s.Autorest;
@@ -62,7 +61,7 @@ internal static class Uninstall
         };
 
         console.WriteLine($"Uninstall CRDs from {file.Name}.");
-        var crds = parser.Transpile(parser.GetEntities()).ToList();
+        var crds = parser.Transpile(parser.GetEntities(), parser.GetInheritedAttributeResolver()).ToList();
         if (crds.Count == 0)
         {
             console.WriteLine("No CRDs found. Exiting.");

@@ -137,7 +137,7 @@ public class EntitySpec
 - `[RangeMinimum]` and `[RangeMaximum]`: Defines numeric value ranges
 - `[MultipleOf]`: Specifies that a number must be a multiple of a given value
 - `[Items]`: Defines minimum and maximum items for arrays
-- `[ValidationRule]`: Defines custom validation rules using CEL expressions. Can be applied to properties and to class types — in both cases it emits `x-kubernetes-validations` on the corresponding schema node. When applied to both a class and a property of that type, the rules are merged (class rules first, then property rules)
+- `[ValidationRule]`: Defines custom validation rules using CEL expressions. Can be applied to properties and to class types — in both cases it emits `x-kubernetes-validations` on the corresponding schema node. When applied to both a class and a property of that type, the rules are merged (class rules first, then property rules). Class-level rules are also collected across the **class inheritance chain**: a rule placed on a base class is inherited by every derived entity or nested type, and all rules found along the chain are merged onto the schema node
 
 ### Documentation Attributes
 
@@ -152,8 +152,12 @@ public class EntitySpec
 ### Special Attributes
 
 - `[Ignore]`: Excludes a property or entity from CRD generation
-- `[PreserveUnknownFields]`: Preserves unknown fields in the Kubernetes object
-- `[EmbeddedResource]`: Marks a property as an embedded Kubernetes resource
+- `[PreserveUnknownFields]`: Allows unknown fields on the annotated object (`x-kubernetes-preserve-unknown-fields: true`). The known fields are still transpiled and validated, so you keep a structural schema for what you model while permitting extra fields. Works the same whether placed on a property or on a class/type: if the type cannot be represented (it contains a circular reference or an otherwise non-transpilable member), it gracefully falls back to an opaque `type: object` with `x-kubernetes-preserve-unknown-fields: true` instead of failing — making this the recommended way to model complex, externally generated, or self-referencing types.
+- `[EmbeddedResource]`: Marks a property as an embedded Kubernetes resource. The property type is never traversed; the schema is always an opaque embedded `type: object`.
+
+:::note
+The CRD transpiler maps property types recursively. A **circular type reference** that is not opted out via `[PreserveUnknownFields]` or `[Ignore]` cannot be represented as a finite OpenAPI schema and raises a descriptive `TranspilationFailedException` during generation. Annotate the offending property or type with `[PreserveUnknownFields]` or `[Ignore]`, or restructure the type to remove the cycle.
+:::
 
 ## Example with Multiple Attributes
 
@@ -190,6 +194,25 @@ public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec
         public DateTime LastUpdated { get; set; }
     }
 }
+```
+
+## Attribute Inheritance
+
+CRD-shaping attributes are collected across the **class inheritance chain**. An attribute placed on a base class is picked up by every derived entity, so shared CRD configuration can live on a common base type.
+
+You can also create **reusable, named attributes** by subclassing an existing attribute and forwarding the values to its base constructor:
+
+```csharp
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+public sealed class ReadyPrinterColumnAttribute : GenericAdditionalPrinterColumnAttribute
+{
+    public ReadyPrinterColumnAttribute()
+        : base(".status.conditions[?(@.type==\"Ready\")].status", "Ready", "string") { }
+}
+
+[KubernetesEntity(Group = "demo.kubeops.dev", ApiVersion = "v1", Kind = "DemoEntity")]
+[ReadyPrinterColumn]
+public class V1DemoEntity : CustomKubernetesEntity { }
 ```
 
 ## Scale Subresource

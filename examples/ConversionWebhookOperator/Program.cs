@@ -2,16 +2,28 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+#if DEBUG
 using System.Net;
+#endif
 
 using KubeOps.Operator;
+
+#if DEBUG
 using KubeOps.Operator.Web.Builder;
 using KubeOps.Operator.Web.Certificates;
+#endif
 
 var builder = WebApplication.CreateBuilder(args);
+
+#if !DEBUG
+builder.Services
+    .AddKubernetesOperator()
+    .RegisterComponents();
+#else
 var opBuilder = builder.Services
     .AddKubernetesOperator()
     .RegisterComponents();
+#endif
 
 #if DEBUG
 const string ip = "192.168.1.100";

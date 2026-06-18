@@ -8,7 +8,6 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Reconciliation;
-using KubeOps.Abstractions.Reconciliation.Queue;
 
 namespace KubeOps.Operator.Logging;
 

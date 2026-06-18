@@ -4,7 +4,7 @@
 
 using System.Text;
 
-using KubeOps.Generator.SyntaxReceiver;
+using KubeOps.Generator.Discovery;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -16,20 +16,15 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace KubeOps.Generator.Generators;
 
 [Generator]
-internal sealed class EntityDefinitionGenerator : ISourceGenerator
+internal sealed class EntityDefinitionGenerator : IIncrementalGenerator
 {
-    public void Initialize(GeneratorInitializationContext context)
+    public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        context.RegisterForSyntaxNotifications(() => new KubernetesEntitySyntaxReceiver());
+        context.RegisterSourceOutput(EntityDiscovery.GetEntities(context), Execute);
     }
 
-    public void Execute(GeneratorExecutionContext context)
+    private static void Execute(SourceProductionContext context, EquatableArray<AttributedEntity> entities)
     {
-        if (context.SyntaxContextReceiver is not KubernetesEntitySyntaxReceiver receiver)
-        {
-            return;
-        }
-
         var declaration = CompilationUnit()
             .WithUsings(
                 List(
@@ -43,7 +38,7 @@ internal sealed class EntityDefinitionGenerator : ISourceGenerator
                 .WithModifiers(TokenList(
                     Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)))
                 .WithMembers(
-                    List<MemberDeclarationSyntax>(receiver.Entities
+                    List<MemberDeclarationSyntax>(entities
                         .OrderBy(e => e.ClassDeclaration.FullyQualifiedName, StringComparer.Ordinal)
                         .Select(e => FieldDeclaration(
                             VariableDeclaration(

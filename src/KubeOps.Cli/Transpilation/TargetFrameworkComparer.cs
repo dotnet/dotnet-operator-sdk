@@ -9,7 +9,7 @@ namespace KubeOps.Cli.Transpilation;
 /// <summary>
 /// Tfm Comparer.
 /// </summary>
-internal sealed partial class TfmComparer : IComparer<string>
+internal sealed partial class TargetFrameworkComparer : IComparer<string>
 {
     [GeneratedRegex(
         "[(]?(?<tfm>(?<n>(netcoreapp|net|netstandard){1})(?<major>[0-9]+)[.](?<minor>[0-9]+))[)]?",

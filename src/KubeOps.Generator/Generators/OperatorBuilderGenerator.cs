@@ -14,15 +14,16 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace KubeOps.Generator.Generators;
 
 [Generator]
-internal sealed class OperatorBuilderGenerator : ISourceGenerator
+internal sealed class OperatorBuilderGenerator : IIncrementalGenerator
 {
     private const string BuilderIdentifier = "builder";
 
-    public void Initialize(GeneratorInitializationContext context)
+    public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        context.RegisterPostInitializationOutput(Execute);
     }
 
-    public void Execute(GeneratorExecutionContext context)
+    private static void Execute(IncrementalGeneratorPostInitializationContext context)
     {
         var declaration = CompilationUnit()
             .WithUsings(

@@ -11,7 +11,7 @@ using KubeOps.Abstractions.Entities.Attributes;
 
 namespace KubeOps.Transpiler.Test;
 
-public class EntitiesTest
+public sealed class EntitiesTest
 {
     [Theory]
     [InlineData(typeof(NamespaceEntity), "Namespaced", "namespaceentity", "namespaceentities", "testing.dev/v1")]

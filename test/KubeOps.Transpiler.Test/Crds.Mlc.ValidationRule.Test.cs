@@ -22,6 +22,7 @@ public sealed partial class CrdsMlcTest
     private const string Rule2 = "has(self.workflow) || self.kind != 'my-workflow";
     private const string Message2 = "workflow must be specified if handling is workflow";
 
+    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_Validations()
     {
@@ -36,6 +37,7 @@ public sealed partial class CrdsMlcTest
         specProperties.XKubernetesValidations[0].Reason.Should().BeNull();
     }
 
+    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_MultipleValidations()
     {
@@ -55,6 +57,7 @@ public sealed partial class CrdsMlcTest
         specProperties.XKubernetesValidations[1].Reason.Should().BeNull();
     }
 
+    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Omit_Validations()
     {
@@ -64,6 +67,7 @@ public sealed partial class CrdsMlcTest
         specProperties.XKubernetesValidations.Should().BeNull();
     }
 
+    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_Validations_On_Root_Class()
     {
@@ -78,6 +82,7 @@ public sealed partial class CrdsMlcTest
         schema.XKubernetesValidations[0].Reason.Should().BeNull();
     }
 
+    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_Multiple_Validations_On_Root_Class()
     {
@@ -89,6 +94,7 @@ public sealed partial class CrdsMlcTest
         schema.XKubernetesValidations[1].Rule.Should().Be(Rule2);
     }
 
+    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_Validations_On_Nested_Class()
     {
@@ -100,6 +106,7 @@ public sealed partial class CrdsMlcTest
         nestedSchema.XKubernetesValidations[0].Message.Should().Be(Message1);
     }
 
+    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Merge_Class_And_Property_Validations()
     {
@@ -111,6 +118,29 @@ public sealed partial class CrdsMlcTest
         nestedSchema.XKubernetesValidations[1].Rule.Should().Be(Rule2);
     }
 
+    [Trait("Area", "ValidationRule")]
+    [Fact]
+    public void Should_Inherit_And_Merge_Class_Validations_From_Base_Entity()
+    {
+        var crd = _mlc.Transpile(typeof(DerivedClassValidateAttrEntity));
+
+        var schema = crd.Spec.Versions[0].Schema.OpenAPIV3Schema;
+        schema.XKubernetesValidations.Should().HaveCount(2);
+        schema.XKubernetesValidations.Select(v => v.Rule).Should().Contain([Rule1, Rule2]);
+    }
+
+    [Trait("Area", "ValidationRule")]
+    [Fact]
+    public void Should_Inherit_And_Merge_Class_Validations_On_Nested_Class()
+    {
+        var crd = _mlc.Transpile(typeof(NestedDerivedClassValidateAttrEntity));
+
+        var nestedSchema = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["nested"];
+        nestedSchema.XKubernetesValidations.Should().HaveCount(2);
+        nestedSchema.XKubernetesValidations.Select(v => v.Rule).Should().Contain([Rule1, Rule2]);
+    }
+
+    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_ValidationFields()
     {
@@ -170,6 +200,35 @@ public sealed partial class CrdsMlcTest
         public sealed class NestedWithClassRule
         {
             public string Name { get; set; } = null!;
+        }
+    }
+
+    [ValidationRule(Rule1, message: Message1)]
+    public abstract class BaseValidateAttrEntity : CustomKubernetesEntity
+    {
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    [ValidationRule(Rule2, message: Message2)]
+    public sealed class DerivedClassValidateAttrEntity : BaseValidateAttrEntity
+    {
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public sealed class NestedDerivedClassValidateAttrEntity : CustomKubernetesEntity
+    {
+        public DerivedNestedObject Nested { get; set; } = new();
+
+        [ValidationRule(Rule1, message: Message1)]
+        public abstract class BaseNestedObject
+        {
+            public string Name { get; set; } = null!;
+        }
+
+        [ValidationRule(Rule2, message: Message2)]
+        public sealed class DerivedNestedObject : BaseNestedObject
+        {
         }
     }
 
