@@ -114,6 +114,13 @@ public sealed partial class OperatorSettingsBuilder
     public bool EnableMetrics { get; set; } = true;
 
     /// <summary>
+    /// Indicates whether the operator validates, on host startup, that its dependency injection
+    /// registrations are complete and consistent with the configuration. Disabled by default. See
+    /// <see cref="OperatorSettings.ValidateRegistrations"/> for details.
+    /// </summary>
+    public bool ValidateRegistrations { get; set; }
+
+    /// <summary>
     /// Produces an immutable <see cref="OperatorSettings"/> record from the current configuration.
     /// </summary>
     /// <returns>A fully initialised <see cref="OperatorSettings"/> record.</returns>
@@ -132,6 +139,7 @@ public sealed partial class OperatorSettingsBuilder
         ReconcileStrategy = ReconcileStrategy,
         ParallelReconciliation = ParallelReconciliation.Build(),
         EnableMetrics = EnableMetrics,
+        ValidateRegistrations = ValidateRegistrations,
     };
 
     [GeneratedRegex(@"(\W|_)", RegexOptions.CultureInvariant)]

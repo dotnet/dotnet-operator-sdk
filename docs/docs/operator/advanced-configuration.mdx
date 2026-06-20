@@ -250,6 +250,33 @@ builder.Services
 - **Geographic Distribution**: Route requests to instances in specific regions
 - **Load Balancing**: Distribute work across multiple instances
 
+## Registration Validation
+
+The operator can verify, on host startup, that its service registrations are complete and consistent with
+the configured `LeaderElectionType` and `QueueStrategy`. This is **disabled by default**; enable it with:
+
+```csharp
+builder.Services.AddKubernetesOperator(settings => settings
+    .WithRegistrationValidation());
+```
+
+When enabled, every managed entity is checked for the components its configuration requires. If anything
+is missing, host startup aborts with an `InvalidRegistrationException` that lists the gaps — turning a
+silent misconfiguration (an operator that starts but processes nothing) into an immediate, actionable
+error.
+
+Most registrations are wired up by the SDK automatically, so validation simply passes. It is most useful
+when you register components yourself — for example with `LeaderElectionType.Custom`, where the watcher
+and queue consumer are your responsibility — and a forgotten registration would otherwise go unnoticed.
+It also flags entities that have a finalizer but no controller, since finalizers run as part of
+reconciliation and need a controller to execute.
+
+:::note
+Components are recognized by deriving from the SDK base types (`ResourceWatcher<TEntity>` /
+`EntityQueueBackgroundService<TEntity>`). Keep validation disabled if you replace these with
+implementations that do not derive from them.
+:::
+
 ## Queue Strategy
 
 KubeOps uses an internal queue to schedule and dispatch reconciliation work. The queue buffers events

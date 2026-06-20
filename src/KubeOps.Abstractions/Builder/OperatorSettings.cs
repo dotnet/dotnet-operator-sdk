@@ -128,4 +128,18 @@ public sealed record OperatorSettings
     /// scrape the metrics, register an OpenTelemetry exporter for the meter named <see cref="Name"/>.
     /// </remarks>
     public required bool EnableMetrics { get; init; }
+
+    /// <summary>
+    /// Indicates whether the operator validates, on host startup, that its dependency injection
+    /// registrations are complete and consistent with the configured
+    /// <see cref="LeaderElectionType"/> and <see cref="QueueStrategy"/>. Disabled by default.
+    /// </summary>
+    /// <remarks>
+    /// When enabled, the operator verifies — for every managed entity — that the components implied by
+    /// the configuration are registered. If anything is missing, host startup aborts with an
+    /// <c>InvalidRegistrationException</c> listing the gaps. This catches registration mistakes
+    /// (for example a forgotten watcher or queue consumer in a manually wired setup) that would
+    /// otherwise let the operator start without processing any resources.
+    /// </remarks>
+    public bool ValidateRegistrations { get; init; }
 }

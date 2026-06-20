@@ -33,6 +33,8 @@ namespace KubeOps.Operator.Builder;
 
 internal sealed class OperatorBuilder : IOperatorBuilder
 {
+    private OperatorRegistrationRegistry? _registrationRegistry;
+
     public OperatorBuilder(IServiceCollection services, OperatorSettings settings)
     {
         Settings = settings;
@@ -50,6 +52,8 @@ internal sealed class OperatorBuilder : IOperatorBuilder
     {
         Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
         Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
+
+        RegisterRegistrationValidation(typeof(TEntity));
 
         // Queue
         Services.TryAddTransient<IEntityQueueFactory, EntityQueueFactory>();
@@ -117,6 +121,11 @@ internal sealed class OperatorBuilder : IOperatorBuilder
             services.GetRequiredService<IEventFinalizerAttacherFactory>()
                 .Create<TImplementation, TEntity>(identifier));
 
+        // Finalizers run as part of reconciliation, so the entity still needs a full pipeline
+        // (controller, watcher, queue consumer). Register it for validation to catch a finalizer that
+        // was added without a corresponding controller.
+        RegisterRegistrationValidation(typeof(TEntity));
+
         return this;
     }
 
@@ -173,5 +182,22 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         {
             Services.AddLeaderElection();
         }
+    }
+
+    private void RegisterRegistrationValidation(Type entityType)
+    {
+        if (!Settings.ValidateRegistrations)
+        {
+            return;
+        }
+
+        if (_registrationRegistry is null)
+        {
+            _registrationRegistry = new(Services);
+            Services.AddSingleton(_registrationRegistry);
+            Services.AddHostedService<OperatorRegistrationValidator>();
+        }
+
+        _registrationRegistry.Add(entityType);
     }
 }
