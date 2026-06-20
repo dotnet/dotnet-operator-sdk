@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics.Metrics;
+
 using FluentAssertions;
 
 using k8s.Models;
@@ -11,6 +13,7 @@ using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Reconciliation;
 
@@ -65,6 +68,52 @@ public sealed class ReconcilerTest
                 0,
                 It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    [Trait("Area", "Otel")]
+    public async Task Reconcile_Should_Record_Requeue_Metric_When_Enqueue_Is_Scheduled()
+    {
+        var entity = CreateTestEntity();
+        var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.ApiServer);
+        var controller = CreateMockController(
+            reconcileResult: ReconciliationResult<V1ConfigMap>.Success(entity, TimeSpan.FromMinutes(5)));
+        _mockQueue
+            .Setup(q => q.Enqueue(
+                It.IsAny<V1ConfigMap>(), It.IsAny<ReconciliationType>(), It.IsAny<ReconciliationTriggerSource>(),
+                It.IsAny<TimeSpan>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        using var harness = new RequeueMetricHarness();
+        var reconciler = CreateReconcilerForController(controller, harness.Metrics);
+
+        await reconciler.Reconcile(context, TestContext.Current.CancellationToken);
+
+        harness.RequeueCount.Should().Be(1);
+    }
+
+    [Fact]
+    [Trait("Area", "Otel")]
+    public async Task Reconcile_Should_Not_Record_Requeue_Metric_When_Enqueue_Is_Dropped()
+    {
+        // When the queue drops the requeue (intake suspended after leadership loss) Enqueue returns false,
+        // so no requeue metric must be recorded.
+        var entity = CreateTestEntity();
+        var context = ReconciliationContext<V1ConfigMap>.CreateFor(entity, ReconciliationType.Added, ReconciliationTriggerSource.ApiServer);
+        var controller = CreateMockController(
+            reconcileResult: ReconciliationResult<V1ConfigMap>.Success(entity, TimeSpan.FromMinutes(5)));
+        _mockQueue
+            .Setup(q => q.Enqueue(
+                It.IsAny<V1ConfigMap>(), It.IsAny<ReconciliationType>(), It.IsAny<ReconciliationTriggerSource>(),
+                It.IsAny<TimeSpan>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        using var harness = new RequeueMetricHarness();
+        var reconciler = CreateReconcilerForController(controller, harness.Metrics);
+
+        await reconciler.Reconcile(context, TestContext.Current.CancellationToken);
+
+        harness.RequeueCount.Should().Be(0);
     }
 
     [Fact]
@@ -380,7 +429,8 @@ public sealed class ReconcilerTest
             Times.Once);
     }
 
-    private Reconciler<V1ConfigMap> CreateReconcilerForController(IEntityController<V1ConfigMap> controller)
+    private Reconciler<V1ConfigMap> CreateReconcilerForController(
+        IEntityController<V1ConfigMap> controller, OperatorMetrics? metrics = null)
     {
         var mockScope = new Mock<IServiceScope>();
         var mockScopeFactory = new Mock<IServiceScopeFactory>();
@@ -406,7 +456,8 @@ public sealed class ReconcilerTest
             _mockServiceProvider.Object,
             _settings,
             _mockQueue.Object,
-            _mockClient.Object);
+            _mockClient.Object,
+            metrics);
     }
 
     private Reconciler<V1ConfigMap> CreateReconcilerForFinalizer(IEntityFinalizer<V1ConfigMap>? finalizer, string finalizerName)
@@ -488,5 +539,44 @@ public sealed class ReconcilerTest
             },
             Kind = V1ConfigMap.KubeKind,
         };
+    }
+
+    // Captures the "kubeops.operator.queue.requeued" counter for a dedicated meter so a test can assert
+    // whether the operator requeue metric was recorded.
+    private sealed class RequeueMetricHarness : IDisposable
+    {
+        private const string MeterName = "reconciler-requeue-test";
+        private readonly ServiceProvider _provider;
+        private readonly MeterListener _listener;
+        private int _requeued;
+
+        public RequeueMetricHarness()
+        {
+            _provider = new ServiceCollection().AddMetrics().BuildServiceProvider();
+            Metrics = new OperatorMetrics(_provider.GetRequiredService<IMeterFactory>(), MeterName);
+
+            _listener = new MeterListener
+            {
+                InstrumentPublished = (instrument, l) =>
+                {
+                    if (instrument.Meter.Name == MeterName && instrument.Name == "kubeops.operator.queue.requeued")
+                    {
+                        l.EnableMeasurementEvents(instrument);
+                    }
+                },
+            };
+            _listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref _requeued, (int)value));
+            _listener.Start();
+        }
+
+        public OperatorMetrics Metrics { get; }
+
+        public int RequeueCount => _requeued;
+
+        public void Dispose()
+        {
+            _listener.Dispose();
+            _provider.Dispose();
+        }
     }
 }

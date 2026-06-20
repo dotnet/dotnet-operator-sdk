@@ -24,35 +24,22 @@ namespace KubeOps.Operator.Queue;
 /// <typeparam name="TEntity">The type of the Kubernetes entity being managed.</typeparam>
 /// <remarks>
 /// <para>
-/// This service deliberately performs a <strong>hard stop</strong> on leadership loss: cancelling the
-/// internal token aborts the dequeue loop as well as any reconciliation that is currently running. This
-/// mirrors the behaviour of the wider Kubernetes operator ecosystem — controller-runtime
-/// (Kubebuilder / Operator SDK) terminates the whole process when its lease is lost rather than draining
-/// work gracefully.
+/// On leadership loss this service performs a <strong>hard stop</strong> combined with a queue gate: it
+/// suspends the queue's intake, cancels the dequeue loop and any in-flight reconciliation, and clears the
+/// queue. While the instance is not the leader the intake stays closed, so neither a still-running
+/// reconciler's <c>RequeueAfter</c> nor an error retry can leave work behind. On re-acquiring leadership the
+/// intake is reopened and the watcher re-lists the current state.
 /// </para>
 /// <para>
-/// Leader election does not guarantee strict mutual exclusion: clock skew, GC pauses or a slow API server
-/// can leave an instance acting briefly after its lease has expired. That short transition overlap is
-/// expected and is made safe by two properties the SDK already relies on:
+/// This protects the <em>queue</em> side only. KubeOps does <strong>not</strong> terminate the process on
+/// leadership loss (unlike controller-runtime). It therefore cannot prevent a <strong>non-cooperative</strong>
+/// reconciler that ignores the <see cref="CancellationToken"/> from performing external side effects while a
+/// former leader. Reconciler implementations must honour cancellation and be idempotent. As a second line of
+/// defence, concurrent writes to the same object are serialised by the API server via
+/// <c>metadata.resourceVersion</c> (a stale write fails with HTTP 409 Conflict).
 /// </para>
-/// <list type="bullet">
-/// <item><description>
-/// <strong>Optimistic concurrency</strong> — concurrent writes to the same object are serialised by the
-/// API server via <c>metadata.resourceVersion</c>; a stale write fails with HTTP 409 Conflict.
-/// </description></item>
-/// <item><description>
-/// <strong>Level-triggered, idempotent reconciliation</strong> — a reconciler converges observed state
-/// towards desired state, so an interrupted reconciliation is simply re-run by the new leader against the
-/// current (possibly partial) state. The lease timing (<c>LeaseDuration &gt; RenewDeadline</c>) bounds the
-/// overlap window.
-/// </description></item>
-/// </list>
 /// <para>
-/// References:
-/// <list type="bullet">
-/// <item><description>https://kubernetes.io/docs/concepts/architecture/leases/</description></item>
-/// <item><description>https://pkg.go.dev/sigs.k8s.io/controller-runtime/pkg/manager#Options</description></item>
-/// </list>
+/// See https://kubernetes.io/docs/concepts/architecture/leases/ for leader-election semantics.
 /// </para>
 /// </remarks>
 public class LeaderAwareEntityQueueBackgroundService<TEntity>(
@@ -69,9 +56,11 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
         operatorSettings,
         queue,
         reconciler,
-        logger)
+        logger), ILeaderAwareEntityQueueConsumer<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
+    private ISuspendableEntityQueue? Gate => Queue as ISuspendableEntityQueue;
+
     public override Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogDebug("Subscribe for leadership updates.");
@@ -79,7 +68,25 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
         elector.OnStartedLeading += StartedLeading;
         elector.OnStoppedLeading += StoppedLeading;
 
-        return elector.IsLeader() ? base.StartAsync(cancellationToken) : Task.CompletedTask;
+        if (Gate is null)
+        {
+            logger.LogWarning(
+                "The configured queue ({QueueType}) does not implement {Capability}; leadership-loss " +
+                "protection (queue clear and intake suspension) is disabled. A former leader may leave " +
+                "queued work behind on a leadership transition.",
+                Queue.GetType().Name,
+                nameof(ISuspendableEntityQueue));
+        }
+
+        if (elector.IsLeader())
+        {
+            Gate?.ResumeIntake();
+            return base.StartAsync(cancellationToken);
+        }
+
+        // Not leading yet: keep the intake gate closed so nothing accumulates work until leadership is held.
+        Gate?.SuspendIntake();
+        return Task.CompletedTask;
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)
@@ -106,6 +113,11 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
     private void StartedLeading()
     {
         logger.LogInformation("This instance started leading, starting queue processing.");
+
+        // Open the intake gate before producers run. This service is registered before the watcher
+        // (see OperatorBuilder.AddController), so its OnStartedLeading runs first and the gate is open
+        // by the time the watcher starts enqueuing.
+        Gate?.ResumeIntake();
         _ = base.StartAsync(CancellationToken.None);
     }
 
@@ -113,8 +125,11 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
     {
         logger.LogInformation("This instance stopped leading, stopping queue processing.");
 
-        // Hard stop: cancelling the internal token aborts the dequeue loop and any in-flight
-        // reconciliation. See the class remarks for why interrupting running reconciliations is safe.
+        // Close the intake gate FIRST so nothing — including a still-running reconciler's RequeueAfter or
+        // an error retry — can enqueue work during or after the stop. Then cancel the dequeue loop and any
+        // in-flight reconciliation, and clear the work the former leader had already queued.
+        Gate?.SuspendIntake();
         _ = base.StopAsync(CancellationToken.None);
+        Gate?.Clear();
     }
 }

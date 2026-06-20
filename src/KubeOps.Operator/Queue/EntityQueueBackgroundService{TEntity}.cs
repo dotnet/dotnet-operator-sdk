@@ -67,7 +67,7 @@ public class EntityQueueBackgroundService<TEntity>(
     ITimedEntityQueue<TEntity> queue,
     IReconciler<TEntity> reconciler,
     ILogger<EntityQueueBackgroundService<TEntity>> logger,
-    OperatorMetrics? metrics = null) : IHostedService, IDisposable, IAsyncDisposable
+    OperatorMetrics? metrics = null) : IHostedService, IDisposable, IAsyncDisposable, IEntityQueueConsumer<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private readonly ConcurrentDictionary<string, UidEntry> _uidEntries = new();
@@ -77,6 +77,12 @@ public class EntityQueueBackgroundService<TEntity>(
 
     private CancellationTokenSource _cts = new();
     private volatile bool _disposed;
+
+    /// <summary>
+    /// Gets the timed entity queue this service consumes. Exposed for leadership-aware subclasses that need
+    /// to suspend intake or clear the queue on a leadership transition.
+    /// </summary>
+    protected ITimedEntityQueue<TEntity> Queue => queue;
 
     /// <inheritdoc cref="IHostedService.StartAsync"/>
     /// <remarks>
@@ -371,7 +377,7 @@ public class EntityQueueBackgroundService<TEntity>(
                 // what event originally caused this reconciliation (e.g. ApiServer or Operator).
                 // RetryCount is incremented and passed explicitly so the back-off calculation
                 // stays correct across successive failures without losing state.
-                await queue.Enqueue(
+                var scheduled = await queue.Enqueue(
                     entry.Entity,
                     entry.ReconciliationType,
                     entry.ReconciliationTriggerSource,
@@ -379,7 +385,12 @@ public class EntityQueueBackgroundService<TEntity>(
                     nextRetryCount,
                     CancellationToken.None);
 
-                metrics?.RecordRequeue(typeof(TEntity).Name, "error_retry");
+                // Only count the retry when it was actually scheduled. A leadership-aware queue with
+                // suspended intake (leadership just lost) drops the entry and returns false.
+                if (scheduled)
+                {
+                    metrics?.RecordRequeue(typeof(TEntity).Name, "error_retry");
+                }
             }
             else
             {
@@ -421,7 +432,7 @@ public class EntityQueueBackgroundService<TEntity>(
                     entry.Entity.ToIdentifierString(),
                     requeueDelay.TotalSeconds);
 
-                await queue.Enqueue(
+                var scheduled = await queue.Enqueue(
                     entry.Entity,
                     entry.ReconciliationType,
                     entry.ReconciliationTriggerSource,
@@ -429,7 +440,12 @@ public class EntityQueueBackgroundService<TEntity>(
                     retryCount: 0,
                     cancellationToken);
 
-                metrics?.RecordRequeue(typeof(TEntity).Name, "conflict");
+                // Only count the requeue when it was actually scheduled (a suspended gate drops it).
+                if (scheduled)
+                {
+                    metrics?.RecordRequeue(typeof(TEntity).Name, "conflict");
+                }
+
                 break;
 
             default:

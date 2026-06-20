@@ -34,6 +34,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     }
 
     [Fact]
+    [Trait("Area", "LeaderLoss")]
     public void Should_Register_LeaderAware_BackgroundService_For_Single_LeaderElection()
     {
         var builder = new OperatorBuilder(

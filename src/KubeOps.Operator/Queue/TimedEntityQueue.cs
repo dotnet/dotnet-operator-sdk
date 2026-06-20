@@ -33,7 +33,7 @@ namespace KubeOps.Operator.Queue;
 /// for reconciliation operations.
 /// </para>
 /// </remarks>
-public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
+public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISuspendableEntityQueue
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     /// <summary>
@@ -56,8 +56,18 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
     // Cancellation token source for the timer loop.
     private readonly CancellationTokenSource _timerCts = new();
 
+    // Guards the intake gate together with all mutations of _management/_queue that must be atomic with the
+    // gate check (Enqueue scheduling, Clear, and timer promotion). Without this, a leadership transition has
+    // a TOCTOU race: Enqueue passes the gate check, SuspendIntake + Clear run, and Enqueue then re-adds an
+    // entry after the clear.
+    private readonly object _gateLock = new();
+
     // Task that runs the timer loop.
     private readonly Task _timerTask;
+
+    // Set while the instance does not hold leadership; guarded by _gateLock. When true, Enqueue drops new
+    // entries and the timer promotes nothing.
+    private bool _intakeSuspended;
 
     // Read by the meter's observation thread (queue-depth gauge) and written on the dispose thread,
     // hence volatile to ensure the disposed state is observed promptly across threads.
@@ -80,12 +90,30 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
 
     internal int Count => _management.Count;
 
+    // Number of entries already promoted to the ready queue. Exposed for tests to assert Clear()/intake
+    // behaviour without consuming the (blocking) enumerator.
+    internal int ReadyCount => _queue.Count;
+
     /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Enqueue"/>
-    public Task Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken)
+    public Task<bool> Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromResult(false);
+        }
+
         var key = this.GetKey(entity) ?? throw new InvalidOperationException("Cannot enqueue entities without name.");
 
-        _management
+        // The gate check and the scheduling mutation must be atomic with SuspendIntake/Clear (see _gateLock),
+        // otherwise a former leader could re-add an entry right after the queue was cleared on leadership loss.
+        lock (_gateLock)
+        {
+            if (_intakeSuspended)
+            {
+                return Task.FromResult(false);
+            }
+
+            _management
             .AddOrUpdate(
                 key,
                 _ =>
@@ -131,10 +159,44 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                     oldEntry.Cancel();
                     return new(entity, newReconciliationType, reconciliationTriggerSource, newQueueIn, retryCount);
                 });
+        }
 
         _metrics?.RecordEnqueue(typeof(TEntity).Name, reconciliationTriggerSource.ToMetricString());
 
-        return Task.CompletedTask;
+        return Task.FromResult(true);
+    }
+
+    /// <inheritdoc cref="ISuspendableEntityQueue.Clear"/>
+    public void Clear()
+    {
+        // Drain both collections atomically with the intake gate, but never CompleteAdding() the
+        // BlockingCollection — the queue must stay usable after ResumeIntake() once leadership is regained.
+        lock (_gateLock)
+        {
+            _management.Clear();
+            while (_queue.TryTake(out _))
+            {
+                // Discard the ready entry; draining only, never CompleteAdding().
+            }
+        }
+    }
+
+    /// <inheritdoc cref="ISuspendableEntityQueue.SuspendIntake"/>
+    public void SuspendIntake()
+    {
+        lock (_gateLock)
+        {
+            _intakeSuspended = true;
+        }
+    }
+
+    /// <inheritdoc cref="ISuspendableEntityQueue.ResumeIntake"/>
+    public void ResumeIntake()
+    {
+        lock (_gateLock)
+        {
+            _intakeSuspended = false;
+        }
     }
 
     /// <inheritdoc cref="IDisposable.Dispose"/>
@@ -204,12 +266,23 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                             continue;
                         }
 
-                        if (entry.EnqueueAt > now || !_management.TryRemove(key, out _))
+                        if (entry.EnqueueAt > now)
                         {
                             continue;
                         }
 
-                        _queue.TryAdd(entry.ToQueueEntry());
+                        // Promote atomically with the intake gate: while intake is suspended nothing is
+                        // promoted, and a Clear() on leadership loss cannot be raced by a concurrent
+                        // promotion re-adding an entry to the ready queue after the clear.
+                        lock (_gateLock)
+                        {
+                            if (_intakeSuspended || !_management.TryRemove(key, out _))
+                            {
+                                continue;
+                            }
+
+                            _queue.TryAdd(entry.ToQueueEntry());
+                        }
 
                         _logger
                             .LogTrace(

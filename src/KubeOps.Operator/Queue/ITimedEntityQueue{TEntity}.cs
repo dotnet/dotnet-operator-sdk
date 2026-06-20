@@ -59,10 +59,16 @@ public interface ITimedEntityQueue<TEntity> : IDisposable, IAsyncEnumerable<Queu
     /// A token to monitor for cancellation requests during the asynchronous operation.
     /// </param>
     /// <returns>
-    /// A task that represents the asynchronous enqueue operation.
+    /// A task whose result is <see langword="true"/> if the entry was scheduled, or <see langword="false"/>
+    /// if it was dropped (for example because <paramref name="cancellationToken"/> was already cancelled, or
+    /// intake is suspended via <see cref="ISuspendableEntityQueue.SuspendIntake"/>). Callers can use this to
+    /// avoid recording requeue metrics for work that was not actually scheduled.
     /// </returns>
     /// <remarks>
     /// If an entity with the same key is already queued, the entry scheduled to run earliest is kept.
+    /// Implementations may drop the entry when <paramref name="cancellationToken"/> is already cancelled, or
+    /// when intake is suspended via <see cref="ISuspendableEntityQueue.SuspendIntake"/> (if the queue
+    /// implements that optional capability), returning <see langword="false"/> in those cases.
     /// </remarks>
-    Task Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken);
+    Task<bool> Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken);
 }

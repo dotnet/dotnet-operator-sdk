@@ -80,25 +80,66 @@ internal sealed class OperatorRegistrationValidator(
 
     public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
+    // True if a closed registration for the service exists, or an open-generic one the DI container would
+    // close to it (e.g. AddSingleton(typeof(ITimedEntityQueue<>), typeof(MyQueue<>))). Keyed registrations
+    // are ignored: the watcher/reconciler take these as plain (unkeyed) constructor dependencies, so a keyed
+    // registration would not satisfy them.
     private static bool HasService(IServiceCollection services, Type serviceType) =>
-        services.Any(d => d.ServiceType == serviceType);
+        services.Any(d => !d.IsKeyedService && d.ServiceType == serviceType) ||
+        (serviceType.IsGenericType &&
+            services.Any(d => !d.IsKeyedService && d.ServiceType == serviceType.GetGenericTypeDefinition()));
 
-    private static bool HasHostedServiceDerivedFrom(IServiceCollection services, Type baseType) =>
+    private static bool HasHostedServiceAssignableTo(IServiceCollection services, Type targetType) =>
         services.Any(d =>
         {
-            if (d.ServiceType != typeof(IHostedService))
+            if (d.IsKeyedService || d.ServiceType != typeof(IHostedService))
             {
                 return false;
             }
 
             var implementationType = d.ImplementationType ?? d.ImplementationInstance?.GetType();
-            return implementationType is not null && baseType.IsAssignableFrom(implementationType);
+            return implementationType is not null && targetType.IsAssignableFrom(implementationType);
         });
 
     private static bool HasKeyedFinalizer(IServiceCollection services, Type entityType)
     {
         var finalizerType = typeof(IEntityFinalizer<>).MakeGenericType(entityType);
         return services.Any(d => d.IsKeyedService && d.ServiceType == finalizerType);
+    }
+
+    // The effective implementation type for a service (the last registration wins in DI). Handles closed
+    // registrations as well as open-generic ones (closing the open implementation to the requested type).
+    // Returns null for factory-registered services whose concrete type cannot be determined without
+    // constructing them.
+    private static Type? GetImplementationType(IServiceCollection services, Type serviceType)
+    {
+        var descriptor = services.LastOrDefault(d => !d.IsKeyedService && d.ServiceType == serviceType);
+        if (descriptor is not null)
+        {
+            return descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType();
+        }
+
+        if (!serviceType.IsGenericType)
+        {
+            return null;
+        }
+
+        var openDescriptor = services.LastOrDefault(d =>
+            !d.IsKeyedService && d.ServiceType == serviceType.GetGenericTypeDefinition());
+        if (openDescriptor?.ImplementationType is { IsGenericTypeDefinition: true } openImplementation)
+        {
+            try
+            {
+                return openImplementation.MakeGenericType(serviceType.GenericTypeArguments);
+            }
+            catch (ArgumentException)
+            {
+                // Generic constraints not satisfiable for this entity; treat as undeterminable.
+                return null;
+            }
+        }
+
+        return openDescriptor?.ImplementationInstance?.GetType();
     }
 
     private void ValidateEntity(Type entityType, List<string> problems)
@@ -124,7 +165,10 @@ internal sealed class OperatorRegistrationValidator(
             return;
         }
 
-        if (!HasHostedServiceDerivedFrom(services, typeof(ResourceWatcher<>).MakeGenericType(entityType)))
+        // Hosted services are recognised by their registered implementation type. A component registered
+        // through a DI factory delegate exposes no type and is therefore reported as missing. Register the
+        // watcher and consumer with a concrete type so validation can inspect them.
+        if (!HasHostedServiceAssignableTo(services, typeof(ResourceWatcher<>).MakeGenericType(entityType)))
         {
             problems.Add(string.Format(
                 CultureInfo.InvariantCulture,
@@ -132,15 +176,13 @@ internal sealed class OperatorRegistrationValidator(
                 entityName));
         }
 
-        // The queue and its consumer are only managed by the SDK for the in-memory strategy. With
-        // QueueStrategy.Custom the queue is entirely user-owned and cannot be introspected, so it is
-        // left unchecked.
-        if (settings.QueueStrategy != QueueStrategy.InMemory)
-        {
-            return;
-        }
-
-        if (!HasService(services, typeof(ITimedEntityQueue<>).MakeGenericType(entityType)))
+        // ITimedEntityQueue<TEntity> is always required: both the resource watcher and the reconciler take
+        // it as a constructor dependency, regardless of queue strategy. With QueueStrategy.Custom the SDK
+        // does not register it, so a user who forgets to supply one would only fail at host startup with a
+        // DI error.
+        var queueType = typeof(ITimedEntityQueue<>).MakeGenericType(entityType);
+        var queueRegistered = HasService(services, queueType);
+        if (!queueRegistered)
         {
             problems.Add(string.Format(
                 CultureInfo.InvariantCulture,
@@ -148,12 +190,61 @@ internal sealed class OperatorRegistrationValidator(
                 entityName));
         }
 
-        if (!HasHostedServiceDerivedFrom(services, typeof(EntityQueueBackgroundService<>).MakeGenericType(entityType)))
+        // A queue consumer is always required. Under Single leader election it must be leadership-aware
+        // (drive the queue gate), so a stronger marker is required there; otherwise the base consumer marker
+        // is enough. The SDK registers one for the in-memory strategy; with QueueStrategy.Custom the user
+        // supplies it and marks it accordingly.
+        var single = settings.LeaderElectionType == LeaderElectionType.Single;
+        var consumerType = single
+            ? typeof(ILeaderAwareEntityQueueConsumer<>).MakeGenericType(entityType)
+            : typeof(IEntityQueueConsumer<>).MakeGenericType(entityType);
+        if (!HasHostedServiceAssignableTo(services, consumerType))
         {
-            problems.Add(string.Format(
-                CultureInfo.InvariantCulture,
-                "Entity '{0}': no queue consumer is registered (expected a hosted service deriving from EntityQueueBackgroundService<{0}>).",
-                entityName));
+            problems.Add(single
+                ? string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Entity '{0}': no leadership-aware queue consumer is registered. LeaderElectionType.Single " +
+                    "requires a consumer implementing ILeaderAwareEntityQueueConsumer<{0}> (e.g. deriving from " +
+                    "LeaderAwareEntityQueueBackgroundService<{0}>) so the queue gate is driven on leadership " +
+                    "transitions.",
+                    entityName)
+                : string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Entity '{0}': no queue consumer is registered (expected a hosted service implementing " +
+                    "IEntityQueueConsumer<{0}>, e.g. deriving from EntityQueueBackgroundService<{0}>).",
+                    entityName));
+        }
+
+        // Under Single leader election the queue must support the leadership gate so a former leader leaves
+        // no work behind on a leadership transition.
+        if (single && queueRegistered)
+        {
+            var queueImpl = GetImplementationType(services, queueType);
+            if (queueImpl is null)
+            {
+                // The queue is registered but its concrete type cannot be determined (e.g. a DI factory),
+                // so the gate capability cannot be verified. Fail rather than silently assume it is safe —
+                // consistent with how an unverifiable consumer is handled.
+                problems.Add(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Entity '{0}': the registered queue cannot be inspected for {1} (it is registered via a " +
+                    "factory delegate). LeaderElectionType.Single requires a queue whose leadership-gate " +
+                    "capability can be verified — register it with a concrete or open-generic type, or use the " +
+                    "built-in TimedEntityQueue<{0}>.",
+                    entityName,
+                    nameof(ISuspendableEntityQueue)));
+            }
+            else if (!typeof(ISuspendableEntityQueue).IsAssignableFrom(queueImpl))
+            {
+                problems.Add(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Entity '{0}': the registered queue ({1}) does not implement {2}, which " +
+                    "LeaderElectionType.Single requires for leadership-loss protection (queue clear and intake " +
+                    "suspension). Implement {2} on your queue or use the built-in TimedEntityQueue<{0}>.",
+                    entityName,
+                    queueImpl.Name,
+                    nameof(ISuspendableEntityQueue)));
+            }
         }
     }
 }

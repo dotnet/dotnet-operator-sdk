@@ -32,7 +32,11 @@ public sealed class EntityQueueBackgroundServiceTest
 
         public int EnqueueCallCount { get; private set; }
 
-        public Task Enqueue(
+        // Controls the value returned by Enqueue, to simulate a leadership-aware queue dropping the entry
+        // (returns false) versus scheduling it (returns true).
+        public bool EnqueueResult { get; set; } = true;
+
+        public Task<bool> Enqueue(
             TEntity entity,
             ReconciliationType type,
             ReconciliationTriggerSource reconciliationTriggerSource,
@@ -42,7 +46,7 @@ public sealed class EntityQueueBackgroundServiceTest
         {
             EnqueueCallCount++;
             _channel.Writer.TryWrite(new(entity, type, reconciliationTriggerSource, retryCount));
-            return Task.CompletedTask;
+            return Task.FromResult(EnqueueResult);
         }
 
         public void Push(TEntity entity, ReconciliationType type, ReconciliationTriggerSource source, int retryCount = 0)
@@ -384,6 +388,140 @@ public sealed class EntityQueueBackgroundServiceTest
         await service.StopAsync(TestContext.Current.CancellationToken);
 
         queue.EnqueueCallCount.Should().BeGreaterThan(0);
+    }
+
+    [Trait("Area", "Otel")]
+    [Fact]
+    public async Task Conflict_Requeue_Metric_Is_Not_Recorded_When_Enqueue_Is_Dropped()
+    {
+        // A conflicting reconciliation is requeued (RequeueAfterDelay). If a leadership-aware queue drops
+        // that enqueue (intake suspended), Enqueue returns false and the conflict metric must not be counted.
+        const string meterName = "test-conflict-requeue-drop-metrics";
+        using var meterFactory = new ServiceCollection().AddMetrics().BuildServiceProvider()
+            .GetRequiredService<IMeterFactory>();
+        var metrics = new OperatorMetrics(meterFactory, meterName);
+
+        var requeued = 0;
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == meterName && instrument.Name == "kubeops.operator.queue.requeued")
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref requeued, (int)value));
+        listener.Start();
+
+        var uid = Guid.NewGuid().ToString();
+        var entity = CreateEntity(uid);
+        var firstStarted = new TaskCompletionSource();
+        var firstCanFinish = new TaskCompletionSource();
+
+        var queue = new ControllableQueue<V1ConfigMap> { EnqueueResult = false };
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+
+        clientMock
+            .Setup(c => c.GetAsync<V1ConfigMap>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entity);
+        reconcilerMock
+            .Setup(r => r.Reconcile(It.IsAny<ReconciliationContext<V1ConfigMap>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (ReconciliationContext<V1ConfigMap> _, CancellationToken _) =>
+            {
+                firstStarted.TrySetResult();
+                await firstCanFinish.Task;
+                return ReconciliationResult<V1ConfigMap>.Success(entity);
+            });
+
+        var settings = new OperatorSettingsBuilder
+        {
+            ParallelReconciliation = new()
+            {
+                MaxParallelReconciliations = 4,
+                ConflictStrategy = ParallelReconciliationConflictStrategy.RequeueAfterDelay,
+                RequeueDelay = TimeSpan.FromMilliseconds(50),
+            },
+        }.Build();
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings, metrics);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        queue.Push(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+        await firstStarted.Task;
+
+        queue.Push(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        firstCanFinish.SetResult();
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        // The conflicting entry's requeue was attempted but dropped, so no conflict metric was recorded.
+        queue.EnqueueCallCount.Should().BeGreaterThan(0);
+        requeued.Should().Be(0);
+    }
+
+    [Trait("Area", "Otel")]
+    [Fact]
+    public async Task ErrorRetry_Requeue_Metric_Is_Not_Recorded_When_Enqueue_Is_Dropped()
+    {
+        // When a leadership-aware queue drops the retry enqueue (intake suspended after leadership loss),
+        // Enqueue returns false and the requeue metric must not be recorded.
+        const string meterName = "test-requeue-drop-metrics";
+        using var meterFactory = new ServiceCollection().AddMetrics().BuildServiceProvider()
+            .GetRequiredService<IMeterFactory>();
+        var metrics = new OperatorMetrics(meterFactory, meterName);
+
+        var requeued = 0;
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == meterName && instrument.Name == "kubeops.operator.queue.requeued")
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref requeued, (int)value));
+        listener.Start();
+
+        var entity = CreateEntity();
+        var queue = new ControllableQueue<V1ConfigMap> { EnqueueResult = false };
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+
+        clientMock
+            .Setup(c => c.GetAsync<V1ConfigMap>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entity);
+        reconcilerMock
+            .Setup(r => r.Reconcile(It.IsAny<ReconciliationContext<V1ConfigMap>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("transient error"));
+
+        var settings = new OperatorSettingsBuilder
+        {
+            ParallelReconciliation = new()
+            {
+                MaxParallelReconciliations = 2,
+                MaxErrorRetries = 3,
+                ErrorBackoffBase = TimeSpan.FromMilliseconds(10),
+            },
+        }.Build();
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings, metrics);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        queue.Push(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+        queue.Complete();
+
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        // The retry was attempted (Enqueue called) but, because it was dropped, no requeue was counted.
+        queue.EnqueueCallCount.Should().BeGreaterThan(0);
+        requeued.Should().Be(0);
     }
 
     [Fact]
