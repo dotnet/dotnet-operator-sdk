@@ -67,7 +67,7 @@ public class EntityQueueBackgroundService<TEntity>(
     ITimedEntityQueue<TEntity> queue,
     IReconciler<TEntity> reconciler,
     ILogger<EntityQueueBackgroundService<TEntity>> logger,
-    OperatorMetrics? metrics = null) : IHostedService, IDisposable, IAsyncDisposable, IEntityQueueConsumer<TEntity>
+    OperatorMetrics? metrics = null) : RestartableHostedService, IEntityQueueConsumer<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private readonly ConcurrentDictionary<string, UidEntry> _uidEntries = new();
@@ -75,123 +75,15 @@ public class EntityQueueBackgroundService<TEntity>(
         operatorSettings.ParallelReconciliation.MaxParallelReconciliations,
         operatorSettings.ParallelReconciliation.MaxParallelReconciliations);
 
-    // Guards the start/stop lifecycle: _running (idempotency gate for the current term) and _activeRuns.
-    private readonly object _lifecycleLock = new();
-
-    // Every processing loop that has been started and not yet finished, with the token source it owns. There is
-    // normally one, but a leadership flap (StoppedLeading -> StartedLeading) can briefly leave the previous loop
-    // still draining its in-flight reconciliations while the next loop is already running. Dispose drains them
-    // ALL, so no worker can touch a semaphore/client/queue after it was disposed.
-    private readonly List<(Task Loop, CancellationTokenSource Cts)> _activeRuns = [];
-
-    private bool _running;
-    private volatile bool _disposed;
-
-    /// <summary>
-    /// Bounds how long a stop/dispose waits for in-flight reconciliations to drain. A non-cooperative reconciler
-    /// that ignores its <see cref="CancellationToken"/> cannot block shutdown beyond this. Internal so tests can
-    /// shorten it.
-    /// </summary>
-    internal TimeSpan DrainGracePeriod { get; set; } = TimeSpan.FromSeconds(30);
-
     /// <summary>
     /// Gets the timed entity queue this service consumes. Exposed for leadership-aware subclasses that need
     /// to suspend intake or clear the queue on a leadership transition.
     /// </summary>
     protected ITimedEntityQueue<TEntity> Queue => queue;
 
-    /// <inheritdoc cref="IHostedService.StartAsync"/>
-    /// <remarks>
-    /// Schedules the queue processing loop as a background task using <see cref="Task.Run(Func{Task}, CancellationToken)"/>.
-    /// The <paramref name="cancellationToken"/> passed to this method is intentionally not used for the processing loop;
-    /// cancellation is managed via an internal <see cref="CancellationTokenSource"/> that is signaled by <see cref="StopAsync"/>.
-    /// This avoids cancelling the scheduled work during the host startup phase.
-    /// </remarks>
-    public virtual Task StartAsync(CancellationToken cancellationToken)
-    {
-        lock (_lifecycleLock)
-        {
-            // Idempotent: if a loop is already running, do not start a second one. This closes the race where
-            // the leadership-aware StartAsync IsLeader() branch and a concurrent OnStartedLeading callback both
-            // call base.StartAsync — two loops would reconcile every entry twice in parallel.
-            if (_disposed || _running)
-            {
-                return Task.CompletedTask;
-            }
-
-            // Fresh token source for this run, owned and disposed by that run's loop (see
-            // RunProcessingLoopAsync). A flap restart therefore never disposes a token source a still-running
-            // former loop is still observing through the queue enumerator.
-            var cts = new CancellationTokenSource();
-            _running = true;
-
-            // The current implementation of IHostedService expects that StartAsync is "really" asynchronous.
-            // Blocking calls are not allowed, they would stop the rest of the startup flow.
-            //
-            // This has been an open issue since 2019 and is not expected to be closed soon. (https://github.com/dotnet/runtime/issues/36063)
-            // For reasons unknown at the time of writing this code, "await Task.Yield()" didn't work as expected, it caused
-            // a deadlock in 1/10 of the cases.
-            //
-            // Therefore, we use Task.Run() and put the work to queue. The passed cancellation token of the StartAsync
-            // method is not used because it would only cancel the scheduling (which we definitely don't want to cancel).
-            // To make this intention explicit, CancellationToken.None gets passed.
-            var loop = Task.Run(() => RunProcessingLoopAsync(cts), CancellationToken.None);
-            _activeRuns.Add((loop, cts));
-
-            return Task.CompletedTask;
-        }
-    }
-
     /// <inheritdoc/>
-    public virtual Task StopAsync(CancellationToken cancellationToken)
+    protected override void DisposeManagedResources()
     {
-        (Task Loop, CancellationTokenSource Cts)[] runs;
-        lock (_lifecycleLock)
-        {
-            if (_disposed || !_running)
-            {
-                return Task.CompletedTask;
-            }
-
-            // Clear the desired-running state so a subsequent StartAsync (e.g. on re-acquired leadership) starts
-            // a fresh loop instead of being suppressed by the idempotency guard.
-            _running = false;
-            runs = [.. _activeRuns];
-        }
-
-        // Stop must not block on the drain (the OnStoppedLeading callback fire-and-forgets it): only request
-        // cancellation. Each loop drains its own workers (see WatchAsync) and DisposeAsyncCore awaits them all
-        // before tearing down shared resources.
-        return CancelRunsAsync(runs);
-    }
-
-    /// <inheritdoc/>
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    /// <inheritdoc/>
-    public async ValueTask DisposeAsync()
-    {
-        await DisposeAsyncCore();
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Releases the resources used by the background service.
-    /// </summary>
-    /// <param name="disposing">Whether the method is called from <see cref="Dispose()"/>.</param>
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!disposing || _disposed)
-        {
-            return;
-        }
-
-        // The synchronous path cannot await the loops to drain (see DisposeAsyncCore for the draining path).
-        // The container disposes via IAsyncDisposable when available, so this is the best-effort fallback.
         _parallelismSemaphore.Dispose();
 
         lock (_uidEntries)
@@ -206,66 +98,21 @@ public class EntityQueueBackgroundService<TEntity>(
 
         client.Dispose();
         queue.Dispose();
-
-        _disposed = true;
     }
 
-    /// <summary>
-    /// Asynchronously releases the resources used by the background service.
-    /// </summary>
-    /// <remarks>
-    /// Overriding subclasses must call <c>base.DisposeAsyncCore()</c> so the shared resources are released on
-    /// the asynchronous disposal path too. This mirrors <see cref="Dispose(bool)"/>: the dependency injection
-    /// container disposes via <see cref="IAsyncDisposable"/> when available, so subclass cleanup that only
-    /// hooks <see cref="Dispose(bool)"/> would otherwise be skipped.
-    /// </remarks>
-    /// <returns>A task that represents the asynchronous dispose operation.</returns>
-    protected virtual async ValueTask DisposeAsyncCore()
+    /// <inheritdoc/>
+    protected override async ValueTask DisposeManagedResourcesAsync()
     {
-        if (_disposed)
-        {
-            return;
-        }
-
-        // Stop and drain EVERY processing loop ever started — a leadership flap can leave the previous loop
-        // still draining its in-flight reconciliations while a new loop runs — before tearing down shared
-        // resources, so no still-running reconciliation can touch an already-disposed semaphore, client or
-        // queue. Each loop disposes its own token source once it finishes. Cancellation is cooperative: a
-        // reconciler that ignores its token can delay this up to DrainGracePeriod.
-        (Task Loop, CancellationTokenSource Cts)[] runs;
-        lock (_lifecycleLock)
-        {
-            _running = false;
-            runs = [.. _activeRuns];
-        }
-
-        await DrainRunsAsync(runs, CancellationToken.None);
-
-        await CastAndDispose(_parallelismSemaphore);
+        await CastAndDisposeAsync(_parallelismSemaphore);
 
         foreach (var entry in _uidEntries.Values)
         {
-            await CastAndDispose(entry.Semaphore);
+            await CastAndDisposeAsync(entry.Semaphore);
         }
 
         _uidEntries.Clear();
-        await CastAndDispose(client);
-        await CastAndDispose(queue);
-
-        _disposed = true;
-        return;
-
-        static async ValueTask CastAndDispose(IDisposable resource)
-        {
-            if (resource is IAsyncDisposable resourceAsyncDisposable)
-            {
-                await resourceAsyncDisposable.DisposeAsync();
-            }
-            else
-            {
-                resource.Dispose();
-            }
-        }
+        await CastAndDisposeAsync(client);
+        await CastAndDisposeAsync(queue);
     }
 
     protected virtual async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
@@ -296,67 +143,8 @@ public class EntityQueueBackgroundService<TEntity>(
         return ReconciliationResult<TEntity>.Failure(entry.Entity, "Entity was not found.");
     }
 
-    private static async Task CancelRunsAsync(IReadOnlyCollection<(Task Loop, CancellationTokenSource Cts)> runs)
-    {
-        foreach (var (_, cts) in runs)
-        {
-            try
-            {
-                await cts.CancelAsync();
-            }
-            catch (ObjectDisposedException)
-            {
-                // The loop already finished and disposed its own token source; nothing to cancel.
-            }
-        }
-    }
-
-    private async Task DrainRunsAsync(
-        IReadOnlyCollection<(Task Loop, CancellationTokenSource Cts)> runs, CancellationToken cancellationToken)
-    {
-        if (runs.Count == 0)
-        {
-            return;
-        }
-
-        await CancelRunsAsync(runs);
-
-        try
-        {
-            // Bound the wait so a non-cooperative reconciler that ignores cancellation cannot block shutdown
-            // indefinitely; after the grace elapses we proceed (documented limitation).
-            await Task.WhenAll(runs.Select(r => r.Loop)).WaitAsync(DrainGracePeriod, cancellationToken);
-        }
-        catch (TimeoutException)
-        {
-            // Grace elapsed while a reconciliation was still running; proceed with disposal.
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // Host shutdown deadline reached; proceed.
-        }
-    }
-
-    // Runs one processing loop and owns its CancellationTokenSource: it disposes the source only after the
-    // loop has finished, so StartAsync never disposes a token source that this loop is still using.
-    private async Task RunProcessingLoopAsync(CancellationTokenSource cts)
-    {
-        try
-        {
-            await WatchAsync(cts.Token);
-        }
-        finally
-        {
-            lock (_lifecycleLock)
-            {
-                _activeRuns.RemoveAll(r => ReferenceEquals(r.Cts, cts));
-            }
-
-            cts.Dispose();
-        }
-    }
-
-    private async Task WatchAsync(CancellationToken cancellationToken)
+    /// <inheritdoc/>
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var tasks = new List<Task>(operatorSettings.ParallelReconciliation.MaxParallelReconciliations);
 

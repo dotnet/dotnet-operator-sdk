@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using FluentAssertions;
+
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
@@ -114,6 +116,58 @@ public sealed class LeaderAwareResourceWatcherTest
             Times.Once);
     }
 
+    [Fact]
+    public async Task StartAsync_Is_Idempotent_And_Starts_Only_One_Watch()
+    {
+        // Finding 1: the leadership-aware StartAsync IsLeader() path and a concurrent OnStartedLeading callback
+        // can both call base.StartAsync. The base watcher must start only ONE Kubernetes watch, otherwise
+        // duplicate watches enqueue duplicate events.
+        var mockCacheProvider = Mock.Of<IFusionCacheProvider>();
+        Mock.Get(mockCacheProvider).Setup(cp => cp.GetCache(It.IsAny<string>())).Returns(Mock.Of<IFusionCache>());
+
+        var lifetime = Mock.Of<IHostApplicationLifetime>();
+        Mock.Get(lifetime).Setup(l => l.ApplicationStopped).Returns(CancellationToken.None);
+
+        var lockMock = new Mock<ILock>();
+        lockMock
+            .Setup(l => l.GetAsync(It.IsAny<CancellationToken>()))
+            .Returns<CancellationToken>(async ct => { await Task.Delay(Timeout.Infinite, ct); return null!; });
+        var elector = new k8s.LeaderElection.LeaderElector(new(lockMock.Object)
+        {
+            LeaseDuration = TimeSpan.FromSeconds(1),
+            RenewDeadline = TimeSpan.FromMilliseconds(500),
+            RetryPeriod = TimeSpan.FromMilliseconds(100),
+        });
+
+        var watchCallCount = 0;
+        var clientMock = new Mock<IKubernetesClient>();
+        clientMock
+            .Setup(c => c.WatchAsync<V1OperatorIntegrationTestEntity>(
+                "unit-test", null, null, null, true, It.IsAny<CancellationToken>()))
+            .Returns<string?, string?, string?, string?, bool?, CancellationToken>((_, _, _, _, _, ct) =>
+            {
+                Interlocked.Increment(ref watchCallCount);
+                return WaitForCancellationAsync<(k8s.WatchEventType, V1OperatorIntegrationTestEntity)>(ct);
+            });
+
+        var watcher = new TestableLeaderAwareResourceWatcher(
+            mockCacheProvider,
+            lifetime,
+            elector,
+            Mock.Of<ILogger<LeaderAwareResourceWatcher<V1OperatorIntegrationTestEntity>>>(),
+            Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>(),
+            clientMock.Object);
+
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+        watcher.SimulateStartedLeading();
+        watcher.SimulateStartedLeading();
+
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        Volatile.Read(ref watchCallCount).Should().Be(1);
+
+        await watcher.DisposeAsync();
+    }
+
     /// <summary>
     /// Wraps <see cref="LeaderAwareResourceWatcher{TEntity}"/> to expose the private
     /// <c>StoppedLeading</c> handler for testing, without needing Moq to raise
@@ -151,16 +205,24 @@ public sealed class LeaderAwareResourceWatcherTest
         /// Direct invocation of <see cref="k8s.LeaderElection.LeaderElector.OnStoppedLeading"/>
         /// is not permitted outside the declaring class, so reflection is the only option.
         /// </summary>
-        public void SimulateStoppedLeading()
+        public void SimulateStoppedLeading() => InvokeElectorEvent(nameof(k8s.LeaderElection.LeaderElector.OnStoppedLeading));
+
+        public void SimulateStartedLeading() => InvokeElectorEvent(nameof(k8s.LeaderElection.LeaderElector.OnStartedLeading));
+
+        private void InvokeElectorEvent(string eventName)
         {
             var field = typeof(k8s.LeaderElection.LeaderElector)
-                .GetField(
-                    nameof(k8s.LeaderElection.LeaderElector.OnStoppedLeading),
-                    System.Reflection.BindingFlags.Instance |
-                    System.Reflection.BindingFlags.NonPublic);
+                .GetField(eventName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
 
             var handler = (Action?)field?.GetValue(_elector);
             handler?.Invoke();
         }
+    }
+
+    private static async IAsyncEnumerable<T> WaitForCancellationAsync<T>(
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.Infinite, cancellationToken);
+        yield break;
     }
 }

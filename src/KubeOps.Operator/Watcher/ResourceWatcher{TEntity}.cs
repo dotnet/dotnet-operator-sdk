@@ -38,13 +38,10 @@ public class ResourceWatcher<TEntity>(
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     OperatorMetrics? metrics = null)
-    : IHostedService, IAsyncDisposable, IDisposable
+    : RestartableHostedService
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private CancellationTokenSource _cancellationTokenSource = new();
     private uint _watcherReconnectRetries;
-    private Task? _eventWatcher;
-    private bool _disposed;
 
     ~ResourceWatcher() => Dispose(false);
 
@@ -75,92 +72,27 @@ public class ResourceWatcher<TEntity>(
             ? CacheConstants.CacheNames.ResourceWatcherByResourceVersion
             : CacheConstants.CacheNames.ResourceWatcher);
 
-    public virtual Task StartAsync(CancellationToken cancellationToken)
+    /// <inheritdoc/>
+    public override Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("Starting resource watcher for {ResourceType}.", typeof(TEntity).Name);
-
-        if (_cancellationTokenSource.IsCancellationRequested)
-        {
-            _cancellationTokenSource.Dispose();
-            _cancellationTokenSource = new();
-        }
-
-        _eventWatcher = WatchClientEventsAsync(_cancellationTokenSource.Token);
-
+        var result = base.StartAsync(cancellationToken);
         logger.LogInformation("Started resource watcher for {ResourceType}.", typeof(TEntity).Name);
-        return Task.CompletedTask;
+        return result;
     }
 
-    public virtual async Task StopAsync(CancellationToken cancellationToken)
+    /// <inheritdoc/>
+    public override Task StopAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("Stopping resource watcher for {ResourceType}.", typeof(TEntity).Name);
-        if (_disposed)
-        {
-            return;
-        }
-
-        await _cancellationTokenSource.CancelAsync();
-        if (_eventWatcher is not null)
-        {
-            await _eventWatcher.WaitAsync(cancellationToken);
-        }
-
-        logger.LogInformation("Stopped resource watcher for {ResourceType}.", typeof(TEntity).Name);
+        return base.StopAsync(cancellationToken);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await StopAsync(CancellationToken.None);
-        await DisposeAsyncCore();
-        GC.SuppressFinalize(this);
-    }
+    /// <inheritdoc/>
+    protected override void DisposeManagedResources() => client.Dispose();
 
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!disposing)
-        {
-            return;
-        }
-
-        _cancellationTokenSource.Dispose();
-        _eventWatcher?.Dispose();
-        client.Dispose();
-
-        _disposed = true;
-    }
-
-    protected virtual async ValueTask DisposeAsyncCore()
-    {
-        if (_eventWatcher is not null)
-        {
-            await CastAndDispose(_eventWatcher);
-        }
-
-        await CastAndDispose(_cancellationTokenSource);
-        await CastAndDispose(client);
-
-        _disposed = true;
-
-        return;
-
-        static async ValueTask CastAndDispose(IDisposable resource)
-        {
-            if (resource is IAsyncDisposable resourceAsyncDisposable)
-            {
-                await resourceAsyncDisposable.DisposeAsync();
-            }
-            else
-            {
-                resource.Dispose();
-            }
-        }
-    }
+    /// <inheritdoc/>
+    protected override ValueTask DisposeManagedResourcesAsync() => CastAndDisposeAsync(client);
 
     protected virtual async Task OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
     {
@@ -279,33 +211,22 @@ public class ResourceWatcher<TEntity>(
         }
     }
 
-    private static string GetDeletionCacheKey(TEntity entity)
-        => $"{entity.Uid()}:deletion";
-
-    private static string GetDeletionFingerprint(TEntity entity)
-        => string.Join(
-            ':',
-            "deleting",
-            entity.Metadata.DeletionTimestamp?.ToUniversalTime().ToString("O"),
-            entity.Metadata.DeletionGracePeriodSeconds,
-            entity.Generation(),
-            string.Join(',', entity.Finalizers() ?? []));
-
-    private async Task WatchClientEventsAsync(CancellationToken stoppingToken)
+    /// <inheritdoc/>
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         string? currentVersion = null;
 
-        while (!stoppingToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
                 await foreach ((WatchEventType type, TEntity entity) in client.WatchAsync<TEntity>(
                                    settings.Namespace,
                                    resourceVersion: currentVersion,
-                                   labelSelector: await labelSelector.GetLabelSelectorAsync(stoppingToken),
-                                   fieldSelector: await fieldSelector.GetFieldSelectorAsync(stoppingToken),
+                                   labelSelector: await labelSelector.GetLabelSelectorAsync(cancellationToken),
+                                   fieldSelector: await fieldSelector.GetFieldSelectorAsync(cancellationToken),
                                    allowWatchBookmarks: true,
-                                   cancellationToken: stoppingToken))
+                                   cancellationToken: cancellationToken))
                 {
                     using var activity = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
                     using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(type, entity));
@@ -327,7 +248,7 @@ public class ResourceWatcher<TEntity>(
 
                     try
                     {
-                        await OnEventAsync(type, entity, stoppingToken);
+                        await OnEventAsync(type, entity, cancellationToken);
                     }
                     catch (Exception e)
                     {
@@ -342,7 +263,7 @@ public class ResourceWatcher<TEntity>(
 
                 _watcherReconnectRetries = 0;
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 break;
             }
@@ -358,7 +279,7 @@ public class ResourceWatcher<TEntity>(
                 await OnWatchErrorAsync(e);
             }
 
-            if (stoppingToken.IsCancellationRequested)
+            if (cancellationToken.IsCancellationRequested)
             {
                 break;
             }
@@ -368,6 +289,18 @@ public class ResourceWatcher<TEntity>(
                 typeof(TEntity).Name);
         }
     }
+
+    private static string GetDeletionCacheKey(TEntity entity)
+        => $"{entity.Uid()}:deletion";
+
+    private static string GetDeletionFingerprint(TEntity entity)
+        => string.Join(
+            ':',
+            "deleting",
+            entity.Metadata.DeletionTimestamp?.ToUniversalTime().ToString("O"),
+            entity.Metadata.DeletionGracePeriodSeconds,
+            entity.Generation(),
+            string.Join(',', entity.Finalizers() ?? []));
 
     private async Task OnWatchErrorAsync(Exception e)
     {

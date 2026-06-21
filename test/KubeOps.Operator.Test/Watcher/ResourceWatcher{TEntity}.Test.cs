@@ -43,6 +43,15 @@ public sealed class ResourceWatcherTest
         // Restart the watcher
         await resourceWatcher.StartAsync(TestContext.Current.CancellationToken);
 
+        // The watch loop now runs on a background task, so StartAsync returns before WatchAsync is invoked.
+        // Wait until both watches have begun before asserting.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline &&
+               Mock.Get(kubernetesClient).Invocations.Count(i => i.Method.Name == "WatchAsync") < 2)
+        {
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+        }
+
         // Assert
         Mock.Get(kubernetesClient)
             .Verify(client => client.WatchAsync<V1OperatorIntegrationTestEntity>(

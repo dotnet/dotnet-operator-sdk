@@ -552,8 +552,9 @@ KubeOps makes this straightforward by exposing the `EntityQueue<TEntity>` delega
 any DI-registered component to enqueue an entity for reconciliation on demand.
 
 ```csharp
-// Signature (fire-and-forget; enqueue is synchronous)
-public delegate void EntityQueue<in TEntity>(
+// Signature — awaitable. The result is true if the entity was scheduled, or false if the enqueue was
+// dropped (for example because the queue's intake is suspended during a leadership transition).
+public delegate Task<bool> EntityQueue<in TEntity>(
     TEntity entity,
     ReconciliationType type,
     ReconciliationTriggerSource reconciliationTriggerSource,
@@ -562,6 +563,8 @@ public delegate void EntityQueue<in TEntity>(
     CancellationToken cancellationToken)
     where TEntity : IKubernetesObject<V1ObjectMeta>;
 ```
+
+Always `await` the delegate and, where it matters, react to a `false` result (a dropped enqueue).
 
 Always pass `ReconciliationTriggerSource.Operator` for externally triggered reconciliations.
 `ReconciliationTriggerSource.ApiServer` is reserved for events originating from the Kubernetes
@@ -586,7 +589,7 @@ app.MapPost("/reconcile/{namespace}/{name}", async (
         return Results.NotFound();
     }
 
-    entityQueue(
+    var scheduled = await entityQueue(
         entity,
         ReconciliationType.Modified,
         ReconciliationTriggerSource.Operator,
@@ -594,7 +597,10 @@ app.MapPost("/reconcile/{namespace}/{name}", async (
         retryCount: 0,
         cancellationToken);
 
-    return Results.Accepted();
+    // false means the enqueue was dropped (e.g. this instance is not the current leader).
+    return scheduled
+        ? Results.Accepted()
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 });
 ```
 
