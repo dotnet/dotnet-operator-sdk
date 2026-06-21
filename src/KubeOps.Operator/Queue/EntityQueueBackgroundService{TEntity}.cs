@@ -75,7 +75,14 @@ public class EntityQueueBackgroundService<TEntity>(
         operatorSettings.ParallelReconciliation.MaxParallelReconciliations,
         operatorSettings.ParallelReconciliation.MaxParallelReconciliations);
 
+    // Guards the start/stop lifecycle: _running (desired state), _cts (re)creation, and its cancellation.
+    // Keeping these mutations mutually exclusive makes StartAsync idempotent (so a concurrent IsLeader() branch
+    // and OnStartedLeading callback cannot start two processing loops) and prevents StopAsync from cancelling a
+    // CancellationTokenSource that StartAsync is concurrently disposing and replacing.
+    private readonly object _lifecycleLock = new();
+
     private CancellationTokenSource _cts = new();
+    private bool _running;
     private volatile bool _disposed;
 
     /// <summary>
@@ -93,34 +100,60 @@ public class EntityQueueBackgroundService<TEntity>(
     /// </remarks>
     public virtual Task StartAsync(CancellationToken cancellationToken)
     {
-        // Re-create the cancellation token source when it was cancelled by a previous StopAsync.
-        // This allows the processing loop to be restarted (e.g. when leadership is re-acquired).
-        if (_cts.IsCancellationRequested)
+        lock (_lifecycleLock)
         {
-            _cts.Dispose();
-            _cts = new();
+            // Idempotent: if a loop is already running, do not start a second one. This closes the race where
+            // the leadership-aware StartAsync IsLeader() branch and a concurrent OnStartedLeading callback both
+            // call base.StartAsync — two loops would reconcile every entry twice in parallel.
+            if (_disposed || _running)
+            {
+                return Task.CompletedTask;
+            }
+
+            // Re-create the cancellation token source when it was cancelled by a previous StopAsync.
+            // This allows the processing loop to be restarted (e.g. when leadership is re-acquired).
+            if (_cts.IsCancellationRequested)
+            {
+                _cts.Dispose();
+                _cts = new();
+            }
+
+            _running = true;
+
+            // The current implementation of IHostedService expects that StartAsync is "really" asynchronous.
+            // Blocking calls are not allowed, they would stop the rest of the startup flow.
+            //
+            // This has been an open issue since 2019 and is not expected to be closed soon. (https://github.com/dotnet/runtime/issues/36063)
+            // For reasons unknown at the time of writing this code, "await Task.Yield()" didn't work as expected, it caused
+            // a deadlock in 1/10 of the cases.
+            //
+            // Therefore, we use Task.Run() and put the work to queue. The passed cancellation token of the StartAsync
+            // method is not used because it would only cancel the scheduling (which we definitely don't want to cancel).
+            // To make this intention explicit, CancellationToken.None gets passed.
+            _ = Task.Run(() => WatchAsync(_cts.Token), CancellationToken.None);
+
+            return Task.CompletedTask;
         }
-
-        // The current implementation of IHostedService expects that StartAsync is "really" asynchronous.
-        // Blocking calls are not allowed, they would stop the rest of the startup flow.
-        //
-        // This has been an open issue since 2019 and is not expected to be closed soon. (https://github.com/dotnet/runtime/issues/36063)
-        // For reasons unknown at the time of writing this code, "await Task.Yield()" didn't work as expected, it caused
-        // a deadlock in 1/10 of the cases.
-        //
-        // Therefore, we use Task.Run() and put the work to queue. The passed cancellation token of the StartAsync
-        // method is not used because it would only cancel the scheduling (which we definitely don't want to cancel).
-        // To make this intention explicit, CancellationToken.None gets passed.
-        _ = Task.Run(() => WatchAsync(_cts.Token), CancellationToken.None);
-
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc/>
     public virtual Task StopAsync(CancellationToken cancellationToken)
-        => _disposed
-            ? Task.CompletedTask
-            : _cts.CancelAsync();
+    {
+        lock (_lifecycleLock)
+        {
+            if (_disposed || !_running)
+            {
+                return Task.CompletedTask;
+            }
+
+            // Clear the desired-running state so a subsequent StartAsync (e.g. on re-acquired leadership) starts
+            // a fresh loop instead of being suppressed by the idempotency guard. Cancellation runs under the lock
+            // so StartAsync cannot dispose/replace _cts concurrently; CancelAsync's callbacks run asynchronously,
+            // so holding the lock does not risk re-entrancy.
+            _running = false;
+            return _cts.CancelAsync();
+        }
+    }
 
     /// <inheritdoc/>
     public void Dispose()
@@ -132,32 +165,8 @@ public class EntityQueueBackgroundService<TEntity>(
     /// <inheritdoc/>
     public async ValueTask DisposeAsync()
     {
-        await CastAndDispose(_cts);
-        await CastAndDispose(_parallelismSemaphore);
-
-        foreach (var entry in _uidEntries.Values)
-        {
-            await CastAndDispose(entry.Semaphore);
-        }
-
-        _uidEntries.Clear();
-        await CastAndDispose(client);
-        await CastAndDispose(queue);
-
-        _disposed = true;
-        return;
-
-        static async ValueTask CastAndDispose(IDisposable resource)
-        {
-            if (resource is IAsyncDisposable resourceAsyncDisposable)
-            {
-                await resourceAsyncDisposable.DisposeAsync();
-            }
-            else
-            {
-                resource.Dispose();
-            }
-        }
+        await DisposeAsyncCore();
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -188,6 +197,51 @@ public class EntityQueueBackgroundService<TEntity>(
         queue.Dispose();
 
         _disposed = true;
+    }
+
+    /// <summary>
+    /// Asynchronously releases the resources used by the background service.
+    /// </summary>
+    /// <remarks>
+    /// Overriding subclasses must call <c>base.DisposeAsyncCore()</c> so the shared resources are released on
+    /// the asynchronous disposal path too. This mirrors <see cref="Dispose(bool)"/>: the dependency injection
+    /// container disposes via <see cref="IAsyncDisposable"/> when available, so subclass cleanup that only
+    /// hooks <see cref="Dispose(bool)"/> would otherwise be skipped.
+    /// </remarks>
+    /// <returns>A task that represents the asynchronous dispose operation.</returns>
+    protected virtual async ValueTask DisposeAsyncCore()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        await CastAndDispose(_cts);
+        await CastAndDispose(_parallelismSemaphore);
+
+        foreach (var entry in _uidEntries.Values)
+        {
+            await CastAndDispose(entry.Semaphore);
+        }
+
+        _uidEntries.Clear();
+        await CastAndDispose(client);
+        await CastAndDispose(queue);
+
+        _disposed = true;
+        return;
+
+        static async ValueTask CastAndDispose(IDisposable resource)
+        {
+            if (resource is IAsyncDisposable resourceAsyncDisposable)
+            {
+                await resourceAsyncDisposable.DisposeAsync();
+            }
+            else
+            {
+                resource.Dispose();
+            }
+        }
     }
 
     protected virtual async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)

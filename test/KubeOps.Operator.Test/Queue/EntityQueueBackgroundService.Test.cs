@@ -30,7 +30,13 @@ public sealed class EntityQueueBackgroundServiceTest
         private readonly System.Threading.Channels.Channel<QueueEntry<TEntity>> _channel =
             System.Threading.Channels.Channel.CreateUnbounded<QueueEntry<TEntity>>();
 
+        private int _getAsyncEnumeratorCallCount;
+
         public int EnqueueCallCount { get; private set; }
+
+        // Number of times a consuming loop began iterating the queue. Each processing loop calls
+        // GetAsyncEnumerator exactly once, so this equals the number of concurrently started loops.
+        public int GetAsyncEnumeratorCallCount => Volatile.Read(ref _getAsyncEnumeratorCallCount);
 
         // Controls the value returned by Enqueue, to simulate a leadership-aware queue dropping the entry
         // (returns false) versus scheduling it (returns true).
@@ -63,6 +69,7 @@ public sealed class EntityQueueBackgroundServiceTest
         public async IAsyncEnumerator<QueueEntry<TEntity>> GetAsyncEnumerator(
             CancellationToken cancellationToken = default)
         {
+            Interlocked.Increment(ref _getAsyncEnumeratorCallCount);
             await foreach (var entry in _channel.Reader.ReadAllAsync(cancellationToken))
             {
                 yield return entry;
@@ -186,6 +193,30 @@ public sealed class EntityQueueBackgroundServiceTest
             captured[0].Status.Should().Be("failure");
             captured[0].ErrorType.Should().Be("System.InvalidOperationException");
         }
+    }
+
+    [Trait("Area", "LeaderLoss")]
+    [Fact]
+    public async Task StartAsync_Is_Idempotent_And_Starts_Only_One_Processing_Loop()
+    {
+        var queue = new ControllableQueue<V1ConfigMap>();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+        var entity = CreateEntity();
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, entity);
+
+        // Two starts without an intervening StopAsync. This mirrors the leadership-aware race where the
+        // StartAsync IsLeader() branch and a concurrent OnStartedLeading callback both invoke
+        // base.StartAsync. Only one queue-consuming loop must run, otherwise every entry is reconciled
+        // twice concurrently.
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        queue.GetAsyncEnumeratorCallCount.Should().Be(1);
     }
 
     [Fact]

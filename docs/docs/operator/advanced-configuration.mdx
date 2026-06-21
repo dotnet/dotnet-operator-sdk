@@ -164,6 +164,7 @@ public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
     ITimedEntityQueue<TEntity> entityQueue,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
+    IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     INamespaceLeadershipManager namespaceLeadershipManager)
     : ResourceWatcher<TEntity>(
@@ -173,6 +174,7 @@ public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
         entityQueue,
         settings,
         labelSelector,
+        fieldSelector,
         client)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
@@ -239,15 +241,26 @@ public class NamespaceLeadershipManager : INamespaceLeadershipManager
 }
 ```
 
-**Step 3: Register the custom watcher**
+**Step 3: Register the controller, the custom watcher, and a queue consumer**
+
+`LeaderElectionType.Custom` intentionally registers **no** watcher and **no** queue consumer — with custom coordination the SDK cannot know how leadership should drive either. You therefore wire up the full pipeline yourself: `AddController` registers the reconciler and the entity queue, and you add the custom watcher plus a queue consumer as hosted services. A watcher without a consumer would enqueue events that nothing ever drains, so the consumer is required.
+
+Enabling `WithRegistrationValidation()` makes host startup fail fast with an `InvalidRegistrationException` if a piece is missing, instead of starting an operator that silently processes nothing.
 
 ```csharp
 builder.Services
     .AddKubernetesOperator(settings => settings
-        .WithLeaderElection(LeaderElectionType.Custom))
+        .WithLeaderElection(LeaderElectionType.Custom)
+        .WithRegistrationValidation())
+    .AddController<V1DemoEntityController, V1DemoEntity>();
+
+builder.Services
     .AddSingleton<INamespaceLeadershipManager, NamespaceLeadershipManager>()
-    .AddHostedService<NamespacedLeaderElectionResourceWatcher<V1DemoEntity>>();
+    .AddHostedService<NamespacedLeaderElectionResourceWatcher<V1DemoEntity>>()
+    .AddHostedService<EntityQueueBackgroundService<V1DemoEntity>>();
 ```
+
+The plain `EntityQueueBackgroundService<TEntity>` is the right consumer here: leadership is handled inside your watcher, so the queue does not need the leadership gate that `LeaderElectionType.Single` adds.
 
 ### Benefits of Custom Leader Election
 

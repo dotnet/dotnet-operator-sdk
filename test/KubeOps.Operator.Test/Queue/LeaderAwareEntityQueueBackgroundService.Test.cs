@@ -141,6 +141,42 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
         act.Should().NotThrow();
     }
 
+    [Fact]
+    public async Task Dispose_Should_Unsubscribe_From_Elector_So_Later_Transitions_Are_Ignored()
+    {
+        var queue = new CapturingQueue();
+        var service = CreateService(queue);
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        queue.GateCalls.Clear();
+
+        service.Dispose();
+
+        // After disposal the service must no longer react to leadership callbacks: the handler is
+        // unsubscribed, so invoking the elector event reaches nothing and no gating happens.
+        service.SimulateStartedLeading();
+        queue.GateCalls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DisposeAsync_Should_Unsubscribe_From_Elector_So_Later_Transitions_Are_Ignored()
+    {
+        var queue = new CapturingQueue();
+        var service = CreateService(queue);
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        queue.GateCalls.Clear();
+
+        await service.DisposeAsync();
+
+        // Regression guard for the async disposal path: the DI container disposes via IAsyncDisposable
+        // when available, so DisposeAsync must perform the same unsubscribe as Dispose. The previous code
+        // skipped the disposal hook on this path, leaving the handler subscribed — a stale StartedLeading
+        // would then resume intake (this assertion would fail) and touch already-disposed state.
+        service.SimulateStartedLeading();
+        queue.GateCalls.Should().BeEmpty();
+    }
+
     private static V1OperatorIntegrationTestEntity CreateEntity(string name)
     {
         var entity = new V1OperatorIntegrationTestEntity();

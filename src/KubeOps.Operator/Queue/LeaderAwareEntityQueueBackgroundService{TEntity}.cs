@@ -65,8 +65,7 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
     {
         logger.LogDebug("Subscribe for leadership updates.");
 
-        elector.OnStartedLeading += StartedLeading;
-        elector.OnStoppedLeading += StoppedLeading;
+        SubscribeToElector();
 
         if (Gate is null)
         {
@@ -104,11 +103,28 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
     {
         if (disposing)
         {
-            elector.OnStartedLeading -= StartedLeading;
-            elector.OnStoppedLeading -= StoppedLeading;
+            UnsubscribeFromElector();
         }
 
         base.Dispose(disposing);
+    }
+
+    protected override async ValueTask DisposeAsyncCore()
+    {
+        UnsubscribeFromElector();
+        await base.DisposeAsyncCore();
+    }
+
+    private void SubscribeToElector()
+    {
+        elector.OnStartedLeading += StartedLeading;
+        elector.OnStoppedLeading += StoppedLeading;
+    }
+
+    private void UnsubscribeFromElector()
+    {
+        elector.OnStartedLeading -= StartedLeading;
+        elector.OnStoppedLeading -= StoppedLeading;
     }
 
     private void StartedLeading()
