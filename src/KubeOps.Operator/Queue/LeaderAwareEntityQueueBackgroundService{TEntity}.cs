@@ -11,6 +11,7 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.LeaderElection;
 
 using Microsoft.Extensions.Logging;
 
@@ -61,13 +62,16 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
         logger), ILeaderAwareEntityQueueConsumer<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
+    private LeaderElectionSubscription? _subscription;
+
     private ISuspendableEntityQueue? Gate => Queue as ISuspendableEntityQueue;
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogDebug("Subscribe for leadership updates.");
 
-        SubscribeToElector();
+        _subscription ??= new(elector, StartedLeading, StoppedLeading);
+        _subscription.Subscribe();
 
         if (Gate is null)
         {
@@ -79,7 +83,7 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
                 nameof(ISuspendableEntityQueue));
         }
 
-        if (elector.IsLeader())
+        if (_subscription.IsLeader)
         {
             Gate?.ResumeIntake();
             return base.StartAsync(cancellationToken);
@@ -94,43 +98,15 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
     public override Task StopAsync(CancellationToken cancellationToken)
     {
         logger.LogDebug("Unsubscribe from leadership updates.");
+        _subscription?.Unsubscribe();
 
-        elector.OnStartedLeading -= StartedLeading;
-        elector.OnStoppedLeading -= StoppedLeading;
-
-        // Always delegate to the base stop: it is idempotent (a no-op when no loop is running), so the
-        // processing loop is reliably stopped on host shutdown even when leadership was already lost — rather
-        // than relying solely on the fire-and-forget StopAsync issued from the OnStoppedLeading callback.
+        // Always delegate to the base stop: it drains in-flight reconciliations, bounded by the host shutdown
+        // token, so the processing loop is reliably awaited on host shutdown even when leadership was already lost.
         return base.StopAsync(cancellationToken);
     }
 
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            UnsubscribeFromElector();
-        }
-
-        base.Dispose(disposing);
-    }
-
-    protected override async ValueTask DisposeAsyncCore()
-    {
-        UnsubscribeFromElector();
-        await base.DisposeAsyncCore();
-    }
-
-    private void SubscribeToElector()
-    {
-        elector.OnStartedLeading += StartedLeading;
-        elector.OnStoppedLeading += StoppedLeading;
-    }
-
-    private void UnsubscribeFromElector()
-    {
-        elector.OnStartedLeading -= StartedLeading;
-        elector.OnStoppedLeading -= StoppedLeading;
-    }
+    /// <inheritdoc/>
+    protected override void OnDisposing() => _subscription?.Unsubscribe();
 
     private void StartedLeading()
     {
@@ -150,8 +126,10 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
         // Close the intake gate FIRST so nothing — including a still-running reconciler's RequeueAfter or
         // an error retry — can enqueue work during or after the stop. Then cancel the dequeue loop and any
         // in-flight reconciliation, and clear the work the former leader had already queued.
+        // RequestStopAsync is non-blocking on purpose: we no longer hold leadership, so we abort (cancel) and
+        // move on without waiting for the reconciliation to finish (the host-shutdown drain is a separate path).
         Gate?.SuspendIntake();
-        _ = base.StopAsync(CancellationToken.None);
+        _ = RequestStopAsync();
         Gate?.Clear();
     }
 }

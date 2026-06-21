@@ -155,7 +155,7 @@ public sealed class EntityQueueBackgroundServiceTest
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((string _, string? _, CancellationToken _) => entity);
 
-        return new(
+        var service = new EntityQueueBackgroundService<V1ConfigMap>(
             new("test"),
             clientMock.Object,
             effectiveSettings,
@@ -163,6 +163,11 @@ public sealed class EntityQueueBackgroundServiceTest
             reconcilerMock.Object,
             Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>(),
             metrics);
+
+        // Keep the drain bound short so tests that intentionally block a worker across StopAsync/dispose don't
+        // wait the production default. Tests that assert the bound itself override this explicitly.
+        service.DrainGracePeriod = TimeSpan.FromMilliseconds(200);
+        return service;
     }
 
     [Trait("Area", "Otel")]
@@ -284,7 +289,11 @@ public sealed class EntityQueueBackgroundServiceTest
             new OperatorSettingsBuilder().Build(),
             queue,
             reconcilerMock.Object,
-            Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>());
+            Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>())
+        {
+            // The BarrierQueue ignores cancellation, so bound the stop/dispose drain short.
+            DrainGracePeriod = TimeSpan.FromMilliseconds(200),
+        };
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         await queue.LoopEntered.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
@@ -356,6 +365,43 @@ public sealed class EntityQueueBackgroundServiceTest
         await Task.Delay(200, TestContext.Current.CancellationToken);
 
         tokenDisposedWhileInFlight.Should().BeFalse();
+    }
+
+    [Trait("Area", "LeaderLoss")]
+    [Fact]
+    public async Task StopAsync_Awaits_The_Drain_Of_In_Flight_Reconciliations()
+    {
+        // Finding 1: host StopAsync must honor the IHostedService contract and await the drain of in-flight
+        // reconciliations (bounded), not return immediately while a reconciliation is still running.
+        var entity = CreateEntity();
+        var queue = new ControllableQueue<V1ConfigMap>();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+
+        var entered = new TaskCompletionSource();
+        var canFinish = new TaskCompletionSource();
+        reconcilerMock
+            .Setup(r => r.Reconcile(It.IsAny<ReconciliationContext<V1ConfigMap>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (ReconciliationContext<V1ConfigMap> _ctx, CancellationToken _token) =>
+            {
+                entered.TrySetResult();
+                await canFinish.Task;
+                return ReconciliationResult<V1ConfigMap>.Success(entity);
+            });
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, entity);
+        service.DrainGracePeriod = TimeSpan.FromSeconds(5); // long enough to actually await a cooperative drain
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        queue.Push(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+        await entered.Task;
+
+        var stopTask = service.StopAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(150, TestContext.Current.CancellationToken);
+        stopTask.IsCompleted.Should().BeFalse(); // StopAsync is awaiting the in-flight reconciliation
+
+        canFinish.SetResult();
+        await stopTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
     [Fact]

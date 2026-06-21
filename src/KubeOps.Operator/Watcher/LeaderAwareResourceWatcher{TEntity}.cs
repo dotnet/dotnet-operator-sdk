@@ -11,10 +11,10 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.LeaderElection;
 using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using ZiggyCreatures.Caching.Fusion;
@@ -30,7 +30,6 @@ public class LeaderAwareResourceWatcher<TEntity>(
     IEntityLabelSelector<TEntity> labelSelector,
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
-    IHostApplicationLifetime hostApplicationLifetime,
     LeaderElector elector,
     OperatorMetrics? metrics = null)
     : ResourceWatcher<TEntity>(
@@ -45,51 +44,32 @@ public class LeaderAwareResourceWatcher<TEntity>(
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private bool _disposed;
+    private LeaderElectionSubscription? _subscription;
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogDebug("Subscribe for leadership updates.");
 
-        elector.OnStartedLeading += StartedLeading;
-        elector.OnStoppedLeading += StoppedLeading;
+        _subscription ??= new(elector, StartedLeading, StoppedLeading);
+        _subscription.Subscribe();
 
-        // Only start watching while leadership is actually held. The base watcher owns the single cancellation
-        // source; StartedLeading/StoppedLeading restart and stop it on leadership transitions.
-        return elector.IsLeader() ? base.StartAsync(cancellationToken) : Task.CompletedTask;
+        // Only start watching while leadership is actually held. StartedLeading/StoppedLeading restart and stop
+        // the base watch loop on leadership transitions.
+        return _subscription.IsLeader ? base.StartAsync(cancellationToken) : Task.CompletedTask;
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)
     {
         logger.LogDebug("Unsubscribe from leadership updates.");
-        if (_disposed)
-        {
-            return Task.CompletedTask;
-        }
+        _subscription?.Unsubscribe();
 
-        elector.OnStartedLeading -= StartedLeading;
-        elector.OnStoppedLeading -= StoppedLeading;
-
-        // Always delegate to the base stop: it is a no-op when no watch task is running, so the watcher loop is
-        // reliably awaited and torn down on host shutdown even when leadership was already lost — rather than
-        // relying solely on the fire-and-forget StopAsync issued from the OnStoppedLeading callback.
+        // Always delegate to the base stop: it drains the watch loop, bounded by the host shutdown token, so the
+        // watcher is reliably awaited and torn down on host shutdown even when leadership was already lost.
         return base.StopAsync(cancellationToken);
     }
 
-    protected override void Dispose(bool disposing)
-    {
-        if (!disposing)
-        {
-            return;
-        }
-
-        elector.OnStartedLeading -= StartedLeading;
-        elector.OnStoppedLeading -= StoppedLeading;
-        elector.Dispose();
-        _disposed = true;
-
-        base.Dispose(disposing);
-    }
+    /// <inheritdoc/>
+    protected override void OnDisposing() => _subscription?.Unsubscribe();
 
     private void StartedLeading()
     {
@@ -104,7 +84,9 @@ public class LeaderAwareResourceWatcher<TEntity>(
     {
         logger.LogInformation("This instance stopped leading, stopping watcher.");
 
+        // RequestStopAsync is non-blocking on purpose: we no longer hold leadership, so we abort (cancel) the
+        // watch and move on without waiting (the host-shutdown drain is a separate path).
         EntityCache.Clear();
-        _ = base.StopAsync(hostApplicationLifetime.ApplicationStopped);
+        _ = RequestStopAsync();
     }
 }

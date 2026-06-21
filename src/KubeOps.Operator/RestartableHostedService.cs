@@ -20,12 +20,30 @@ namespace KubeOps.Operator;
 /// disposes a token source a still-running former loop is still observing.
 /// </para>
 /// <para>
-/// <see cref="StopAsync"/> only requests cancellation and does not block on the drain — a leadership callback may
-/// fire-and-forget it. A leadership flap (stop then start) can therefore briefly leave the previous loop draining
-/// while the next loop is already running; both are tracked, and disposal drains <strong>all</strong> of them
-/// (bounded by <see cref="DrainGracePeriod"/>) before subclass resources are released, so no in-flight work can
-/// touch an already-disposed resource. A reconciler that ignores its <see cref="CancellationToken"/> cannot block
-/// disposal beyond the grace period.
+/// There are two ways to stop the loop, with deliberately different semantics:
+/// </para>
+/// <list type="bullet">
+/// <item><description>
+/// <see cref="StopAsync"/> — the host-shutdown entry point. It requests cancellation and then <strong>awaits the
+/// drain</strong> of all in-flight work, bounded by its cancellation token (the host shutdown deadline) and
+/// <see cref="DrainGracePeriod"/>. This honors the <see cref="IHostedService"/> contract that a graceful host stop
+/// waits for the service to stop.
+/// </description></item>
+/// <item><description>
+/// <see cref="RequestStopAsync"/> — requests cancellation <strong>without waiting</strong>, for callers that must
+/// not block (such as a leadership-loss callback). On leadership loss the in-flight reconciliation is cancelled and
+/// the operator moves on — it does <strong>not</strong> wait for it to finish — which matches controller-runtime /
+/// other operator SDKs. (KubeOps does not terminate the process on leadership loss, so cancellation is cooperative
+/// rather than a hard <c>os.Exit</c>.)
+/// </description></item>
+/// </list>
+/// <para>
+/// "Draining" never means letting in-flight work <em>complete</em>: the work is cancelled first, and the bounded
+/// wait only lets the already-cancelled loop <em>unwind</em> so that shared resources are not torn down underneath
+/// a still-running worker. A flap (request-stop then start) can briefly leave the previous loop draining while the
+/// next loop already runs; both are tracked, and disposal drains <strong>all</strong> of them (bounded by
+/// <see cref="DrainGracePeriod"/>) before subclass resources are released. A reconciler that ignores its
+/// <see cref="CancellationToken"/> cannot block shutdown beyond the grace period.
 /// </para>
 /// </remarks>
 public abstract class RestartableHostedService : IHostedService, IDisposable, IAsyncDisposable
@@ -76,24 +94,28 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
     }
 
     /// <inheritdoc/>
-    public virtual Task StopAsync(CancellationToken cancellationToken)
+    /// <remarks>
+    /// Honors the <see cref="IHostedService"/> contract: it requests the loop to stop and then <strong>awaits the
+    /// drain</strong> of all in-flight work, bounded by <paramref name="cancellationToken"/> (the host shutdown
+    /// deadline) and <see cref="DrainGracePeriod"/>. It drains whatever is still active even if a prior
+    /// <see cref="RequestStopAsync"/> already cleared the running state. For a non-blocking stop (e.g. from a
+    /// leadership-loss callback) use <see cref="RequestStopAsync"/>.
+    /// </remarks>
+    public virtual async Task StopAsync(CancellationToken cancellationToken)
     {
         (Task Loop, CancellationTokenSource Cts)[] runs;
         lock (_lifecycleLock)
         {
-            if (_disposed || !_running)
+            if (_disposed)
             {
-                return Task.CompletedTask;
+                return;
             }
 
-            // Clear the desired-running state so a subsequent StartAsync (e.g. on re-acquired leadership) starts a
-            // fresh loop instead of being suppressed by the idempotency guard.
             _running = false;
             runs = [.. _activeRuns];
         }
 
-        // Non-blocking: only request cancellation. Disposal drains all loops before resources are released.
-        return CancelRunsAsync(runs);
+        await DrainRunsAsync(runs, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -126,6 +148,30 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
     }
 
     /// <summary>
+    /// Requests the loop to stop without waiting for it to drain — for callers that must not block, such as a
+    /// leadership-loss callback. The remaining drain is awaited by the next <see cref="StopAsync"/> or by disposal.
+    /// </summary>
+    /// <returns>A task that completes once cancellation has been signalled (not when the loop has drained).</returns>
+    protected Task RequestStopAsync()
+    {
+        (Task Loop, CancellationTokenSource Cts)[] runs;
+        lock (_lifecycleLock)
+        {
+            if (_disposed || !_running)
+            {
+                return Task.CompletedTask;
+            }
+
+            // Clear the desired-running state so a subsequent StartAsync (e.g. on re-acquired leadership) starts a
+            // fresh loop instead of being suppressed by the idempotency guard.
+            _running = false;
+            runs = [.. _activeRuns];
+        }
+
+        return CancelRunsAsync(runs);
+    }
+
+    /// <summary>
     /// Runs one iteration of the background loop. Implementations must honor <paramref name="cancellationToken"/>
     /// and return when it is cancelled.
     /// </summary>
@@ -149,6 +195,15 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// Synchronous cleanup that must run on <strong>both</strong> the synchronous and asynchronous disposal paths —
+    /// for example unsubscribing event handlers. Called from <see cref="Dispose(bool)"/> and
+    /// <see cref="DisposeAsyncCore"/>, so subclasses do not have to override both dispose methods to be safe.
+    /// </summary>
+    protected virtual void OnDisposing()
+    {
+    }
+
     /// <summary>Releases the resources used by the service.</summary>
     /// <param name="disposing">Whether the method is called from <see cref="Dispose()"/>.</param>
     /// <remarks>
@@ -163,6 +218,7 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
             return;
         }
 
+        OnDisposing();
         DisposeManagedResources();
         _disposed = true;
     }
@@ -188,6 +244,7 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
         }
 
         await DrainRunsAsync(runs, CancellationToken.None);
+        OnDisposing();
         await DisposeManagedResourcesAsync();
 
         _disposed = true;

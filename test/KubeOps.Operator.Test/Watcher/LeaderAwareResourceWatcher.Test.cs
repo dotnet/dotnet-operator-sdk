@@ -34,11 +34,6 @@ public sealed class LeaderAwareResourceWatcherTest
             .Setup(cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcher)))
             .Returns(mockCache.Object);
 
-        var lifetime = Mock.Of<IHostApplicationLifetime>();
-        Mock.Get(lifetime)
-            .Setup(l => l.ApplicationStopped)
-            .Returns(CancellationToken.None);
-
         var lockMock = new Mock<ILock>();
         lockMock
             .Setup(l => l.GetAsync(It.IsAny<CancellationToken>()))
@@ -53,7 +48,6 @@ public sealed class LeaderAwareResourceWatcherTest
 
         var watcher = new TestableLeaderAwareResourceWatcher(
             mockCacheProvider,
-            lifetime,
             elector,
             Mock.Of<ILogger<LeaderAwareResourceWatcher<V1OperatorIntegrationTestEntity>>>(),
             Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>(),
@@ -78,9 +72,6 @@ public sealed class LeaderAwareResourceWatcherTest
             .Setup(cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcher)))
             .Returns(mockCache.Object);
 
-        var lifetime = Mock.Of<IHostApplicationLifetime>();
-        Mock.Get(lifetime).Setup(l => l.ApplicationStopped).Returns(CancellationToken.None);
-
         var lockMock = new Mock<ILock>();
         lockMock
             .Setup(l => l.GetAsync(It.IsAny<CancellationToken>()))
@@ -96,7 +87,6 @@ public sealed class LeaderAwareResourceWatcherTest
         var loggerMock = new Mock<ILogger<LeaderAwareResourceWatcher<V1OperatorIntegrationTestEntity>>>();
         var watcher = new TestableLeaderAwareResourceWatcher(
             mockCacheProvider,
-            lifetime,
             elector,
             loggerMock.Object,
             Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>(),
@@ -125,9 +115,6 @@ public sealed class LeaderAwareResourceWatcherTest
         var mockCacheProvider = Mock.Of<IFusionCacheProvider>();
         Mock.Get(mockCacheProvider).Setup(cp => cp.GetCache(It.IsAny<string>())).Returns(Mock.Of<IFusionCache>());
 
-        var lifetime = Mock.Of<IHostApplicationLifetime>();
-        Mock.Get(lifetime).Setup(l => l.ApplicationStopped).Returns(CancellationToken.None);
-
         var lockMock = new Mock<ILock>();
         lockMock
             .Setup(l => l.GetAsync(It.IsAny<CancellationToken>()))
@@ -152,7 +139,6 @@ public sealed class LeaderAwareResourceWatcherTest
 
         var watcher = new TestableLeaderAwareResourceWatcher(
             mockCacheProvider,
-            lifetime,
             elector,
             Mock.Of<ILogger<LeaderAwareResourceWatcher<V1OperatorIntegrationTestEntity>>>(),
             Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>(),
@@ -168,6 +154,50 @@ public sealed class LeaderAwareResourceWatcherTest
         await watcher.DisposeAsync();
     }
 
+    [Fact]
+    public async Task DisposeAsync_Unsubscribes_From_Elector()
+    {
+        // Finding 2: the asynchronous dispose path (DisposeAsync -> base DisposeAsyncCore) must remove the
+        // leadership handlers from the (singleton) elector, not only the synchronous Dispose(bool). Otherwise the
+        // disposed watcher stays referenced by the elector and later leadership events call back into it.
+        var mockCacheProvider = Mock.Of<IFusionCacheProvider>();
+        Mock.Get(mockCacheProvider).Setup(cp => cp.GetCache(It.IsAny<string>())).Returns(Mock.Of<IFusionCache>());
+
+        var lockMock = new Mock<ILock>();
+        lockMock
+            .Setup(l => l.GetAsync(It.IsAny<CancellationToken>()))
+            .Returns<CancellationToken>(async ct => { await Task.Delay(Timeout.Infinite, ct); return null!; });
+        var elector = new k8s.LeaderElection.LeaderElector(new(lockMock.Object)
+        {
+            LeaseDuration = TimeSpan.FromSeconds(1),
+            RenewDeadline = TimeSpan.FromMilliseconds(500),
+            RetryPeriod = TimeSpan.FromMilliseconds(100),
+        });
+
+        var watcher = new TestableLeaderAwareResourceWatcher(
+            mockCacheProvider,
+            elector,
+            Mock.Of<ILogger<LeaderAwareResourceWatcher<V1OperatorIntegrationTestEntity>>>(),
+            Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>(),
+            Mock.Of<IKubernetesClient>());
+
+        await watcher.StartAsync(TestContext.Current.CancellationToken); // subscribes the handlers
+        GetElectorHandler(elector, nameof(k8s.LeaderElection.LeaderElector.OnStartedLeading)).Should().NotBeNull();
+
+        await watcher.DisposeAsync();
+
+        // The async dispose path must have removed both handlers from the elector.
+        GetElectorHandler(elector, nameof(k8s.LeaderElection.LeaderElector.OnStartedLeading)).Should().BeNull();
+        GetElectorHandler(elector, nameof(k8s.LeaderElection.LeaderElector.OnStoppedLeading)).Should().BeNull();
+    }
+
+    private static Delegate? GetElectorHandler(k8s.LeaderElection.LeaderElector elector, string eventName)
+    {
+        var field = typeof(k8s.LeaderElection.LeaderElector)
+            .GetField(eventName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        return (Delegate?)field?.GetValue(elector);
+    }
+
     /// <summary>
     /// Wraps <see cref="LeaderAwareResourceWatcher{TEntity}"/> to expose the private
     /// <c>StoppedLeading</c> handler for testing, without needing Moq to raise
@@ -179,7 +209,6 @@ public sealed class LeaderAwareResourceWatcherTest
 
         public TestableLeaderAwareResourceWatcher(
             IFusionCacheProvider cacheProvider,
-            IHostApplicationLifetime lifetime,
             k8s.LeaderElection.LeaderElector elector,
             ILogger<LeaderAwareResourceWatcher<V1OperatorIntegrationTestEntity>> logger,
             ITimedEntityQueue<V1OperatorIntegrationTestEntity> queue,
@@ -193,7 +222,6 @@ public sealed class LeaderAwareResourceWatcherTest
                 new DefaultEntityLabelSelector<V1OperatorIntegrationTestEntity>(),
                 new DefaultEntityFieldSelector<V1OperatorIntegrationTestEntity>(),
                 client,
-                lifetime,
                 elector)
         {
             _elector = elector;
