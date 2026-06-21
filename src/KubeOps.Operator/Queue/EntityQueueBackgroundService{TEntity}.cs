@@ -383,7 +383,7 @@ public class EntityQueueBackgroundService<TEntity>(
                     entry.ReconciliationTriggerSource,
                     delay,
                     nextRetryCount,
-                    CancellationToken.None);
+                    cancellationToken);
 
                 // Only count the retry when it was actually scheduled. A leadership-aware queue with
                 // suspended intake (leadership just lost) drops the entry and returns false.

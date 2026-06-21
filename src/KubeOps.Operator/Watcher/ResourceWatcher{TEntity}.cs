@@ -227,7 +227,7 @@ public class ResourceWatcher<TEntity>(
             }
         }
 
-        await entityQueue
+        var enqueued = await entityQueue
             .Enqueue(
                 entity,
                 eventType.ToReconciliationType(),
@@ -235,6 +235,15 @@ public class ResourceWatcher<TEntity>(
                 queueIn: TimeSpan.Zero,
                 retryCount: 0,
                 cancellationToken);
+
+        if (!enqueued)
+        {
+            logger
+                .LogTrace(
+                    """Enqueue of "{Identifier}" was dropped; leaving deduplication cache unchanged.""",
+                    entity.ToIdentifierString());
+            return;
+        }
 
         if (eventType == WatchEventType.Deleted)
         {

@@ -62,6 +62,7 @@ public sealed class ResourceWatcherTest
         var entity = CreateTestEntity();
         var mockCache = new Mock<IFusionCache>();
         var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        SetupEnqueueResult(mockQueue, true);
         var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object);
 
         // Act
@@ -119,6 +120,7 @@ public sealed class ResourceWatcherTest
                     It.IsAny<FusionCacheEntryOptions>(),
                     It.IsAny<CancellationToken>()))
             .ReturnsAsync(MaybeValue<long>.FromValue(entity.Generation()!.Value - 1));
+        SetupEnqueueResult(mockQueue, true);
 
         // Act
         await watcher
@@ -321,6 +323,7 @@ public sealed class ResourceWatcherTest
                 It.IsAny<FusionCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(MaybeValue<string>.FromValue("deleting:2026-05-28T10:00:00.0000000Z:30:1:operator.test/first-finalizer"));
+        SetupEnqueueResult(mockQueue, true);
 
         // Act
         await watcher.InvokeOnEventAsync(
@@ -410,6 +413,7 @@ public sealed class ResourceWatcherTest
                 It.IsAny<FusionCacheEntryOptions>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(MaybeValue<string>.FromValue("1"));
+        SetupEnqueueResult(mockQueue, true);
 
         // Act
         await watcher.InvokeOnEventAsync(WatchEventType.Modified, entity, TestContext.Current.CancellationToken);
@@ -502,6 +506,7 @@ public sealed class ResourceWatcherTest
         var mockCache = new Mock<IFusionCache>();
         var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
         var settings = new OperatorSettingsBuilder { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion }.Build();
+        SetupEnqueueResult(mockQueue, true);
         var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, settings: settings);
 
         // Act
@@ -518,6 +523,144 @@ public sealed class ResourceWatcherTest
             q => q.Enqueue(entity, ReconciliationType.Deleted, ReconciliationTriggerSource.ApiServer, TimeSpan.Zero, 0, It.IsAny<CancellationToken>()),
             Times.Once);
     }
+
+    [Fact]
+    [Trait("Area", "LeaderLoss")]
+    public async Task OnEvent_Should_Not_Update_Cache_When_Enqueue_Dropped_And_Strategy_Is_ByGeneration()
+    {
+        // Arrange – generation changed, but the queue dropped the entry (intake suspended on leadership loss)
+        var entity = CreateTestEntity();
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object);
+
+        mockCache
+            .Setup(c => c.TryGetAsync<long>(
+                It.Is<string>(s => s == entity.Uid()),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MaybeValue<long>.FromValue(entity.Generation()!.Value - 1));
+        SetupEnqueueResult(mockQueue, false);
+
+        // Act
+        await watcher.InvokeOnEventAsync(WatchEventType.Modified, entity, TestContext.Current.CancellationToken);
+
+        // Assert – dedup cache must NOT be advanced for an entry that was never enqueued
+        mockCache.Verify(
+            c => c.SetAsync(
+                It.IsAny<string>(),
+                It.IsAny<long>(),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<IEnumerable<string>?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    [Trait("Area", "LeaderLoss")]
+    public async Task OnEvent_Should_Not_Update_Cache_When_Enqueue_Dropped_And_Strategy_Is_ByResourceVersion()
+    {
+        // Arrange – resourceVersion changed, but the queue dropped the entry
+        var entity = CreateTestEntity(resourceVersion: "2");
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var settings = new OperatorSettingsBuilder { Namespace = "unit-test", ReconcileStrategy = ReconcileStrategy.ByResourceVersion }.Build();
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object, settings: settings);
+
+        mockCache
+            .Setup(c => c.TryGetAsync<string>(
+                It.Is<string>(s => s == entity.Uid()),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MaybeValue<string>.FromValue("1"));
+        SetupEnqueueResult(mockQueue, false);
+
+        // Act
+        await watcher.InvokeOnEventAsync(WatchEventType.Modified, entity, TestContext.Current.CancellationToken);
+
+        // Assert – dedup cache must NOT be advanced for an entry that was never enqueued
+        mockCache.Verify(
+            c => c.SetAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<IEnumerable<string>?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    [Trait("Area", "LeaderLoss")]
+    public async Task OnEvent_Should_Not_Update_DeletionTracking_When_Enqueue_Dropped_And_Strategy_Is_ByGeneration()
+    {
+        // Arrange – deletion fingerprint changed, but the queue dropped the entry
+        var entity = CreateTestEntity();
+        entity.Metadata.DeletionTimestamp = new DateTime(2026, 05, 28, 10, 00, 00, DateTimeKind.Utc);
+        entity.Metadata.DeletionGracePeriodSeconds = 30;
+        entity.Metadata.Finalizers = ["operator.test/second-finalizer"];
+
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object);
+
+        mockCache
+            .Setup(c => c.TryGetAsync<string>(
+                It.Is<string>(s => s == $"{entity.Uid()}:deletion"),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MaybeValue<string>.FromValue("deleting:2026-05-28T10:00:00.0000000Z:30:1:operator.test/first-finalizer"));
+        SetupEnqueueResult(mockQueue, false);
+
+        // Act
+        await watcher.InvokeOnEventAsync(WatchEventType.Modified, entity, TestContext.Current.CancellationToken);
+
+        // Assert – deletion tracking entry must NOT be advanced for an entry that was never enqueued
+        mockCache.Verify(
+            c => c.SetAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<IEnumerable<string>?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    [Trait("Area", "LeaderLoss")]
+    public async Task OnEvent_Should_Not_Remove_From_Cache_When_Enqueue_Dropped_On_Deleted()
+    {
+        // Arrange – delete event, but the queue dropped the entry
+        var entity = CreateTestEntity();
+        var mockCache = new Mock<IFusionCache>();
+        var mockQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        var watcher = CreateTestableWatcher(cache: mockCache.Object, queue: mockQueue.Object);
+
+        SetupEnqueueResult(mockQueue, false);
+
+        // Act
+        await watcher.InvokeOnEventAsync(WatchEventType.Deleted, entity, TestContext.Current.CancellationToken);
+
+        // Assert – cache entry must NOT be removed when the delete was never enqueued
+        mockCache.Verify(
+            c => c.RemoveAsync(
+                It.IsAny<string>(),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    private static void SetupEnqueueResult(
+        Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>> queue,
+        bool result)
+        => queue
+            .Setup(q => q.Enqueue(
+                It.IsAny<V1OperatorIntegrationTestEntity>(),
+                It.IsAny<ReconciliationType>(),
+                It.IsAny<ReconciliationTriggerSource>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(result);
 
     private static V1OperatorIntegrationTestEntity CreateTestEntity(string resourceVersion = "1")
         => new()

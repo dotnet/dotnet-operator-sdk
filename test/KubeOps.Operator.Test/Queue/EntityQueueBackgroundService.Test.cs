@@ -36,6 +36,10 @@ public sealed class EntityQueueBackgroundServiceTest
         // (returns false) versus scheduling it (returns true).
         public bool EnqueueResult { get; set; } = true;
 
+        // Captures the cancellation token of the most recent Enqueue call, so tests can assert which token
+        // the producer passed (e.g. the processing token vs. CancellationToken.None for error retries).
+        public CancellationToken LastEnqueueToken { get; private set; }
+
         public Task<bool> Enqueue(
             TEntity entity,
             ReconciliationType type,
@@ -45,6 +49,7 @@ public sealed class EntityQueueBackgroundServiceTest
             CancellationToken cancellationToken)
         {
             EnqueueCallCount++;
+            LastEnqueueToken = cancellationToken;
             _channel.Writer.TryWrite(new(entity, type, reconciliationTriggerSource, retryCount));
             return Task.FromResult(EnqueueResult);
         }
@@ -522,6 +527,64 @@ public sealed class EntityQueueBackgroundServiceTest
         // The retry was attempted (Enqueue called) but, because it was dropped, no requeue was counted.
         queue.EnqueueCallCount.Should().BeGreaterThan(0);
         requeued.Should().Be(0);
+    }
+
+    [Trait("Area", "LeaderLoss")]
+    [Fact]
+    public async Task ErrorRetry_Enqueue_Receives_Processing_Token_So_It_Is_Rejected_After_Stop()
+    {
+        // Finding 2: a former leadership term's error retry must not leak into the next term.
+        // The retry enqueue is passed the processing cancellationToken (not CancellationToken.None).
+        // A non-cooperative reconciler that ignores cancellation and throws a non-OCE *after* StopAsync
+        // has cancelled the processing loop must therefore enqueue its retry with an already-cancelled
+        // token, which a leadership-aware queue rejects.
+        var entity = CreateEntity();
+        var queue = new ControllableQueue<V1ConfigMap>();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+
+        var reconcileEntered = new TaskCompletionSource();
+        var canThrow = new TaskCompletionSource();
+
+        clientMock
+            .Setup(c => c.GetAsync<V1ConfigMap>(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entity);
+
+        // Non-cooperative: ignores the token, blocks until released, then throws a non-OCE.
+        reconcilerMock
+            .Setup(r => r.Reconcile(It.IsAny<ReconciliationContext<V1ConfigMap>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (ReconciliationContext<V1ConfigMap> _, CancellationToken _) =>
+            {
+                reconcileEntered.TrySetResult();
+                await canThrow.Task;
+                throw new InvalidOperationException("late non-cooperative failure");
+            });
+
+        var settings = new OperatorSettingsBuilder
+        {
+            ParallelReconciliation = new()
+            {
+                MaxParallelReconciliations = 2,
+                MaxErrorRetries = 3,
+                ErrorBackoffBase = TimeSpan.FromMilliseconds(10),
+            },
+        }.Build();
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, entity, settings);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        queue.Push(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+        await reconcileEntered.Task;
+
+        // Simulate leadership loss / shutdown: cancel the processing loop while the reconciler is in-flight.
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        // Let the in-flight reconciler throw now; its retry enqueue must carry the cancelled processing token.
+        canThrow.SetResult();
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        queue.EnqueueCallCount.Should().BeGreaterThan(0);
+        queue.LastEnqueueToken.IsCancellationRequested.Should().BeTrue();
     }
 
     [Fact]
