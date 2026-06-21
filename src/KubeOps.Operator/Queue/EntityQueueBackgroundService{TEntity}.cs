@@ -110,14 +110,11 @@ public class EntityQueueBackgroundService<TEntity>(
                 return Task.CompletedTask;
             }
 
-            // Re-create the cancellation token source when it was cancelled by a previous StopAsync.
-            // This allows the processing loop to be restarted (e.g. when leadership is re-acquired).
-            if (_cts.IsCancellationRequested)
-            {
-                _cts.Dispose();
-                _cts = new();
-            }
-
+            // Fresh token source for this run, owned and disposed by that run's loop (see
+            // RunProcessingLoopAsync). A flap restart therefore never disposes a token source a still-running
+            // former loop is still observing through the queue enumerator.
+            var cts = new CancellationTokenSource();
+            _cts = cts;
             _running = true;
 
             // The current implementation of IHostedService expects that StartAsync is "really" asynchronous.
@@ -130,7 +127,7 @@ public class EntityQueueBackgroundService<TEntity>(
             // Therefore, we use Task.Run() and put the work to queue. The passed cancellation token of the StartAsync
             // method is not used because it would only cancel the scheduling (which we definitely don't want to cancel).
             // To make this intention explicit, CancellationToken.None gets passed.
-            _ = Task.Run(() => WatchAsync(_cts.Token), CancellationToken.None);
+            _ = Task.Run(() => RunProcessingLoopAsync(cts), CancellationToken.None);
 
             return Task.CompletedTask;
         }
@@ -270,6 +267,30 @@ public class EntityQueueBackgroundService<TEntity>(
                 """Queued entity "{Identifier}" was not found. Skipping reconciliation.""",
                 entry.Entity.ToIdentifierString());
         return ReconciliationResult<TEntity>.Failure(entry.Entity, "Entity was not found.");
+    }
+
+    // Runs one processing loop and owns its CancellationTokenSource: it disposes the source only after the
+    // loop has finished, so StartAsync never disposes a token source that this loop is still using.
+    private async Task RunProcessingLoopAsync(CancellationTokenSource cts)
+    {
+        try
+        {
+            await WatchAsync(cts.Token);
+        }
+        finally
+        {
+            lock (_lifecycleLock)
+            {
+                // If this run is still the current one (the loop ended on its own, e.g. the queue completed),
+                // mark it stopped so a concurrent StopAsync does not cancel the source we are about to dispose.
+                if (ReferenceEquals(_cts, cts))
+                {
+                    _running = false;
+                }
+            }
+
+            cts.Dispose();
+        }
     }
 
     private async Task WatchAsync(CancellationToken cancellationToken)

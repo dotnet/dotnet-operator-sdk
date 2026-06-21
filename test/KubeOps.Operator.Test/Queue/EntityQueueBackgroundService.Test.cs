@@ -80,6 +80,52 @@ public sealed class EntityQueueBackgroundServiceTest
             => _channel.Writer.TryComplete();
     }
 
+    // A queue whose enumerator parks inside MoveNextAsync (holding the processing token) until released, then
+    // touches the token's wait handle — exactly what BlockingCollection.GetConsumingEnumerable does. If the
+    // token's source was disposed while the loop was parked, that touch throws ObjectDisposedException.
+    private sealed class BarrierQueue : ITimedEntityQueue<V1ConfigMap>
+    {
+        private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private volatile bool _tokenDisposedWhileInUse;
+
+        public Task LoopEntered => _entered.Task;
+
+        public bool TokenDisposedWhileInUse => _tokenDisposedWhileInUse;
+
+        public void ReleaseLoops() => _release.TrySetResult();
+
+        public Task<bool> Enqueue(
+            V1ConfigMap entity,
+            ReconciliationType type,
+            ReconciliationTriggerSource reconciliationTriggerSource,
+            TimeSpan queueIn,
+            int retryCount,
+            CancellationToken cancellationToken) => Task.FromResult(true);
+
+        public async IAsyncEnumerator<QueueEntry<V1ConfigMap>> GetAsyncEnumerator(
+            CancellationToken cancellationToken = default)
+        {
+            _entered.TrySetResult();
+            await _release.Task;
+
+            try
+            {
+                _ = cancellationToken.WaitHandle;
+            }
+            catch (ObjectDisposedException)
+            {
+                _tokenDisposedWhileInUse = true;
+            }
+
+            yield break;
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
     private static V1ConfigMap CreateEntity(string? uid = null)
         => new()
         {
@@ -217,6 +263,45 @@ public sealed class EntityQueueBackgroundServiceTest
         await service.StopAsync(TestContext.Current.CancellationToken);
 
         queue.GetAsyncEnumeratorCallCount.Should().Be(1);
+    }
+
+    [Trait("Area", "LeaderLoss")]
+    [Fact]
+    public async Task Restart_Does_Not_Dispose_CancellationTokenSource_Still_Used_By_Previous_Loop()
+    {
+        // L2: on a leadership flap (StopAsync then StartAsync) the service must not dispose a
+        // CancellationTokenSource whose token a still-running former loop is observing. The previous code
+        // reused a shared _cts and eagerly disposed it in StartAsync, so the lingering loop's queue
+        // enumerator could touch an already-disposed token source (ObjectDisposedException). Each run must
+        // own its own token source and dispose it only when that run ends.
+        var queue = new BarrierQueue();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+
+        var service = new EntityQueueBackgroundService<V1ConfigMap>(
+            new("test"),
+            clientMock.Object,
+            new OperatorSettingsBuilder().Build(),
+            queue,
+            reconcilerMock.Object,
+            Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>());
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        await queue.LoopEntered.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        // Flap: stop (cancels the first run's token) then start a fresh run, all while the first loop is
+        // still parked inside the queue enumerator holding the first run's token.
+        await service.StopAsync(TestContext.Current.CancellationToken);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        // Now let the parked loop(s) touch their token.
+        queue.ReleaseLoops();
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        queue.TokenDisposedWhileInUse.Should().BeFalse();
+
+        await service.StopAsync(TestContext.Current.CancellationToken);
+        await service.DisposeAsync();
     }
 
     [Fact]

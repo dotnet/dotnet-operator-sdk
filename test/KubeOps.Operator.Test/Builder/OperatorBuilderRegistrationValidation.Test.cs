@@ -391,6 +391,35 @@ public sealed class OperatorBuilderRegistrationValidationTest
             .Which.Message.Should().Contain("IEntityQueueConsumer");
     }
 
+    [Fact]
+    public async Task Should_Report_Missing_Queue_When_Open_Generic_Cannot_Close_For_Entity()
+    {
+        // An open-generic queue whose generic constraints exclude the managed entity is registered. The DI
+        // container cannot close ITimedEntityQueue<entity> from it, so it does not actually satisfy the
+        // watcher/reconciler dependency. A name-only (generic type definition) match would be a false
+        // positive; validation must report the queue as missing. Use None leader election so the queue is the
+        // only gap.
+        var settings = new OperatorSettingsBuilder
+        {
+            LeaderElectionType = LeaderElectionType.None,
+            QueueStrategy = QueueStrategy.Custom,
+            ValidateRegistrations = true,
+        }.Build();
+        var services = new ServiceCollection();
+        var builder = new OperatorBuilder(services, settings);
+        builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+        services.AddSingleton(typeof(ITimedEntityQueue<>), typeof(ConstrainedOpenQueue<>));
+        services.AddHostedService<CustomConsumer>();
+
+        var validator = CreateValidator(services, settings);
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<InvalidRegistrationException>())
+            .Which.Message.Should()
+            .Contain(nameof(V1OperatorIntegrationTestEntity))
+            .And.Contain("ITimedEntityQueue");
+    }
+
     private static OperatorRegistrationValidator CreateValidatorForSdkRegistrations(
         LeaderElectionType leaderElectionType, QueueStrategy queueStrategy)
         => CreateValidator(leaderElectionType, queueStrategy);
@@ -502,6 +531,32 @@ public sealed class OperatorBuilderRegistrationValidationTest
         public void ResumeIntake()
         {
         }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    // A constraint that V1OperatorIntegrationTestEntity does not satisfy, used to build an open-generic queue
+    // whose implementation cannot be closed for the managed entity.
+    private interface IUnsatisfiedQueueConstraint;
+
+    // An open-generic queue whose extra constraint excludes the managed entity, so the DI container cannot
+    // close ITimedEntityQueue<V1OperatorIntegrationTestEntity> from it. Validation inspects the registration
+    // descriptor only and never constructs it, so the members can throw.
+    private sealed class ConstrainedOpenQueue<TEntity> : ITimedEntityQueue<TEntity>
+        where TEntity : IKubernetesObject<V1ObjectMeta>, IUnsatisfiedQueueConstraint
+    {
+        public Task<bool> Enqueue(
+            TEntity entity,
+            ReconciliationType type,
+            ReconciliationTriggerSource reconciliationTriggerSource,
+            TimeSpan queueIn,
+            int retryCount,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public IAsyncEnumerator<QueueEntry<TEntity>> GetAsyncEnumerator(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
 
         public void Dispose()
         {

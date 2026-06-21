@@ -84,10 +84,45 @@ internal sealed class OperatorRegistrationValidator(
     // close to it (e.g. AddSingleton(typeof(ITimedEntityQueue<>), typeof(MyQueue<>))). Keyed registrations
     // are ignored: the watcher/reconciler take these as plain (unkeyed) constructor dependencies, so a keyed
     // registration would not satisfy them.
-    private static bool HasService(IServiceCollection services, Type serviceType) =>
-        services.Any(d => !d.IsKeyedService && d.ServiceType == serviceType) ||
-        (serviceType.IsGenericType &&
-            services.Any(d => !d.IsKeyedService && d.ServiceType == serviceType.GetGenericTypeDefinition()));
+    private static bool HasService(IServiceCollection services, Type serviceType)
+    {
+        if (services.Any(d => !d.IsKeyedService && d.ServiceType == serviceType))
+        {
+            return true;
+        }
+
+        if (!serviceType.IsGenericType)
+        {
+            return false;
+        }
+
+        // An open-generic registration only satisfies the requested closed type if its implementation can
+        // actually be closed to it. An open implementation whose generic constraints exclude the entity (e.g.
+        // `where TEntity : ISomeMarker`) would pass a name-only match but fail to resolve at runtime; verify it
+        // closes. Factory/instance registrations expose no implementation type to check and are assumed to match.
+        var openServiceType = serviceType.GetGenericTypeDefinition();
+        return services.Any(d =>
+            !d.IsKeyedService && d.ServiceType == openServiceType && ClosesToRequestedType(d, serviceType));
+    }
+
+    private static bool ClosesToRequestedType(ServiceDescriptor descriptor, Type closedServiceType)
+    {
+        if (descriptor.ImplementationType is not { IsGenericTypeDefinition: true } openImplementation)
+        {
+            return true;
+        }
+
+        try
+        {
+            openImplementation.MakeGenericType(closedServiceType.GenericTypeArguments);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            // Generic constraints not satisfiable for this entity; the registration cannot serve it.
+            return false;
+        }
+    }
 
     private static bool HasHostedServiceAssignableTo(IServiceCollection services, Type targetType) =>
         services.Any(d =>
