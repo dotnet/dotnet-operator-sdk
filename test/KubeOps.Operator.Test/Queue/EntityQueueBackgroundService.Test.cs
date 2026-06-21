@@ -248,6 +248,31 @@ public sealed class EntityQueueBackgroundServiceTest
 
     [Trait("Area", "LeaderLoss")]
     [Fact]
+    public async Task StartAsync_Can_Restart_After_The_Loop_Exits_Without_A_Stop_Request()
+    {
+        // Finding 1: if ExecuteAsync exits on its own (queue enumerator completed, or an unexpected fault)
+        // without going through StopAsync/RequestStopAsync, _running must be reset so a later StartAsync
+        // (e.g. a leadership re-acquisition) can restart the loop instead of being suppressed forever.
+        var queue = new ControllableQueue<V1ConfigMap>();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+        await using var service = CreateService(queue, reconcilerMock, clientMock, CreateEntity());
+
+        // Completed channel -> the loop's enumerator finishes immediately -> ExecuteAsync returns on its own.
+        queue.Complete();
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(200, TestContext.Current.CancellationToken); // let the loop start and fully exit
+
+        // A second start (as on re-acquired leadership) must start a fresh loop, not be suppressed.
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        queue.GetAsyncEnumeratorCallCount.Should().Be(2);
+    }
+
+    [Trait("Area", "LeaderLoss")]
+    [Fact]
     public async Task StartAsync_Is_Idempotent_And_Starts_Only_One_Processing_Loop()
     {
         var queue = new ControllableQueue<V1ConfigMap>();

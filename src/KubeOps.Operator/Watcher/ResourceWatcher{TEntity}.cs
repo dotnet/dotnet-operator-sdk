@@ -21,7 +21,6 @@ using KubeOps.Operator.Queue;
 using KubeOps.Operator.Reconciliation;
 using KubeOps.Operator.Retry;
 
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using ZiggyCreatures.Caching.Fusion;
@@ -87,6 +86,13 @@ public class ResourceWatcher<TEntity>(
         logger.LogInformation("Stopping resource watcher for {ResourceType}.", typeof(TEntity).Name);
         return base.StopAsync(cancellationToken);
     }
+
+    /// <inheritdoc/>
+    protected override void OnLoopFaulted(Exception exception) =>
+        logger.LogError(
+            exception,
+            "The watch loop for {ResourceType} exited unexpectedly and stopped watching.",
+            typeof(TEntity).Name);
 
     /// <inheritdoc/>
     protected override void DisposeManagedResources() => client.Dispose();

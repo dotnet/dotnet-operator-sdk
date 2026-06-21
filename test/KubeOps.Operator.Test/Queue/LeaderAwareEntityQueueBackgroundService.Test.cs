@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics.Metrics;
 using System.Reflection;
 
 using FluentAssertions;
@@ -11,9 +12,11 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Moq;
@@ -295,6 +298,64 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
         await service.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
+    [Trait("Area", "Otel")]
+    [Fact]
+    public async Task Records_Reconciliation_Metrics_When_Leader()
+    {
+        // Finding 2: the leader-aware consumer must forward OperatorMetrics to the base, otherwise leader-elected
+        // operators (LeaderElectionType.Single) lose all queue-side reconciliation metrics.
+        const string meterName = "test-leader-aware-reconciliation-metrics";
+        using var meterFactory = new ServiceCollection().AddMetrics().BuildServiceProvider()
+            .GetRequiredService<IMeterFactory>();
+        var metrics = new OperatorMetrics(meterFactory, meterName);
+
+        var recorded = 0;
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == meterName && instrument.Name == "kubeops.operator.reconciliation")
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, _, _) => Interlocked.Increment(ref recorded));
+        listener.Start();
+
+        using var realQueue = new TimedEntityQueue<V1OperatorIntegrationTestEntity>(
+            Mock.Of<ILogger<TimedEntityQueue<V1OperatorIntegrationTestEntity>>>());
+        var entity = CreateEntity("metric");
+        entity.Metadata.Uid = Guid.NewGuid().ToString();
+
+        var clientMock = new Mock<IKubernetesClient>();
+        clientMock
+            .Setup(c => c.GetAsync<V1OperatorIntegrationTestEntity>(
+                It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entity);
+        var reconcilerMock = new Mock<IReconciler<V1OperatorIntegrationTestEntity>>();
+        reconcilerMock
+            .Setup(r => r.Reconcile(
+                It.IsAny<ReconciliationContext<V1OperatorIntegrationTestEntity>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
+
+        var service = CreateService(realQueue, reconciler: reconcilerMock.Object, client: clientMock.Object, metrics: metrics);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        service.SimulateStartedLeading();
+        await realQueue.Enqueue(
+            entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.Zero, 0,
+            TestContext.Current.CancellationToken);
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline && Volatile.Read(ref recorded) == 0)
+        {
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+        }
+
+        Volatile.Read(ref recorded).Should().BeGreaterThan(0);
+        await service.DisposeAsync();
+    }
+
     private static V1OperatorIntegrationTestEntity CreateEntity(string name)
     {
         var entity = new V1OperatorIntegrationTestEntity();
@@ -308,7 +369,8 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
         ITimedEntityQueue<V1OperatorIntegrationTestEntity> queue,
         ILogger<LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>>? logger = null,
         IReconciler<V1OperatorIntegrationTestEntity>? reconciler = null,
-        IKubernetesClient? client = null)
+        IKubernetesClient? client = null,
+        OperatorMetrics? metrics = null)
     {
         var lockMock = new Mock<ILock>();
         lockMock
@@ -327,7 +389,8 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
             elector,
             logger ?? Mock.Of<ILogger<LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>>>(),
             reconciler,
-            client);
+            client,
+            metrics);
     }
 
     /// <summary>
@@ -343,7 +406,8 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
             LeaderElectorType elector,
             ILogger<LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>> logger,
             IReconciler<V1OperatorIntegrationTestEntity>? reconciler = null,
-            IKubernetesClient? client = null)
+            IKubernetesClient? client = null,
+            OperatorMetrics? metrics = null)
             : base(
                 new("test"),
                 client ?? Mock.Of<IKubernetesClient>(),
@@ -351,7 +415,8 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
                 queue,
                 reconciler ?? Mock.Of<IReconciler<V1OperatorIntegrationTestEntity>>(),
                 logger,
-                elector)
+                elector,
+                metrics)
         {
             _elector = elector;
         }

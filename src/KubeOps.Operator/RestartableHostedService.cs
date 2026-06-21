@@ -179,6 +179,15 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
     /// <returns>A task that completes when the loop has stopped.</returns>
     protected abstract Task ExecuteAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Called when <see cref="ExecuteAsync"/> exits with an unexpected error (any exception other than its own
+    /// cancellation). Override to log it so a dead loop is visible. Defaults to no-op.
+    /// </summary>
+    /// <param name="exception">The exception the loop exited with.</param>
+    protected virtual void OnLoopFaulted(Exception exception)
+    {
+    }
+
     /// <summary>Releases subclass-managed resources synchronously. Called from <see cref="Dispose(bool)"/>.</summary>
     protected virtual void DisposeManagedResources()
     {
@@ -299,11 +308,29 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
         {
             await ExecuteAsync(cts.Token);
         }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // Expected: the loop was cancelled by a stop or disposal. Nothing to report.
+        }
+        catch (Exception exception)
+        {
+            // The loop exited with an unexpected error (not its own cancellation). Surface it so a dead loop is
+            // visible. The loop is not auto-restarted, but _running is reset below so the next StartAsync can.
+            OnLoopFaulted(exception);
+        }
         finally
         {
             lock (_lifecycleLock)
             {
                 _activeRuns.RemoveAll(r => ReferenceEquals(r.Cts, cts));
+
+                // If no loop remains while we still think we are running, the loop exited without a stop request
+                // (ExecuteAsync returned or faulted). Reset so a subsequent StartAsync can restart it instead of
+                // being suppressed forever by the idempotency guard.
+                if (_activeRuns.Count == 0)
+                {
+                    _running = false;
+                }
             }
 
             cts.Dispose();

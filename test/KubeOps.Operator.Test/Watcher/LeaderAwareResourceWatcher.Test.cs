@@ -12,7 +12,6 @@ using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 using KubeOps.Operator.Watcher;
 
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using Moq;

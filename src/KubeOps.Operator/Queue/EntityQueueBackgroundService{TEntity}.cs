@@ -14,7 +14,6 @@ using KubeOps.KubernetesClient;
 using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Queue;
@@ -114,6 +113,13 @@ public class EntityQueueBackgroundService<TEntity>(
         await CastAndDisposeAsync(client);
         await CastAndDisposeAsync(queue);
     }
+
+    /// <inheritdoc/>
+    protected override void OnLoopFaulted(Exception exception) =>
+        logger.LogError(
+            exception,
+            "The queue processing loop for {Entity} exited unexpectedly and stopped consuming the queue.",
+            typeof(TEntity).Name);
 
     protected virtual async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
