@@ -177,6 +177,124 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
         queue.GateCalls.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task StopAsync_Stops_Base_Loop_Even_When_No_Longer_Leader()
+    {
+        // N2: after leadership was lost the elector reports non-leader. Host shutdown then calls StopAsync,
+        // which must still stop the base processing loop instead of skipping base.StopAsync and leaving the
+        // loop (and its in-flight work) running.
+        var queue = new CapturingQueue();
+        await using var service = CreateService(queue);
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        service.SimulateStartedLeading();
+        await queue.EnumeratorStarted.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        await queue.EnumeratorCancelled.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        queue.CapturedToken.IsCancellationRequested.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Dispose_After_Flap_Drains_The_Overlapped_Old_Loop()
+    {
+        // F1: a StoppedLeading -> StartedLeading flap can leave the previous loop still draining an in-flight
+        // reconciliation while a new loop runs. Dispose must drain the OLD loop too (not only the latest),
+        // otherwise that worker can touch a semaphore/client/queue after they were disposed.
+        using var realQueue = new TimedEntityQueue<V1OperatorIntegrationTestEntity>(
+            Mock.Of<ILogger<TimedEntityQueue<V1OperatorIntegrationTestEntity>>>());
+
+        var entity = CreateEntity("flap");
+        entity.Metadata.Uid = Guid.NewGuid().ToString();
+        var entered = new TaskCompletionSource();
+        var canFinish = new TaskCompletionSource();
+
+        var clientMock = new Mock<IKubernetesClient>();
+        clientMock
+            .Setup(c => c.GetAsync<V1OperatorIntegrationTestEntity>(
+                It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entity);
+
+        var reconcilerMock = new Mock<IReconciler<V1OperatorIntegrationTestEntity>>();
+        reconcilerMock
+            .Setup(r => r.Reconcile(
+                It.IsAny<ReconciliationContext<V1OperatorIntegrationTestEntity>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (ReconciliationContext<V1OperatorIntegrationTestEntity> _ctx, CancellationToken _token) =>
+            {
+                entered.TrySetResult();
+                await canFinish.Task;
+                return ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity);
+            });
+
+        var service = CreateService(realQueue, reconciler: reconcilerMock.Object, client: clientMock.Object);
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        service.SimulateStartedLeading();
+
+        await realQueue.Enqueue(
+            entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.Zero, 0,
+            TestContext.Current.CancellationToken);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        // Flap: cancel loop1 (now draining the blocked worker) and start loop2.
+        service.SimulateStoppedLeading();
+        service.SimulateStartedLeading();
+
+        // Dispose must wait for loop1's in-flight worker; it cannot complete while the worker is blocked.
+        var disposeTask = service.DisposeAsync().AsTask();
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+        disposeTask.IsCompleted.Should().BeFalse();
+
+        canFinish.SetResult();
+        await disposeTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Dispose_Is_Bounded_When_A_Reconciliation_Ignores_Cancellation()
+    {
+        // R1: a non-cooperative reconciler that ignores its token must not block disposal indefinitely; the
+        // drain is bounded by DrainGracePeriod.
+        using var realQueue = new TimedEntityQueue<V1OperatorIntegrationTestEntity>(
+            Mock.Of<ILogger<TimedEntityQueue<V1OperatorIntegrationTestEntity>>>());
+
+        var entity = CreateEntity("stuck");
+        entity.Metadata.Uid = Guid.NewGuid().ToString();
+        var entered = new TaskCompletionSource();
+        var neverFinishes = new TaskCompletionSource();
+
+        var clientMock = new Mock<IKubernetesClient>();
+        clientMock
+            .Setup(c => c.GetAsync<V1OperatorIntegrationTestEntity>(
+                It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(entity);
+
+        var reconcilerMock = new Mock<IReconciler<V1OperatorIntegrationTestEntity>>();
+        reconcilerMock
+            .Setup(r => r.Reconcile(
+                It.IsAny<ReconciliationContext<V1OperatorIntegrationTestEntity>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (ReconciliationContext<V1OperatorIntegrationTestEntity> _ctx, CancellationToken _token) =>
+            {
+                entered.TrySetResult();
+                await neverFinishes.Task;
+                return ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity);
+            });
+
+        var service = CreateService(realQueue, reconciler: reconcilerMock.Object, client: clientMock.Object);
+        service.DrainGracePeriod = TimeSpan.FromMilliseconds(300);
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        service.SimulateStartedLeading();
+
+        await realQueue.Enqueue(
+            entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.Zero, 0,
+            TestContext.Current.CancellationToken);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        // Must return within the grace, not hang on the stuck reconciler.
+        await service.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+    }
+
     private static V1OperatorIntegrationTestEntity CreateEntity(string name)
     {
         var entity = new V1OperatorIntegrationTestEntity();
@@ -188,7 +306,9 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
 
     private static TestableService CreateService(
         ITimedEntityQueue<V1OperatorIntegrationTestEntity> queue,
-        ILogger<LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>>? logger = null)
+        ILogger<LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>>? logger = null,
+        IReconciler<V1OperatorIntegrationTestEntity>? reconciler = null,
+        IKubernetesClient? client = null)
     {
         var lockMock = new Mock<ILock>();
         lockMock
@@ -205,7 +325,9 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
         return new(
             queue,
             elector,
-            logger ?? Mock.Of<ILogger<LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>>>());
+            logger ?? Mock.Of<ILogger<LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>>>(),
+            reconciler,
+            client);
     }
 
     /// <summary>
@@ -219,13 +341,15 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
         public TestableService(
             ITimedEntityQueue<V1OperatorIntegrationTestEntity> queue,
             LeaderElectorType elector,
-            ILogger<LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>> logger)
+            ILogger<LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>> logger,
+            IReconciler<V1OperatorIntegrationTestEntity>? reconciler = null,
+            IKubernetesClient? client = null)
             : base(
                 new("test"),
-                Mock.Of<IKubernetesClient>(),
+                client ?? Mock.Of<IKubernetesClient>(),
                 new OperatorSettingsBuilder { Namespace = "unit-test" }.Build(),
                 queue,
-                Mock.Of<IReconciler<V1OperatorIntegrationTestEntity>>(),
+                reconciler ?? Mock.Of<IReconciler<V1OperatorIntegrationTestEntity>>(),
                 logger,
                 elector)
         {

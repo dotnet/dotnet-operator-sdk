@@ -82,11 +82,11 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
             EntityQueue<V1OperatorIntegrationTestEntity> queue)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public async Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             observer.RecordInvocation(entity);
-            queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromSeconds(60), retryCount: 0, TestContext.Current.CancellationToken);
-            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
+            await queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromSeconds(60), retryCount: 0, TestContext.Current.CancellationToken);
+            return ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity);
         }
 
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)

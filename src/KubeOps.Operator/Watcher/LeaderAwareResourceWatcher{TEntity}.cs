@@ -45,21 +45,18 @@ public class LeaderAwareResourceWatcher<TEntity>(
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private CancellationTokenSource _cts = new();
     private bool _disposed;
 
-    public override async Task StartAsync(CancellationToken cancellationToken)
+    public override Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogDebug("Subscribe for leadership updates.");
 
         elector.OnStartedLeading += StartedLeading;
         elector.OnStoppedLeading += StoppedLeading;
 
-        if (elector.IsLeader())
-        {
-            using CancellationTokenSource linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cts.Token);
-            await base.StartAsync(linkedCancellationTokenSource.Token);
-        }
+        // Only start watching while leadership is actually held. The base watcher owns the single cancellation
+        // source; StartedLeading/StoppedLeading restart and stop it on leadership transitions.
+        return elector.IsLeader() ? base.StartAsync(cancellationToken) : Task.CompletedTask;
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)
@@ -73,7 +70,10 @@ public class LeaderAwareResourceWatcher<TEntity>(
         elector.OnStartedLeading -= StartedLeading;
         elector.OnStoppedLeading -= StoppedLeading;
 
-        return elector.IsLeader() ? base.StopAsync(cancellationToken) : Task.CompletedTask;
+        // Always delegate to the base stop: it is a no-op when no watch task is running, so the watcher loop is
+        // reliably awaited and torn down on host shutdown even when leadership was already lost — rather than
+        // relying solely on the fire-and-forget StopAsync issued from the OnStoppedLeading callback.
+        return base.StopAsync(cancellationToken);
     }
 
     protected override void Dispose(bool disposing)
@@ -83,7 +83,8 @@ public class LeaderAwareResourceWatcher<TEntity>(
             return;
         }
 
-        _cts.Dispose();
+        elector.OnStartedLeading -= StartedLeading;
+        elector.OnStoppedLeading -= StoppedLeading;
         elector.Dispose();
         _disposed = true;
 
@@ -94,19 +95,13 @@ public class LeaderAwareResourceWatcher<TEntity>(
     {
         logger.LogInformation("This instance started leading, starting watcher.");
 
-        if (_cts.IsCancellationRequested)
-        {
-            _cts.Dispose();
-            _cts = new();
-        }
-
-        base.StartAsync(_cts.Token);
+        // The base watcher recreates its cancellation source when it was previously cancelled, so this
+        // restarts the watch after a leadership loss. The token passed here is unused by the base watcher.
+        base.StartAsync(CancellationToken.None);
     }
 
     private void StoppedLeading()
     {
-        _cts.Cancel();
-
         logger.LogInformation("This instance stopped leading, stopping watcher.");
 
         EntityCache.Clear();

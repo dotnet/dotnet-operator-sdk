@@ -18,7 +18,7 @@ namespace KubeOps.Operator.Test.Queue;
 public sealed class EntityQueueFactoryTest
 {
     [Fact]
-    public void Create_Should_Return_Delegate_That_Calls_Enqueue_On_Queue()
+    public async Task Create_Should_Return_Delegate_That_Calls_Enqueue_On_Queue()
     {
         var mockQueue = new Mock<ITimedEntityQueue<V1ConfigMap>>();
         var services = new ServiceCollection()
@@ -33,7 +33,7 @@ public sealed class EntityQueueFactoryTest
         var queueIn = TimeSpan.FromSeconds(10);
         const int retryCount = 3;
 
-        enqueue(
+        await enqueue(
             entity,
             ReconciliationType.Modified,
             ReconciliationTriggerSource.Operator,

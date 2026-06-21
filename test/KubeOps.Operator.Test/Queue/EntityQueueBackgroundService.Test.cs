@@ -304,6 +304,60 @@ public sealed class EntityQueueBackgroundServiceTest
         await service.DisposeAsync();
     }
 
+    [Trait("Area", "LeaderLoss")]
+    [Fact]
+    public async Task Stop_Does_Not_Dispose_Token_While_A_Reconciliation_Is_Still_In_Flight()
+    {
+        // N1: StopAsync only requests cancellation; the processing loop must still drain its in-flight worker
+        // tasks before its CancellationTokenSource is disposed (and before resources are torn down). Otherwise
+        // a still-running reconciler that touches its token hits ObjectDisposedException.
+        var entity = CreateEntity();
+        var queue = new ControllableQueue<V1ConfigMap>();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+
+        var entered = new TaskCompletionSource();
+        var canFinish = new TaskCompletionSource();
+        var tokenDisposedWhileInFlight = false;
+
+        reconcilerMock
+            .Setup(r => r.Reconcile(It.IsAny<ReconciliationContext<V1ConfigMap>>(), It.IsAny<CancellationToken>()))
+            .Returns(async (ReconciliationContext<V1ConfigMap> _context, CancellationToken token) =>
+            {
+                entered.TrySetResult();
+                await canFinish.Task;
+
+                // The worker still holds the processing token after StopAsync cancelled it. If the loop
+                // disposed the token source underneath the still-running worker, touching the token throws.
+                try
+                {
+                    _ = token.WaitHandle;
+                }
+                catch (ObjectDisposedException)
+                {
+                    tokenDisposedWhileInFlight = true;
+                }
+
+                return ReconciliationResult<V1ConfigMap>.Success(entity);
+            });
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, entity);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        queue.Push(entity, ReconciliationType.Modified, ReconciliationTriggerSource.ApiServer);
+        await entered.Task;
+
+        // Stop while the reconciliation is in flight, then give the (buggy) loop time to return and dispose
+        // its token source before the worker resumes and touches the token.
+        await service.StopAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        canFinish.SetResult();
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        tokenDisposedWhileInFlight.Should().BeFalse();
+    }
+
     [Fact]
     public async Task Reconciler_Is_Called_For_Each_Queued_Entry()
     {

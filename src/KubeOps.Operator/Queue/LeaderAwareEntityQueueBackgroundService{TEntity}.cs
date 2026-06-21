@@ -98,7 +98,10 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
         elector.OnStartedLeading -= StartedLeading;
         elector.OnStoppedLeading -= StoppedLeading;
 
-        return elector.IsLeader() ? base.StopAsync(cancellationToken) : Task.CompletedTask;
+        // Always delegate to the base stop: it is idempotent (a no-op when no loop is running), so the
+        // processing loop is reliably stopped on host shutdown even when leadership was already lost — rather
+        // than relying solely on the fire-and-forget StopAsync issued from the OnStoppedLeading callback.
+        return base.StopAsync(cancellationToken);
     }
 
     protected override void Dispose(bool disposing)

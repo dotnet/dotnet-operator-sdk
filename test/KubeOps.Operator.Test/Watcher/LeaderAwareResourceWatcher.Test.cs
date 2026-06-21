@@ -64,6 +64,56 @@ public sealed class LeaderAwareResourceWatcherTest
         mockCache.Verify(c => c.Clear(It.IsAny<bool>()), Times.Once);
     }
 
+    [Fact]
+    public async Task StopAsync_Stops_Base_Watcher_Even_When_No_Longer_Leader()
+    {
+        // F2: after leadership is lost the elector reports non-leader. Host shutdown then calls StopAsync,
+        // which must still delegate to the base watcher's stop (cancel and await its watch loop) instead of
+        // no-opping and leaving the loop running.
+        var mockCache = new Mock<IFusionCache>();
+        var mockCacheProvider = Mock.Of<IFusionCacheProvider>();
+        Mock.Get(mockCacheProvider)
+            .Setup(cp => cp.GetCache(It.Is<string>(s => s == CacheConstants.CacheNames.ResourceWatcher)))
+            .Returns(mockCache.Object);
+
+        var lifetime = Mock.Of<IHostApplicationLifetime>();
+        Mock.Get(lifetime).Setup(l => l.ApplicationStopped).Returns(CancellationToken.None);
+
+        var lockMock = new Mock<ILock>();
+        lockMock
+            .Setup(l => l.GetAsync(It.IsAny<CancellationToken>()))
+            .Returns<CancellationToken>(async ct => { await Task.Delay(Timeout.Infinite, ct); return null!; });
+
+        var elector = new k8s.LeaderElection.LeaderElector(new(lockMock.Object)
+        {
+            LeaseDuration = TimeSpan.FromSeconds(1),
+            RenewDeadline = TimeSpan.FromMilliseconds(500),
+            RetryPeriod = TimeSpan.FromMilliseconds(100),
+        });
+
+        var loggerMock = new Mock<ILogger<LeaderAwareResourceWatcher<V1OperatorIntegrationTestEntity>>>();
+        var watcher = new TestableLeaderAwareResourceWatcher(
+            mockCacheProvider,
+            lifetime,
+            elector,
+            loggerMock.Object,
+            Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>(),
+            Mock.Of<IKubernetesClient>());
+
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+
+        // The base ResourceWatcher.StopAsync logs this; the old code skipped base.StopAsync when not leader.
+        loggerMock.Verify(
+            l => l.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((@object, _) => @object.ToString()!.Contains("Stopping resource watcher")),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
     /// <summary>
     /// Wraps <see cref="LeaderAwareResourceWatcher{TEntity}"/> to expose the private
     /// <c>StoppedLeading</c> handler for testing, without needing Moq to raise
