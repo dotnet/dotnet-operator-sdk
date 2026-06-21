@@ -18,8 +18,10 @@ namespace KubeOps.Operator.Queue;
 
 /// <summary>
 /// A leadership-aware variant of <see cref="EntityQueueBackgroundService{TEntity}"/>. The queue is only
-/// consumed while this instance holds leadership; when leadership is lost the processing loop and any
-/// in-flight reconciliations are cancelled immediately.
+/// consumed while this instance holds leadership; when leadership is lost the queue's intake is suspended, the
+/// dequeue loop is stopped and cancellation is <em>requested</em> for any in-flight reconciliation. This stops
+/// the queue side promptly, but cannot force a non-cooperative reconciler that ignores its
+/// <see cref="CancellationToken"/> to abort — see the remarks.
 /// </summary>
 /// <typeparam name="TEntity">The type of the Kubernetes entity being managed.</typeparam>
 /// <remarks>
