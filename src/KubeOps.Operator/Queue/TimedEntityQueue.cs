@@ -110,6 +110,12 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
         {
             if (_intakeSuspended)
             {
+                _logger
+                    .LogTrace(
+                        """Intake suspended for {Entity}; dropping enqueue of "{Identifier}" (trigger {Trigger}).""",
+                        typeof(TEntity).Name,
+                        entity.ToIdentifierString(),
+                        reconciliationTriggerSource.ToMetricString());
                 return Task.FromResult(false);
             }
 
@@ -173,11 +179,22 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
         // BlockingCollection — the queue must stay usable after ResumeIntake() once leadership is regained.
         lock (_gateLock)
         {
+            var scheduled = _management.Count;
             _management.Clear();
+
+            var ready = 0;
             while (_queue.TryTake(out _))
             {
                 // Discard the ready entry; draining only, never CompleteAdding().
+                ready++;
             }
+
+            _logger
+                .LogDebug(
+                    "Cleared entity queue for {Entity} on leadership loss: discarded {Scheduled} scheduled and {Ready} ready entries.",
+                    typeof(TEntity).Name,
+                    scheduled,
+                    ready);
         }
     }
 
@@ -188,6 +205,11 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
         {
             _intakeSuspended = true;
         }
+
+        _logger
+            .LogTrace(
+                "Intake gate for {Entity} suspended; new and scheduled entries are dropped until resumed.",
+                typeof(TEntity).Name);
     }
 
     /// <inheritdoc cref="ISuspendableEntityQueue.ResumeIntake"/>
@@ -197,6 +219,11 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
         {
             _intakeSuspended = false;
         }
+
+        _logger
+            .LogTrace(
+                "Intake gate for {Entity} resumed; accepting new entries again.",
+                typeof(TEntity).Name);
     }
 
     /// <inheritdoc cref="IDisposable.Dispose"/>
@@ -276,7 +303,17 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
                         // promotion re-adding an entry to the ready queue after the clear.
                         lock (_gateLock)
                         {
-                            if (_intakeSuspended || !_management.TryRemove(key, out _))
+                            if (_intakeSuspended)
+                            {
+                                _logger
+                                    .LogTrace(
+                                        """Intake suspended for {Entity}; skipping promotion of scheduled entry "{Identifier}".""",
+                                        typeof(TEntity).Name,
+                                        entry.GetEntityIdentifierString());
+                                continue;
+                            }
+
+                            if (!_management.TryRemove(key, out _))
                             {
                                 continue;
                             }

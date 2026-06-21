@@ -85,6 +85,7 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
         }
 
         // Not leading yet: keep the intake gate closed so nothing accumulates work until leadership is held.
+        logger.LogDebug("Starting as non-leader; intake gate kept closed until leadership is acquired.");
         Gate?.SuspendIntake();
         return Task.CompletedTask;
     }
