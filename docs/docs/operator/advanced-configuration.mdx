@@ -337,9 +337,16 @@ builder.Services
 // QueueStrategy defaults to QueueStrategy.InMemory
 ```
 
-With `InMemory`, KubeOps registers `TimedEntityQueue<TEntity>` as `ITimedEntityQueue<TEntity>` and
-starts `EntityQueueBackgroundService<TEntity>` as a hosted service. All scheduling state lives in
-the operator pod's heap.
+With `InMemory`, KubeOps registers `TimedEntityQueue<TEntity>` as `ITimedEntityQueue<TEntity>` and starts a
+queue-consumer hosted service. Which consumer is started depends on the configured `LeaderElectionType`:
+
+- `None`: `EntityQueueBackgroundService<TEntity>`.
+- `Single`: `LeaderAwareEntityQueueBackgroundService<TEntity>`, which drives the queue's leadership gate
+  (suspends intake and clears the queue on leadership loss). This is what provides the leadership-loss
+  protection.
+- `Custom`: no consumer is registered — you supply one yourself (see the Custom leader election example above).
+
+All scheduling state lives in the operator pod's heap.
 
 When the same entity is scheduled multiple times before it becomes ready, the in-memory queue keeps
 one entry per namespace/name key. The entry scheduled to run earliest is kept, and later enqueue calls
