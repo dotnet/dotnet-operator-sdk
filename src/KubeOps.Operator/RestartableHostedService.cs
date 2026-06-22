@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics;
+
 using KubeOps.Operator.Retry;
 
 using Microsoft.Extensions.Hosting;
@@ -72,6 +74,14 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
     /// Defaults to an exponential back-off with jitter; internal so tests can make restarts immediate.
     /// </summary>
     internal Func<uint, TimeSpan> FaultBackoff { get; set; } = ExponentialRetryBackoff.GetDelayWithJitter;
+
+    /// <summary>
+    /// How long a loop iteration must run before a subsequent fault is treated as a fresh failure and the
+    /// back-off counter is reset to zero. This keeps the back-off escalating for a tight crash loop while not
+    /// penalising an isolated fault that occurs after a long healthy run. Must exceed the maximum back-off.
+    /// Internal so tests can control it.
+    /// </summary>
+    internal TimeSpan FaultBackoffResetThreshold { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <summary>Gets a value indicating whether the service has been disposed.</summary>
     protected bool IsDisposed => _disposed;
@@ -324,6 +334,7 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
         {
             while (!cts.IsCancellationRequested)
             {
+                var startedAt = Stopwatch.GetTimestamp();
                 try
                 {
                     await ExecuteAsync(cts.Token);
@@ -342,6 +353,14 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
                     // The loop exited with an unexpected error (not its own cancellation). Surface it, then wait a
                     // back-off and restart so the service keeps working after a transient failure.
                     OnLoopFaulted(exception);
+
+                    // If the loop ran healthily for a while before faulting, treat this as a fresh failure and
+                    // restart the back-off from the beginning, so an isolated late fault is not penalised by
+                    // earlier, already-recovered ones. A tight crash loop keeps escalating.
+                    if (Stopwatch.GetElapsedTime(startedAt) >= FaultBackoffResetThreshold)
+                    {
+                        faultRetries = 0;
+                    }
 
                     try
                     {

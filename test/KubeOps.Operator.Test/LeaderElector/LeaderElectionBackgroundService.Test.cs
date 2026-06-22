@@ -16,6 +16,7 @@ using Moq;
 
 namespace KubeOps.Operator.Test.LeaderElector;
 
+[Trait("Area", "LeaderLoss")]
 public sealed class LeaderElectionBackgroundServiceTest
 {
     [Fact]
