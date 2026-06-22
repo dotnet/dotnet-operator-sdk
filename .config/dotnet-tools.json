@@ -3,7 +3,7 @@
   "isRoot": true,
   "tools": {
     "nuget-license": {
-      "version": "4.0.11",
+      "version": "4.0.12",
       "commands": [
         "nuget-license"
       ],
