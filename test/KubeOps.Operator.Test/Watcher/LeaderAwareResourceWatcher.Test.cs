@@ -2,7 +2,11 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Runtime.CompilerServices;
+
 using FluentAssertions;
+
+using k8s;
 
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
@@ -53,11 +57,8 @@ public sealed class LeaderAwareResourceWatcherTest
             Mock.Of<IKubernetesClient>());
         await watcher.StartAsync(TestContext.Current.CancellationToken);
 
-        // Trigger the private StoppedLeading handler via the testable wrapper.
         watcher.SimulateStoppedLeading();
 
-        // Only this entity type's tagged entries must be removed — never a global Clear() that would also wipe
-        // the dedup tokens of other entity types sharing the same named cache.
         mockCache.Verify(
             c => c.RemoveByTag(
                 It.Is<string>(tag => tag == typeof(V1OperatorIntegrationTestEntity).FullName),
@@ -70,9 +71,6 @@ public sealed class LeaderAwareResourceWatcherTest
     [Fact]
     public async Task StoppedLeading_Stops_Watcher_Even_When_Cache_Cleanup_Throws()
     {
-        // The cache cleanup runs inside the elector's OnStoppedLeading callback. If it throws (e.g. a custom cache
-        // with tagging disabled), the safety-critical stop must still happen and the exception must not escape into
-        // the callback (where it would be misattributed as a leadership-hold failure).
         var mockCache = new Mock<IFusionCache>();
         mockCache
             .Setup(c => c.RemoveByTag(
@@ -100,7 +98,7 @@ public sealed class LeaderAwareResourceWatcherTest
             .Setup(c => c.WatchAsync<V1OperatorIntegrationTestEntity>(
                 "unit-test", null, null, null, true, It.IsAny<CancellationToken>()))
             .Returns<string?, string?, string?, string?, bool?, CancellationToken>((_, _, _, _, _, ct) =>
-                SignalingWatchAsync(ct, watchStarted, watchCancelled));
+                SignalingWatchAsync(watchStarted, watchCancelled, ct));
 
         var watcher = new TestableLeaderAwareResourceWatcher(
             mockCacheProvider,
@@ -110,13 +108,12 @@ public sealed class LeaderAwareResourceWatcherTest
             clientMock.Object);
 
         await watcher.StartAsync(TestContext.Current.CancellationToken);
-        watcher.SimulateStartedLeading(); // starts the watch loop
+        watcher.SimulateStartedLeading();
         (await Task.WhenAny(
                 watchStarted.Task,
                 Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)))
             .Should().Be(watchStarted.Task, "the watch loop should have started");
 
-        // Must not throw even though RemoveByTag throws inside.
         watcher.SimulateStoppedLeading();
 
         (await Task.WhenAny(
@@ -134,9 +131,6 @@ public sealed class LeaderAwareResourceWatcherTest
     [Fact]
     public async Task StopAsync_Stops_Base_Watcher_Even_When_No_Longer_Leader()
     {
-        // F2: after leadership is lost the elector reports non-leader. Host shutdown then calls StopAsync,
-        // which must still delegate to the base watcher's stop (cancel and await its watch loop) instead of
-        // no-opping and leaving the loop running.
         var mockCache = new Mock<IFusionCache>();
         var mockCacheProvider = Mock.Of<IFusionCacheProvider>();
         Mock.Get(mockCacheProvider)
@@ -166,7 +160,6 @@ public sealed class LeaderAwareResourceWatcherTest
         await watcher.StartAsync(TestContext.Current.CancellationToken);
         await watcher.StopAsync(TestContext.Current.CancellationToken);
 
-        // The base ResourceWatcher.StopAsync logs this; the old code skipped base.StopAsync when not leader.
         loggerMock.Verify(
             l => l.Log(
                 LogLevel.Information,
@@ -180,9 +173,6 @@ public sealed class LeaderAwareResourceWatcherTest
     [Fact]
     public async Task StartAsync_Is_Idempotent_And_Starts_Only_One_Watch()
     {
-        // Finding 1: the leadership-aware StartAsync IsLeader() path and a concurrent OnStartedLeading callback
-        // can both call base.StartAsync. The base watcher must start only ONE Kubernetes watch, otherwise
-        // duplicate watches enqueue duplicate events.
         var mockCacheProvider = Mock.Of<IFusionCacheProvider>();
         Mock.Get(mockCacheProvider).Setup(cp => cp.GetCache(It.IsAny<string>())).Returns(Mock.Of<IFusionCache>());
 
@@ -228,9 +218,6 @@ public sealed class LeaderAwareResourceWatcherTest
     [Fact]
     public async Task DisposeAsync_Unsubscribes_From_Elector()
     {
-        // Finding 2: the asynchronous dispose path (DisposeAsync -> base DisposeAsyncCore) must remove the
-        // leadership handlers from the (singleton) elector, not only the synchronous Dispose(bool). Otherwise the
-        // disposed watcher stays referenced by the elector and later leadership events call back into it.
         var mockCacheProvider = Mock.Of<IFusionCacheProvider>();
         Mock.Get(mockCacheProvider).Setup(cp => cp.GetCache(It.IsAny<string>())).Returns(Mock.Of<IFusionCache>());
 
@@ -269,11 +256,6 @@ public sealed class LeaderAwareResourceWatcherTest
         return (Delegate?)field?.GetValue(elector);
     }
 
-    /// <summary>
-    /// Wraps <see cref="LeaderAwareResourceWatcher{TEntity}"/> to expose the private
-    /// <c>StoppedLeading</c> handler for testing, without needing Moq to raise
-    /// non-virtual events.
-    /// </summary>
     private sealed class TestableLeaderAwareResourceWatcher : LeaderAwareResourceWatcher<V1OperatorIntegrationTestEntity>
     {
         private readonly k8s.LeaderElection.LeaderElector _elector;
@@ -319,18 +301,16 @@ public sealed class LeaderAwareResourceWatcherTest
     }
 
     private static async IAsyncEnumerable<T> WaitForCancellationAsync<T>(
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await Task.Delay(Timeout.Infinite, cancellationToken);
         yield break;
     }
 
-    // Signals when the watch has started and again when it is cancelled, so a test can assert the watch loop was
-    // stopped (e.g. by RequestStopAsync) without reaching into the watcher's internals.
-    private static async IAsyncEnumerable<(k8s.WatchEventType, V1OperatorIntegrationTestEntity)> SignalingWatchAsync(
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
+    private static async IAsyncEnumerable<(WatchEventType, V1OperatorIntegrationTestEntity)> SignalingWatchAsync(
         TaskCompletionSource started,
-        TaskCompletionSource cancelled)
+        TaskCompletionSource cancelled,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         started.TrySetResult();
         try
