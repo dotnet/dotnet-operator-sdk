@@ -80,9 +80,7 @@ public class ResourceWatcher<TEntity>(
     /// </para>
     /// </remarks>
     protected IFusionCache EntityCache { get; } = cacheProvider.GetCache(
-        settings.ReconcileStrategy == ReconcileStrategy.ByResourceVersion
-            ? CacheConstants.CacheNames.ResourceWatcherByResourceVersion
-            : CacheConstants.CacheNames.ResourceWatcher);
+        CacheConstants.ResourceWatcherCacheNameFor(settings.ReconcileStrategy));
 
     /// <inheritdoc/>
     public override Task StartAsync(CancellationToken cancellationToken)

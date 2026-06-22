@@ -7,6 +7,7 @@ using System.Globalization;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
+using KubeOps.Operator.Constants;
 using KubeOps.Operator.Exceptions;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Watcher;
@@ -14,6 +15,8 @@ using KubeOps.Operator.Watcher;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+
+using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Builder;
 
@@ -26,6 +29,10 @@ namespace KubeOps.Operator.Builder;
 /// The validator inspects the registered services (it does not construct them) and, for every managed
 /// entity, verifies that the components implied by the configuration are present. If anything is missing
 /// it throws an <see cref="InvalidRegistrationException"/> aggregating all gaps, aborting host startup.
+/// The one exception to "inspect only" is the cache-tagging check: the resource watcher tags every
+/// deduplication entry, which requires FusionCache tagging to be enabled. Tagging state cannot be read from
+/// the cache or its options (a builder-applied <c>DisableTagging</c> is not reflected in <c>IOptionsMonitor</c>),
+/// so it is verified with a harmless no-op probe against the resource-watcher cache.
 /// <para>
 /// Validation runs in <see cref="StartingAsync"/>, i.e. the host's <c>Starting</c> phase, which completes
 /// before any hosted service's <see cref="IHostedService.StartAsync"/> is invoked. A failed validation
@@ -36,8 +43,11 @@ namespace KubeOps.Operator.Builder;
 internal sealed class OperatorRegistrationValidator(
     OperatorRegistrationRegistry registry,
     OperatorSettings settings,
+    IFusionCacheProvider cacheProvider,
     ILogger<OperatorRegistrationValidator> logger) : IHostedLifecycleService
 {
+    private const string TaggingProbeTag = "__kubeops_tagging_probe__";
+
     public Task StartingAsync(CancellationToken cancellationToken)
     {
         if (registry.ManagedEntities.Count == 0)
@@ -50,6 +60,8 @@ internal sealed class OperatorRegistrationValidator(
         {
             ValidateEntity(entityType, problems);
         }
+
+        ValidateCacheTagging(problems);
 
         if (problems.Count > 0)
         {
@@ -80,9 +92,9 @@ internal sealed class OperatorRegistrationValidator(
 
     public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    // True if a closed registration for the service exists, or an open-generic one the DI container would
+    // True, if a closed registration for the service exists, or an open-generic one, the DI container would
     // close to it (e.g. AddSingleton(typeof(ITimedEntityQueue<>), typeof(MyQueue<>))). Keyed registrations
-    // are ignored: the watcher/reconciler take these as plain (unkeyed) constructor dependencies, so a keyed
+    // are ignored: the watcher/reconciler take, these as plain (unkeyed) constructor dependencies, so a keyed
     // registration would not satisfy them.
     private static bool HasService(IServiceCollection services, Type serviceType)
     {
@@ -114,12 +126,12 @@ internal sealed class OperatorRegistrationValidator(
 
         try
         {
-            openImplementation.MakeGenericType(closedServiceType.GenericTypeArguments);
+            _ = openImplementation.MakeGenericType(closedServiceType.GenericTypeArguments);
             return true;
         }
         catch (ArgumentException)
         {
-            // Generic constraints not satisfiable for this entity; the registration cannot serve it.
+            // Generic constraints, not satisfiable for this entity; the registration cannot serve it.
             return false;
         }
     }
@@ -161,20 +173,47 @@ internal sealed class OperatorRegistrationValidator(
 
         var openDescriptor = services.LastOrDefault(d =>
             !d.IsKeyedService && d.ServiceType == serviceType.GetGenericTypeDefinition());
-        if (openDescriptor?.ImplementationType is { IsGenericTypeDefinition: true } openImplementation)
+
+        if (openDescriptor?.ImplementationType is not { IsGenericTypeDefinition: true } openImplementation)
         {
-            try
-            {
-                return openImplementation.MakeGenericType(serviceType.GenericTypeArguments);
-            }
-            catch (ArgumentException)
-            {
-                // Generic constraints not satisfiable for this entity; treat as undeterminable.
-                return null;
-            }
+            return openDescriptor?.ImplementationInstance?.GetType();
         }
 
-        return openDescriptor?.ImplementationInstance?.GetType();
+        try
+        {
+            return openImplementation.MakeGenericType(serviceType.GenericTypeArguments);
+        }
+        catch (ArgumentException)
+        {
+            // Generic constraints not satisfiable for this entity; treat as undeterminable.
+            return null;
+        }
+    }
+
+    // The resource watcher tags every deduplication entry (so a leadership-aware watcher can drop only its own
+    // entity type's entries via RemoveByTag). That requires FusionCache tagging to be enabled — otherwise every
+    // tagged write throws at runtime. Tagging is on by default; this catches a configuration that disabled it.
+    // The flag cannot be read from the cache or its options (a builder-applied DisableTagging is not reflected in
+    // IOptionsMonitor), so a harmless no-op tag removal for an unused sentinel tag is used as the probe: it is a
+    // no-op when tagging is enabled and throws InvalidOperationException when it is disabled.
+    private void ValidateCacheTagging(List<string> problems)
+    {
+        var cacheName = CacheConstants.ResourceWatcherCacheNameFor(settings.ReconcileStrategy);
+
+        try
+        {
+            cacheProvider.GetCache(cacheName).RemoveByTag(TaggingProbeTag);
+        }
+        catch (InvalidOperationException)
+        {
+            problems.Add(string.Format(
+                CultureInfo.InvariantCulture,
+                "The resource-watcher cache '{0}' has FusionCache tagging disabled " +
+                "(FusionCacheOptions.DisableTagging), but the watcher tags every deduplication entry (used to " +
+                "drop an entity type's own entries on leadership loss). Remove DisableTagging from your " +
+                "ConfigureResourceWatcherEntityCache configuration, or use the default cache.",
+                cacheName));
+        }
     }
 
     private void ValidateEntity(Type entityType, List<string> problems)
@@ -200,7 +239,7 @@ internal sealed class OperatorRegistrationValidator(
             return;
         }
 
-        // Hosted services are recognised by their registered implementation type. A component registered
+        // Hosted services are recognized by their registered implementation type. A component registered
         // through a DI factory delegate exposes no type and is therefore reported as missing. Register the
         // watcher and consumer with a concrete type so validation can inspect them.
         if (!HasHostedServiceAssignableTo(services, typeof(ResourceWatcher<>).MakeGenericType(entityType)))
@@ -250,36 +289,38 @@ internal sealed class OperatorRegistrationValidator(
                     entityName));
         }
 
-        // Under Single leader election the queue must support the leadership gate so a former leader leaves
-        // no work behind on a leadership transition.
-        if (single && queueRegistered)
+        if (!single || !queueRegistered)
         {
-            var queueImpl = GetImplementationType(services, queueType);
-            if (queueImpl is null)
-            {
-                // The queue is registered but its concrete type cannot be determined (e.g. a DI factory),
-                // so the gate capability cannot be verified. Fail rather than silently assume it is safe —
-                // consistent with how an unverifiable consumer is handled.
-                problems.Add(string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Entity '{0}': the registered queue cannot be inspected for {1} (it is registered via a " +
-                    "factory delegate). LeaderElectionType.Single requires a queue whose leadership-gate " +
-                    "capability can be verified — register it with a concrete or open-generic type, or use the " +
-                    "built-in TimedEntityQueue<{0}>.",
-                    entityName,
-                    nameof(ISuspendableEntityQueue)));
-            }
-            else if (!typeof(ISuspendableEntityQueue).IsAssignableFrom(queueImpl))
-            {
-                problems.Add(string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Entity '{0}': the registered queue ({1}) does not implement {2}, which " +
-                    "LeaderElectionType.Single requires for leadership-loss protection (queue clear and intake " +
-                    "suspension). Implement {2} on your queue or use the built-in TimedEntityQueue<{0}>.",
-                    entityName,
-                    queueImpl.Name,
-                    nameof(ISuspendableEntityQueue)));
-            }
+            return;
+        }
+
+        // Under Single leader election the queue must support the leadership gate
+        // so a former leader leaves no work behind on a leadership transition.
+        var queueImpl = GetImplementationType(services, queueType);
+        if (queueImpl is null)
+        {
+            // The queue is registered, but its concrete type cannot be determined (e.g. a DI factory),
+            // so the gate capability cannot be verified. Fail rather than silently assume it is safe —
+            // consistent with how an unverifiable consumer is handled.
+            problems.Add(string.Format(
+                CultureInfo.InvariantCulture,
+                "Entity '{0}': the registered queue cannot be inspected for {1} (it is registered via a " +
+                "factory delegate). LeaderElectionType.Single requires a queue whose leadership-gate " +
+                "capability can be verified — register it with a concrete or open-generic type, or use the " +
+                "built-in TimedEntityQueue<{0}>.",
+                entityName,
+                nameof(ISuspendableEntityQueue)));
+        }
+        else if (!typeof(ISuspendableEntityQueue).IsAssignableFrom(queueImpl))
+        {
+            problems.Add(string.Format(
+                CultureInfo.InvariantCulture,
+                "Entity '{0}': the registered queue ({1}) does not implement {2}, which " +
+                "LeaderElectionType.Single requires for leadership-loss protection (queue clear and intake " +
+                "suspension). Implement {2} on your queue or use the built-in TimedEntityQueue<{0}>.",
+                entityName,
+                queueImpl.Name,
+                nameof(ISuspendableEntityQueue)));
         }
     }
 }

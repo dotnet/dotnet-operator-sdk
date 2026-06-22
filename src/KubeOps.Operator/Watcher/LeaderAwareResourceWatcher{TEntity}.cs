@@ -84,13 +84,28 @@ public class LeaderAwareResourceWatcher<TEntity>(
     {
         logger.LogInformation("This instance stopped leading, stopping watcher.");
 
-        // RequestStopAsync is non-blocking on purpose: we no longer hold leadership, so we abort (cancel) the
-        // watch and move on without waiting (the host-shutdown drain is a separate path).
-        //
+        // Stop FIRST: this runs inside the elector's OnStoppedLeading callback, so the safety-critical action
+        // (abort the watch so a former leader stops enqueuing) must not be skipped by a failure in the best-effort
+        // cache cleanup below. RequestStopAsync is non-blocking on purpose — we no longer hold leadership, so we
+        // cancel and move on without waiting (the host-shutdown drain is a separate path).
+        _ = RequestStopAsync();
+
         // EntityCache is a single named cache shared by all entity watchers (keyed by entity UID). Remove only THIS
         // entity type's entries (tagged with EntityCacheTag) so a leadership loss does not wipe the dedup tokens of
-        // unrelated entity types that share this cache instance.
-        EntityCache.RemoveByTag(EntityCacheTag);
-        _ = RequestStopAsync();
+        // unrelated entity types that share this cache instance. Best-effort and guarded: a cache that has tagging
+        // disabled (custom configuration) would throw, and that exception must not propagate into the elector
+        // callback (it would be misattributed as a leadership-hold failure).
+        try
+        {
+            EntityCache.RemoveByTag(EntityCacheTag);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Failed to drop deduplication cache entries for {Entity} on leadership loss. The watch has still " +
+                "been stopped; stale dedup tokens may briefly survive into the next leadership term.",
+                typeof(TEntity).Name);
+        }
     }
 }

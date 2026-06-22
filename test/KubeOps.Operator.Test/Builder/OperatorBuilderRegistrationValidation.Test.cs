@@ -23,6 +23,8 @@ using Microsoft.Extensions.Logging;
 
 using Moq;
 
+using ZiggyCreatures.Caching.Fusion;
+
 namespace KubeOps.Operator.Test.Builder;
 
 [Trait("Area", "RegistrationValidation")]
@@ -420,6 +422,41 @@ public sealed class OperatorBuilderRegistrationValidationTest
             .And.Contain("ITimedEntityQueue");
     }
 
+    [Fact]
+    public async Task Should_Fail_When_ResourceWatcher_Cache_Has_Tagging_Disabled()
+    {
+        // The watcher tags every dedup entry, so FusionCache tagging must stay enabled. A custom cache config
+        // that disables it would otherwise make every tagged write throw at runtime; validation catches it early.
+        var settings = new OperatorSettingsBuilder
+        {
+            LeaderElectionType = LeaderElectionType.None,
+            QueueStrategy = QueueStrategy.InMemory,
+            ValidateRegistrations = true,
+            ConfigureResourceWatcherEntityCache = b => b.WithOptions(o => o.DisableTagging = true),
+        }.Build();
+
+        var services = new ServiceCollection();
+        var builder = new OperatorBuilder(services, settings);
+        builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+        var validator = CreateValidator(services, settings);
+
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<InvalidRegistrationException>())
+            .Which.Message.Should().Contain("tagging");
+    }
+
+    [Fact]
+    public async Task Should_Pass_When_ResourceWatcher_Cache_Has_Tagging_Enabled_By_Default()
+    {
+        // The default cache registration keeps tagging enabled, so the tagging probe must not add a problem.
+        var validator = CreateValidatorForSdkRegistrations(LeaderElectionType.None, QueueStrategy.InMemory);
+
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        await act.Should().NotThrowAsync();
+    }
+
     private static OperatorRegistrationValidator CreateValidatorForSdkRegistrations(
         LeaderElectionType leaderElectionType, QueueStrategy queueStrategy)
         => CreateValidator(leaderElectionType, queueStrategy);
@@ -450,8 +487,12 @@ public sealed class OperatorBuilderRegistrationValidationTest
             .Single(d => d.ServiceType == typeof(OperatorRegistrationRegistry))
             .ImplementationInstance!;
 
+        // The tagging check probes the real resource-watcher cache, so resolve the actual FusionCache provider
+        // the operator base registered (default config = tagging enabled).
+        var cacheProvider = services.BuildServiceProvider().GetRequiredService<IFusionCacheProvider>();
+
         return new OperatorRegistrationValidator(
-            registry, settings, Mock.Of<ILogger<OperatorRegistrationValidator>>());
+            registry, settings, cacheProvider, Mock.Of<ILogger<OperatorRegistrationValidator>>());
     }
 
     private sealed class TestController : IEntityController<V1OperatorIntegrationTestEntity>

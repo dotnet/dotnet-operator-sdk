@@ -126,13 +126,33 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
     {
         logger.LogInformation("This instance stopped leading, stopping queue processing.");
 
-        // Close the intake gate FIRST so nothing — including a still-running reconciler's RequeueAfter or
-        // an error retry — can enqueue work during or after the stop. Then cancel the dequeue loop and any
-        // in-flight reconciliation, and clear the work the former leader had already queued.
-        // RequestStopAsync is non-blocking on purpose: we no longer hold leadership, so we abort (cancel) and
-        // move on without waiting for the reconciliation to finish (the host-shutdown drain is a separate path).
-        Gate?.SuspendIntake();
+        // This runs inside the elector's OnStoppedLeading callback, so the safety-critical stop must not be skipped
+        // by a failure in the (best-effort) gate operations of a custom queue — and no exception may propagate into
+        // the callback (it would be misattributed as a leadership-hold failure).
+        //
+        // Close the intake gate FIRST so nothing — including a still-running reconciler's RequeueAfter or an error
+        // retry — can enqueue work during or after the stop.
+        try
+        {
+            Gate?.SuspendIntake();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Failed to suspend queue intake for {Entity} on leadership loss.", typeof(TEntity).Name);
+        }
+
+        // Cancel the dequeue loop and any in-flight reconciliation. Non-blocking on purpose: we no longer hold
+        // leadership, so we abort and move on without waiting (the host-shutdown drain is a separate path).
         _ = RequestStopAsync();
-        Gate?.Clear();
+
+        // Clear the work the former leader had already queued (best-effort).
+        try
+        {
+            Gate?.Clear();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Failed to clear the queue for {Entity} on leadership loss.", typeof(TEntity).Name);
+        }
     }
 }
