@@ -296,7 +296,7 @@ public class ResourceWatcher<TEntity>(
             }
             catch (Exception e)
             {
-                await OnWatchErrorAsync(e);
+                await OnWatchErrorAsync(e, cancellationToken);
             }
 
             if (cancellationToken.IsCancellationRequested)
@@ -322,7 +322,7 @@ public class ResourceWatcher<TEntity>(
             entity.Generation(),
             string.Join(',', entity.Finalizers() ?? []));
 
-    private async Task OnWatchErrorAsync(Exception e)
+    private async Task OnWatchErrorAsync(Exception e, CancellationToken cancellationToken)
     {
         switch (e)
         {
@@ -352,7 +352,15 @@ public class ResourceWatcher<TEntity>(
             "There were {Retries} errors / retries in the watcher. Wait {Seconds}s before next attempt to connect.",
             _watcherReconnectRetries,
             delay.TotalSeconds);
-        await Task.Delay(delay);
+
+        try
+        {
+            await Task.Delay(delay, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Stop or leadership loss during the backoff
+        }
     }
 
     private sealed record DeletionTrackingEntry(string CacheKey, string Fingerprint);
