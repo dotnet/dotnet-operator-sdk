@@ -119,51 +119,52 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
             }
 
             _management
-            .AddOrUpdate(
-                key,
-                _ =>
-                {
-                    _logger
-                        .LogTrace(
-                            """Scheduling entity "{Identifier}" to reconcile in {Seconds}s.""",
-                            entity.ToIdentifierString(),
-                            queueIn.TotalSeconds);
-
-                    return new(entity, type, reconciliationTriggerSource, queueIn, retryCount);
-                },
-                (_, oldEntry) =>
-                {
-                    var newQueueIn = queueIn;
-                    var oldQueueIn = TimeSpan.FromTicks(Math.Max(0, oldEntry.EnqueueAt.Subtract(DateTimeOffset.UtcNow).Ticks));
-
-                    // the earliest execution time should be kept,
-                    if (oldQueueIn <= newQueueIn)
-                    {
-                        newQueueIn = oldQueueIn;
-
-                        _logger
-                            .LogTrace(
-                                """Keeping scheduled entity "{Identifier}" to reconcile in {Seconds}s.""",
-                                entity.ToIdentifierString(),
-                                newQueueIn.TotalSeconds);
-                    }
-                    else
+                .AddOrUpdate(
+                    key: key,
+                    addValueFactory: _ =>
                     {
                         _logger
                             .LogTrace(
-                                """Updating scheduled entity "{Identifier}" to reconcile in {Seconds}s.""",
+                                """Scheduling entity "{Identifier}" to reconcile in {Seconds}s.""",
                                 entity.ToIdentifierString(),
-                                newQueueIn.TotalSeconds);
-                    }
+                                queueIn.TotalSeconds);
 
-                    // schedule deleted reconciliations must not be cancelled
-                    var newReconciliationType = oldEntry.ReconciliationType == ReconciliationType.Deleted
-                        ? oldEntry.ReconciliationType
-                        : type;
+                        return new(entity, type, reconciliationTriggerSource, queueIn, retryCount);
+                    },
+                    updateValueFactory: (_, oldEntry) =>
+                    {
+                        var newQueueIn = queueIn;
+                        var oldQueueIn = TimeSpan.FromTicks(
+                            Math.Max(0, oldEntry.EnqueueAt.Subtract(DateTimeOffset.UtcNow).Ticks));
 
-                    oldEntry.Cancel();
-                    return new(entity, newReconciliationType, reconciliationTriggerSource, newQueueIn, retryCount);
-                });
+                        // the earliest execution time should be kept,
+                        if (oldQueueIn <= newQueueIn)
+                        {
+                            newQueueIn = oldQueueIn;
+
+                            _logger
+                                .LogTrace(
+                                    """Keeping scheduled entity "{Identifier}" to reconcile in {Seconds}s.""",
+                                    entity.ToIdentifierString(),
+                                    newQueueIn.TotalSeconds);
+                        }
+                        else
+                        {
+                            _logger
+                                .LogTrace(
+                                    """Updating scheduled entity "{Identifier}" to reconcile in {Seconds}s.""",
+                                    entity.ToIdentifierString(),
+                                    newQueueIn.TotalSeconds);
+                        }
+
+                        // schedule deleted reconciliations must not be cancelled
+                        var newReconciliationType = oldEntry.ReconciliationType == ReconciliationType.Deleted
+                            ? oldEntry.ReconciliationType
+                            : type;
+
+                        oldEntry.Cancel();
+                        return new(entity, newReconciliationType, reconciliationTriggerSource, newQueueIn, retryCount);
+                    });
         }
 
         _metrics?.RecordEnqueue(typeof(TEntity).Name, reconciliationTriggerSource.ToMetricString());
