@@ -90,8 +90,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
 
     internal int Count => _management.Count;
 
-    // Number of entries already promoted to the ready queue. Exposed for tests to assert Clear()/intake
-    // behaviour without consuming the (blocking) enumerator.
+    // Number of entries already promoted to the ready queue.
     internal int ReadyCount => _queue.Count;
 
     /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Enqueue"/>
