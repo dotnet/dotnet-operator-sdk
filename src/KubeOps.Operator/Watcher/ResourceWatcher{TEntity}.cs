@@ -40,13 +40,9 @@ public class ResourceWatcher<TEntity>(
     : RestartableHostedService
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    // The tag applied to every cache write for this entity type, held as a single-element array to avoid
-    // allocating one per event. Exposed via EntityCacheTag for leadership-aware subclasses.
     private readonly string[] _entityCacheTags = [typeof(TEntity).FullName ?? typeof(TEntity).Name];
 
     private uint _watcherReconnectRetries;
-
-    ~ResourceWatcher() => Dispose(false);
 
     /// <summary>
     /// Gets the tag applied to every cached deduplication entry of this entity type. The dedup cache is a single

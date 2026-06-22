@@ -83,9 +83,6 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
     /// </summary>
     internal TimeSpan FaultBackoffResetThreshold { get; set; } = TimeSpan.FromMinutes(1);
 
-    /// <summary>Gets a value indicating whether the service has been disposed.</summary>
-    protected bool IsDisposed => _disposed;
-
     /// <inheritdoc cref="IHostedService.StartAsync"/>
     /// <remarks>
     /// Idempotent: starts the background loop only if one is not already running. The loop is scheduled with
@@ -207,7 +204,9 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
     {
     }
 
-    /// <summary>Releases subclass-managed resources synchronously. Called from <see cref="Dispose(bool)"/>.</summary>
+    /// <summary>
+    /// Releases subclass-managed resources synchronously. Called from <see cref="Dispose(bool)"/>.
+    /// </summary>
     protected virtual void DisposeManagedResources()
     {
     }
