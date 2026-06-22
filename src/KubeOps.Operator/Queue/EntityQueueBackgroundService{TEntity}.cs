@@ -177,7 +177,7 @@ public class EntityQueueBackgroundService<TEntity>(
         finally
         {
             // Drain the worker tasks already spawned so the loop does not return — and its CancellationTokenSource
-            // is not disposed (see RunProcessingLoopAsync), nor shared resources torn down, nor a new leadership
+            // is not disposed (see RunLoopAsync), nor shared resources torn down, nor a new leadership
             // term started — while reconciliations are still in flight. Individual worker failures are already
             // handled inside ProcessEntryAsync; cancellation surfaces here as OperationCanceledException.
             try
@@ -293,7 +293,7 @@ public class EntityQueueBackgroundService<TEntity>(
             // Catches all unexpected errors, including OperationCanceledException that was NOT triggered
             // by the operator's own cancellation token (i.e. an internal abort from within the reconciler).
             // Intentional shutdown cancellations (IsCancellationRequested == true) are re-thrown and handled
-            // by the caller in WatchAsync.
+            // by the caller in ExecuteAsync.
             logger
                 .LogError(
                     e,
@@ -394,7 +394,7 @@ public class EntityQueueBackgroundService<TEntity>(
                 break;
 
             default:
-                throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliation.ConflictStrategy} is not supported in HandleUidConflictAsync.");
+                throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliation.ConflictStrategy} is not supported in HandleLockingConflictAsync.");
         }
     }
 

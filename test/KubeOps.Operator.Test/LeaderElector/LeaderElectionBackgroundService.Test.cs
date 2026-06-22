@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics;
+
 using FluentAssertions;
 
 using k8s.LeaderElection;
@@ -58,5 +60,43 @@ public sealed class LeaderElectionBackgroundServiceTest
         electionLockSubsequentCallEvent.WaitOne(TimeSpan.FromMilliseconds(3100)).Should().BeTrue();
 
         await leaderElectionBackgroundService.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Stop_During_Retry_Backoff_Should_Complete_Promptly()
+    {
+        // Arrange.
+        var logger = Mock.Of<ILogger<LeaderElectionBackgroundService>>();
+
+        var electionLock = Mock.Of<ILock>();
+
+        var firstCall = new TaskCompletionSource();
+        Mock.Get(electionLock)
+            .Setup(el => el.GetAsync(It.IsAny<CancellationToken>()))
+            .Returns<CancellationToken>(_ =>
+            {
+                // Fail immediately so the service enters its exponential retry back-off (>= 2s).
+                firstCall.TrySetResult();
+                throw new InvalidOperationException("Unit test exception");
+            });
+
+        var leaderElector = new k8s.LeaderElection.LeaderElector(new LeaderElectionConfig(electionLock));
+        var leaderElectionBackgroundService = new LeaderElectionBackgroundService(logger, leaderElector);
+
+        // Act.
+        await leaderElectionBackgroundService.StartAsync(TestContext.Current.CancellationToken);
+
+        var faulted = await Task.WhenAny(
+            firstCall.Task,
+            Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        faulted.Should().Be(firstCall.Task, "the lock attempt should have failed and entered the back-off");
+
+        // Stopping during the back-off must cancel the wait instead of blocking until the (>= 2s) delay elapses.
+        var stopwatch = Stopwatch.StartNew();
+        await leaderElectionBackgroundService.StopAsync(TestContext.Current.CancellationToken);
+        stopwatch.Stop();
+
+        // Assert.
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
     }
 }

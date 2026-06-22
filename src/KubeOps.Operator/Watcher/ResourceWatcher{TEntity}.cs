@@ -40,9 +40,21 @@ public class ResourceWatcher<TEntity>(
     : RestartableHostedService
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
+    // The tag applied to every cache write for this entity type, held as a single-element array to avoid
+    // allocating one per event. Exposed via EntityCacheTag for leadership-aware subclasses.
+    private readonly string[] _entityCacheTags = [typeof(TEntity).FullName ?? typeof(TEntity).Name];
+
     private uint _watcherReconnectRetries;
 
     ~ResourceWatcher() => Dispose(false);
+
+    /// <summary>
+    /// Gets the tag applied to every cached deduplication entry of this entity type. The dedup cache is a single
+    /// named FusionCache instance shared by all entity watchers (keyed by entity UID); the tag lets a
+    /// leadership-aware subclass drop only <em>this</em> entity type's entries (see
+    /// <see cref="LeaderAwareResourceWatcher{TEntity}"/>) instead of clearing every entity's entries.
+    /// </summary>
+    protected string EntityCacheTag => _entityCacheTags[0];
 
     /// <summary>
     /// Gets the fusion cache used to store a strategy-dependent deduplication token for each
@@ -56,8 +68,9 @@ public class ResourceWatcher<TEntity>(
     /// <remarks>
     /// <para>
     /// Subclasses may access this cache to read or invalidate cached tokens. For example,
-    /// <see cref="LeaderAwareResourceWatcher{TEntity}"/> calls <see cref="IFusionCache.Clear"/>
-    /// when leadership is lost to ensure stale data is not carried over to the next watch session.
+    /// <see cref="LeaderAwareResourceWatcher{TEntity}"/> removes this entity type's entries by
+    /// <see cref="EntityCacheTag"/> when leadership is lost, so stale data is not carried over to the next watch
+    /// session — without disturbing other entity types that share this cache instance.
     /// </para>
     /// <para>
     /// Note: when an entity has a <c>DeletionTimestamp</c> set (finalizer processing), the
@@ -196,6 +209,7 @@ public class ResourceWatcher<TEntity>(
                     await EntityCache.SetAsync(
                         deletionTrackingEntry.CacheKey,
                         deletionTrackingEntry.Fingerprint,
+                        tags: _entityCacheTags,
                         token: cancellationToken);
 
                     break;
@@ -203,6 +217,7 @@ public class ResourceWatcher<TEntity>(
                     await EntityCache.SetAsync(
                         entity.Uid(),
                         entity.Generation() ?? 1,
+                        tags: _entityCacheTags,
                         token: cancellationToken);
 
                     break;
@@ -210,6 +225,7 @@ public class ResourceWatcher<TEntity>(
                     await EntityCache.SetAsync(
                         entity.Uid(),
                         entity.ResourceVersion(),
+                        tags: _entityCacheTags,
                         token: cancellationToken);
 
                     break;

@@ -25,7 +25,7 @@ namespace KubeOps.Operator.Test.Watcher;
 public sealed class LeaderAwareResourceWatcherTest
 {
     [Fact]
-    public async Task StoppedLeading_Should_Clear_EntityCache()
+    public async Task StoppedLeading_Should_Remove_Only_This_Entity_Types_Cache_Entries()
     {
         var mockCache = new Mock<IFusionCache>();
         var mockCacheProvider = Mock.Of<IFusionCacheProvider>();
@@ -56,7 +56,15 @@ public sealed class LeaderAwareResourceWatcherTest
         // Trigger the private StoppedLeading handler via the testable wrapper.
         watcher.SimulateStoppedLeading();
 
-        mockCache.Verify(c => c.Clear(It.IsAny<bool>()), Times.Once);
+        // Only this entity type's tagged entries must be removed — never a global Clear() that would also wipe
+        // the dedup tokens of other entity types sharing the same named cache.
+        mockCache.Verify(
+            c => c.RemoveByTag(
+                It.Is<string>(tag => tag == typeof(V1OperatorIntegrationTestEntity).FullName),
+                It.IsAny<FusionCacheEntryOptions>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        mockCache.Verify(c => c.Clear(It.IsAny<bool>()), Times.Never);
     }
 
     [Fact]

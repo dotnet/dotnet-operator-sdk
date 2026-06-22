@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using KubeOps.Operator.Retry;
+
 using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator;
@@ -64,6 +66,12 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
     /// <see cref="CancellationToken"/> cannot block shutdown beyond this. Internal so tests can shorten it.
     /// </summary>
     internal TimeSpan DrainGracePeriod { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Computes the back-off delay before a faulted loop is restarted, from the consecutive fault count.
+    /// Defaults to an exponential back-off with jitter; internal so tests can make restarts immediate.
+    /// </summary>
+    internal Func<uint, TimeSpan> FaultBackoff { get; set; } = ExponentialRetryBackoff.GetDelayWithJitter;
 
     /// <summary>Gets a value indicating whether the service has been disposed.</summary>
     protected bool IsDisposed => _disposed;
@@ -180,8 +188,9 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
     protected abstract Task ExecuteAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Called when <see cref="ExecuteAsync"/> exits with an unexpected error (any exception other than its own
-    /// cancellation). Override to log it so a dead loop is visible. Defaults to no-op.
+    /// Called each time <see cref="ExecuteAsync"/> exits with an unexpected error (any exception other than its own
+    /// cancellation), before the loop is restarted with a back-off (see <see cref="FaultBackoff"/>). Override to log
+    /// it so a faulting loop is visible. Defaults to no-op.
     /// </summary>
     /// <param name="exception">The exception the loop exited with.</param>
     protected virtual void OnLoopFaulted(Exception exception)
@@ -205,9 +214,10 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
     }
 
     /// <summary>
-    /// Synchronous cleanup that must run on <strong>both</strong> the synchronous and asynchronous disposal paths —
-    /// for example unsubscribing event handlers. Called from <see cref="Dispose(bool)"/> and
-    /// <see cref="DisposeAsyncCore"/>, so subclasses do not have to override both dispose methods to be safe.
+    /// Cleanup that must run <strong>before</strong> the loops are drained — for example unsubscribing event handlers
+    /// so that no leadership callback can start a new loop while disposal is in progress. Runs on both the synchronous
+    /// (<see cref="Dispose(bool)"/>) and asynchronous (<see cref="DisposeAsyncCore"/>) disposal paths, so subclasses
+    /// do not have to override both dispose methods to be safe.
     /// </summary>
     protected virtual void OnDisposing()
     {
@@ -249,14 +259,17 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
         lock (_lifecycleLock)
         {
             _running = false;
+
+            // Mark disposed under the lock and before the drain so a leadership callback racing the drain is
+            // suppressed by StartAsync's guard and cannot add a new loop that would escape the snapshot below.
+            _disposed = true;
             runs = [.. _activeRuns];
         }
 
-        await DrainRunsAsync(runs, CancellationToken.None);
+        // Unsubscribe before draining so no leadership callback can start a fresh loop during the drain.
         OnDisposing();
+        await DrainRunsAsync(runs, CancellationToken.None);
         await DisposeManagedResourcesAsync();
-
-        _disposed = true;
     }
 
     private static async Task CancelRunsAsync(IReadOnlyCollection<(Task Loop, CancellationTokenSource Cts)> runs)
@@ -301,22 +314,45 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
     }
 
     // Runs one loop and owns its CancellationTokenSource: it disposes the source only after the loop has finished,
-    // so StartAsync never disposes a token source that this loop is still using.
+    // so StartAsync never disposes a token source that this loop is still using. A loop that faults (any exception
+    // other than its own cancellation) is restarted in place with a back-off, so a single transient error cannot
+    // silently stop a service for the rest of the process lifetime; only cancellation or a clean return ends it.
     private async Task RunLoopAsync(CancellationTokenSource cts)
     {
+        uint faultRetries = 0;
         try
         {
-            await ExecuteAsync(cts.Token);
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested)
-        {
-            // Expected: the loop was cancelled by a stop or disposal. Nothing to report.
-        }
-        catch (Exception exception)
-        {
-            // The loop exited with an unexpected error (not its own cancellation). Surface it so a dead loop is
-            // visible. The loop is not auto-restarted, but _running is reset below so the next StartAsync can.
-            OnLoopFaulted(exception);
+            while (!cts.IsCancellationRequested)
+            {
+                try
+                {
+                    await ExecuteAsync(cts.Token);
+
+                    // ExecuteAsync returned without being cancelled: the loop body decided it is done. A clean
+                    // return is not a fault, so it is not restarted.
+                    break;
+                }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                {
+                    // Expected: the loop was cancelled by a stop or disposal. Nothing to report.
+                    break;
+                }
+                catch (Exception exception)
+                {
+                    // The loop exited with an unexpected error (not its own cancellation). Surface it, then wait a
+                    // back-off and restart so the service keeps working after a transient failure.
+                    OnLoopFaulted(exception);
+
+                    try
+                    {
+                        await Task.Delay(FaultBackoff(++faultRetries), cts.Token);
+                    }
+                    catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                }
+            }
         }
         finally
         {
@@ -325,7 +361,7 @@ public abstract class RestartableHostedService : IHostedService, IDisposable, IA
                 _activeRuns.RemoveAll(r => ReferenceEquals(r.Cts, cts));
 
                 // If no loop remains while we still think we are running, the loop exited without a stop request
-                // (ExecuteAsync returned or faulted). Reset so a subsequent StartAsync can restart it instead of
+                // (ExecuteAsync returned cleanly). Reset so a subsequent StartAsync can restart it instead of
                 // being suppressed forever by the idempotency guard.
                 if (_activeRuns.Count == 0)
                 {

@@ -86,7 +86,11 @@ public class LeaderAwareResourceWatcher<TEntity>(
 
         // RequestStopAsync is non-blocking on purpose: we no longer hold leadership, so we abort (cancel) the
         // watch and move on without waiting (the host-shutdown drain is a separate path).
-        EntityCache.Clear();
+        //
+        // EntityCache is a single named cache shared by all entity watchers (keyed by entity UID). Remove only THIS
+        // entity type's entries (tagged with EntityCacheTag) so a leadership loss does not wipe the dedup tokens of
+        // unrelated entity types that share this cache instance.
+        EntityCache.RemoveByTag(EntityCacheTag);
         _ = RequestStopAsync();
     }
 }
