@@ -92,9 +92,9 @@ internal sealed class OperatorRegistrationValidator(
 
     public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    // True, if a closed registration for the service exists, or an open-generic one, the DI container would
+    // True if a closed registration for the service exists, or an open-generic one the DI container would
     // close to it (e.g. AddSingleton(typeof(ITimedEntityQueue<>), typeof(MyQueue<>))). Keyed registrations
-    // are ignored: the watcher/reconciler take, these as plain (unkeyed) constructor dependencies, so a keyed
+    // are ignored: the watcher/reconciler take these as plain (unkeyed) constructor dependencies, so a keyed
     // registration would not satisfy them.
     private static bool HasService(IServiceCollection services, Type serviceType)
     {
@@ -131,7 +131,6 @@ internal sealed class OperatorRegistrationValidator(
         }
         catch (ArgumentException)
         {
-            // Generic constraints, not satisfiable for this entity; the registration cannot serve it.
             return false;
         }
     }
@@ -185,7 +184,6 @@ internal sealed class OperatorRegistrationValidator(
         }
         catch (ArgumentException)
         {
-            // Generic constraints not satisfiable for this entity; treat as undeterminable.
             return null;
         }
     }
