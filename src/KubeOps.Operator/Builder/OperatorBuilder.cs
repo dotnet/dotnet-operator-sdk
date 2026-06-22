@@ -121,9 +121,6 @@ internal sealed class OperatorBuilder : IOperatorBuilder
             services.GetRequiredService<IEventFinalizerAttacherFactory>()
                 .Create<TImplementation, TEntity>(identifier));
 
-        // Finalizers run as part of reconciliation, so the entity still needs a full pipeline
-        // (controller, watcher, queue consumer). Register it for validation to catch a finalizer that
-        // was added without a corresponding controller.
         RegisterRegistrationValidation(typeof(TEntity));
 
         return this;
