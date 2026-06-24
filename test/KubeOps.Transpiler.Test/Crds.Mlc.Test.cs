@@ -233,6 +233,26 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
 
     [Trait("Area", "General")]
     [Fact]
+    public void Should_Set_Title()
+    {
+        var crd = _mlc.Transpile(typeof(TitleAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+        specProperties.Title.Should().Be("My Title");
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
+    public void Should_Set_Title_On_Class()
+    {
+        var crd = _mlc.Transpile(typeof(ClassTitleAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"];
+        specProperties.Title.Should().Be("My Title");
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
     public void Should_Set_ExternalDocs()
     {
         var crd = _mlc.Transpile(typeof(ExtDocsAttrEntity));
@@ -263,6 +283,30 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         (specProperties.Items as V1JSONSchemaProps)?.Type?.Should().Be("string");
         specProperties.MaxItems.Should().Be(42);
         specProperties.MinItems.Should().Be(13);
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
+    public void Should_Set_MinItemsOnly_Information()
+    {
+        var crd = _mlc.Transpile(typeof(MinItemsAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.MinItems.Should().Be(13);
+        specProperties.MaxItems.Should().BeNull();
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
+    public void Should_Set_MaxItemsOnly_Information()
+    {
+        var crd = _mlc.Transpile(typeof(MaxItemsAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.MinItems.Should().BeNull();
+        specProperties.MaxItems.Should().Be(42);
     }
 
     [Trait("Area", "General")]
@@ -314,6 +358,42 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
 
     [Trait("Area", "General")]
     [Fact]
+    public void Should_Set_Properties_Information()
+    {
+        var crd = _mlc.Transpile(typeof(PropertiesAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.MinProperties.Should().Be(1);
+        specProperties.MaxProperties.Should().Be(10);
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
+    public void Should_Set_MinPropertiesOnly_Information()
+    {
+        var crd = _mlc.Transpile(typeof(MinPropertiesAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.MinProperties.Should().Be(1);
+        specProperties.MaxProperties.Should().BeNull();
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
+    public void Should_Set_MaxPropertiesOnly_Information()
+    {
+        var crd = _mlc.Transpile(typeof(MaxPropertiesAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.MinProperties.Should().BeNull();
+        specProperties.MaxProperties.Should().Be(10);
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
     public void Should_Set_Pattern()
     {
         var crd = _mlc.Transpile(typeof(PatternAttrEntity));
@@ -345,6 +425,51 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
 
         specProperties.Maximum.Should().Be(15);
         specProperties.ExclusiveMaximum.Should().BeTrue();
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
+    public void Should_Set_UniqueItems()
+    {
+        var crd = _mlc.Transpile(typeof(UniqueItemsAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.UniqueItems.Should().BeTrue();
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
+    public void Should_Set_XListType()
+    {
+        var crd = _mlc.Transpile(typeof(XListTypeAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.XKubernetesListType.Should().Be("set");
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
+    public void Should_Set_XMapType()
+    {
+        var crd = _mlc.Transpile(typeof(XMapTypeAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.XKubernetesMapType.Should().Be("atomic");
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
+    public void Should_Set_XListMapKeys()
+    {
+        var crd = _mlc.Transpile(typeof(XListMapKeysAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.XKubernetesListType.Should().Be("map");
+        specProperties.XKubernetesListMapKeys.Should().BeEquivalentTo("name", "port");
     }
 
     [Trait("Area", "General")]
@@ -1050,6 +1175,20 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class TitleAttrEntity : CustomKubernetesEntity
+    {
+        [Title("My Title")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class ClassTitleAttrEntity : CustomKubernetesEntity<ClassTitleAttrEntity.EntitySpec>
+    {
+        [Title("My Title")]
+        public class EntitySpec;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
     public class ExtDocsAttrEntity : CustomKubernetesEntity
     {
         [ExternalDocs("url")]
@@ -1067,6 +1206,20 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     public class ItemsAttrEntity : CustomKubernetesEntity
     {
         [Items(13, 42)]
+        public string[] Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class MinItemsAttrEntity : CustomKubernetesEntity
+    {
+        [Items(minItems: 13)]
+        public string[] Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class MaxItemsAttrEntity : CustomKubernetesEntity
+    {
+        [Items(maxItems: 42)]
         public string[] Property { get; set; } = null!;
     }
 
@@ -1099,6 +1252,48 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class PropertiesAttrEntity : CustomKubernetesEntity
+    {
+        [PropertyLimits(1, 10)]
+        public PropertyLimitsObject Property { get; set; } = null!;
+
+        public class PropertyLimitsObject
+        {
+            public string FirstProperty { get; set; } = null!;
+
+            public string SecondProperty { get; set; } = null!;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class MinPropertiesAttrEntity : CustomKubernetesEntity
+    {
+        [PropertyLimits(minProperties: 1)]
+        public PropertyLimitsObject Property { get; set; } = null!;
+
+        public class PropertyLimitsObject
+        {
+            public string FirstProperty { get; set; } = null!;
+
+            public string SecondProperty { get; set; } = null!;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class MaxPropertiesAttrEntity : CustomKubernetesEntity
+    {
+        [PropertyLimits(maxProperties: 10)]
+        public PropertyLimitsObject Property { get; set; } = null!;
+
+        public class PropertyLimitsObject
+        {
+            public string FirstProperty { get; set; } = null!;
+
+            public string SecondProperty { get; set; } = null!;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
     public sealed class PatternAttrEntity : CustomKubernetesEntity
     {
         [Pattern(@"/\d*/")]
@@ -1117,6 +1312,49 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     {
         [RangeMaximum(15, true)]
         public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class UniqueItemsAttrEntity : CustomKubernetesEntity
+    {
+        [UniqueItems]
+        public string[] Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class XListTypeAttrEntity : CustomKubernetesEntity
+    {
+        [XListType(XListType.Set)]
+        public string[] Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class XMapTypeAttrEntity : CustomKubernetesEntity
+    {
+        [XMapType(XMapType.Atomic)]
+        public MapTypeObject Property { get; set; } = null!;
+
+        public class MapTypeObject
+        {
+            public string FirstProperty { get; set; } = null!;
+
+            public string SecondProperty { get; set; } = null!;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class XListMapKeysAttrEntity : CustomKubernetesEntity
+    {
+        [XListType(XListType.Map)]
+        [XListMapKeys("name", "port")]
+        public ListMapKeysItem[] Property { get; set; } = null!;
+
+        public class ListMapKeysItem
+        {
+            public string Name { get; set; } = null!;
+
+            public int Port { get; set; }
+        }
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
