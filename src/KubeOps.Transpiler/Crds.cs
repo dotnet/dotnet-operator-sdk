@@ -108,6 +108,8 @@ public static class Crds
                     Type = Object,
                     Description =
                         type.GetCustomAttributeData<DescriptionAttribute>()?.GetCustomAttributeCtorArg<string>(context, 0),
+                    Title =
+                        type.GetCustomAttributeData<TitleAttribute>()?.GetCustomAttributeCtorArg<string>(context, 0),
                     Properties = type.GetProperties()
                         .Where(p => !IgnoredToplevelProperties.Contains(p.Name.ToLowerInvariant())
                                     && p.GetCustomAttributeData<IgnoreAttribute>() == null)
@@ -337,6 +339,9 @@ public static class Crds
         props.Description ??= prop.GetCustomAttributeData<DescriptionAttribute>()
             ?.GetCustomAttributeCtorArg<string>(context, 0);
 
+        props.Title ??= prop.GetCustomAttributeData<TitleAttribute>()
+            ?.GetCustomAttributeCtorArg<string>(context, 0);
+
         if (prop.IsNullable())
         {
             // Default to Nullable to null to avoid generating `nullable:false`
@@ -367,6 +372,15 @@ public static class Crds
             props.MaxLength = maxLength == -1 ? null : maxLength;
         }
 
+        if (prop.GetCustomAttributeData<PropertyLimitsAttribute>() is { } properties)
+        {
+            var minProperties = properties.GetCustomAttributeCtorArg<long>(context, 0);
+            props.MinProperties = minProperties == -1 ? null : minProperties;
+
+            var maxProperties = properties.GetCustomAttributeCtorArg<long>(context, 1);
+            props.MaxProperties = maxProperties == -1 ? null : maxProperties;
+        }
+
         if (prop.GetCustomAttributeData<MultipleOfAttribute>() is { } multi)
         {
             props.MultipleOf = multi.GetCustomAttributeCtorArg<double>(context, 0);
@@ -389,6 +403,28 @@ public static class Crds
             props.Minimum = rangeMin.GetCustomAttributeCtorArg<double>(context, 0);
             props.ExclusiveMinimum =
                 rangeMin.GetCustomAttributeCtorArg<bool>(context, 1);
+        }
+
+        if (prop.GetCustomAttributeData<UniqueItemsAttribute>() is not null)
+        {
+            props.UniqueItems = true;
+        }
+
+        if (prop.GetCustomAttributeData<XListTypeAttribute>() is { } listType)
+        {
+            props.XKubernetesListType = listType.GetCustomAttributeCtorArg<XListType>(context, 0)
+                .ToString().ToLowerInvariant();
+        }
+
+        if (prop.GetCustomAttributeData<XMapTypeAttribute>() is { } mapType)
+        {
+            props.XKubernetesMapType = mapType.GetCustomAttributeCtorArg<XMapType>(context, 0)
+                .ToString().ToLowerInvariant();
+        }
+
+        if (prop.GetCustomAttributeData<XListMapKeysAttribute>() is { } listMapKeysAttr)
+        {
+            props.XKubernetesListMapKeys = listMapKeysAttr.GetCustomAttributeCtorArrayArg<string>(0);
         }
 
         if (preservesUnknownFields)
@@ -585,6 +621,9 @@ public static class Crds
                         Type = Object,
                         Description =
                             type.GetCustomAttributeData<DescriptionAttribute>()
+                                ?.GetCustomAttributeCtorArg<string>(context, 0),
+                        Title =
+                            type.GetCustomAttributeData<TitleAttribute>()
                                 ?.GetCustomAttributeCtorArg<string>(context, 0),
                         Properties = type
                             .GetProperties()
