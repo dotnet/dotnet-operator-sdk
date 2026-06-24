@@ -243,6 +243,16 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
 
     [Trait("Area", "General")]
     [Fact]
+    public void Should_Set_Title_On_Class()
+    {
+        var crd = _mlc.Transpile(typeof(ClassTitleAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"];
+        specProperties.Title.Should().Be("My Title");
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
     public void Should_Set_ExternalDocs()
     {
         var crd = _mlc.Transpile(typeof(ExtDocsAttrEntity));
@@ -434,6 +444,7 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
 
         var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
 
+        specProperties.XKubernetesListType.Should().Be("map");
         specProperties.XKubernetesListMapKeys.Should().BeEquivalentTo("name", "port");
     }
 
@@ -1147,6 +1158,13 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class ClassTitleAttrEntity : CustomKubernetesEntity<ClassTitleAttrEntity.EntitySpec>
+    {
+        [Title("My Title")]
+        public class EntitySpec;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
     public class ExtDocsAttrEntity : CustomKubernetesEntity
     {
         [ExternalDocs("url")]
@@ -1199,21 +1217,42 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     public class PropertiesAttrEntity : CustomKubernetesEntity
     {
         [PropertyLimits(1, 10)]
-        public Dictionary<string, string> Property { get; set; } = null!;
+        public PropertyLimitsObject Property { get; set; } = null!;
+
+        public class PropertyLimitsObject
+        {
+            public string FirstProperty { get; set; } = null!;
+
+            public string SecondProperty { get; set; } = null!;
+        }
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
     public class MinPropertiesAttrEntity : CustomKubernetesEntity
     {
         [PropertyLimits(minProperties: 1)]
-        public Dictionary<string, string> Property { get; set; } = null!;
+        public PropertyLimitsObject Property { get; set; } = null!;
+
+        public class PropertyLimitsObject
+        {
+            public string FirstProperty { get; set; } = null!;
+
+            public string SecondProperty { get; set; } = null!;
+        }
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
     public class MaxPropertiesAttrEntity : CustomKubernetesEntity
     {
         [PropertyLimits(maxProperties: 10)]
-        public Dictionary<string, string> Property { get; set; } = null!;
+        public PropertyLimitsObject Property { get; set; } = null!;
+
+        public class PropertyLimitsObject
+        {
+            public string FirstProperty { get; set; } = null!;
+
+            public string SecondProperty { get; set; } = null!;
+        }
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
@@ -1255,14 +1294,29 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     public class XMapTypeAttrEntity : CustomKubernetesEntity
     {
         [XMapType(XMapType.Atomic)]
-        public Dictionary<string, string> Property { get; set; } = null!;
+        public MapTypeObject Property { get; set; } = null!;
+
+        public class MapTypeObject
+        {
+            public string FirstProperty { get; set; } = null!;
+
+            public string SecondProperty { get; set; } = null!;
+        }
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
     public class XListMapKeysAttrEntity : CustomKubernetesEntity
     {
+        [XListType(XListType.Map)]
         [XListMapKeys("name", "port")]
-        public string[] Property { get; set; } = null!;
+        public ListMapKeysItem[] Property { get; set; } = null!;
+
+        public class ListMapKeysItem
+        {
+            public string Name { get; set; } = null!;
+
+            public int Port { get; set; }
+        }
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
