@@ -287,6 +287,30 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
 
     [Trait("Area", "General")]
     [Fact]
+    public void Should_Set_MinItemsOnly_Information()
+    {
+        var crd = _mlc.Transpile(typeof(MinItemsAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.MinItems.Should().Be(13);
+        specProperties.MaxItems.Should().BeNull();
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
+    public void Should_Set_MaxItemsOnly_Information()
+    {
+        var crd = _mlc.Transpile(typeof(MaxItemsAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+
+        specProperties.MinItems.Should().BeNull();
+        specProperties.MaxItems.Should().Be(42);
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
     public void Should_Set_Length_Information()
     {
         var crd = _mlc.Transpile(typeof(LengthAttrEntity));
@@ -1182,6 +1206,20 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     public class ItemsAttrEntity : CustomKubernetesEntity
     {
         [Items(13, 42)]
+        public string[] Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class MinItemsAttrEntity : CustomKubernetesEntity
+    {
+        [Items(minItems: 13)]
+        public string[] Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class MaxItemsAttrEntity : CustomKubernetesEntity
+    {
+        [Items(maxItems: 42)]
         public string[] Property { get; set; } = null!;
     }
 

@@ -359,8 +359,11 @@ public static class Crds
 
         if (prop.GetCustomAttributeData<ItemsAttribute>() is { } items)
         {
-            props.MinItems = items.GetCustomAttributeCtorArg<long>(context, 0);
-            props.MaxItems = items.GetCustomAttributeCtorArg<long>(context, 1);
+            var minItems = items.GetCustomAttributeCtorArg<long>(context, 0);
+            props.MinItems = minItems == -1 ? null : minItems;
+
+            var maxItems = items.GetCustomAttributeCtorArg<long>(context, 1);
+            props.MaxItems = maxItems == -1 ? null : maxItems;
         }
 
         if (prop.GetCustomAttributeData<LengthAttribute>() is { } length)
