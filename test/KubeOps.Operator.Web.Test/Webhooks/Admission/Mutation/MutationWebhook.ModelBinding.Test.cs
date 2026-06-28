@@ -16,8 +16,36 @@ namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Mutation;
 
 public sealed class MutationWebhookModelBindingTest : WebhookTestBase
 {
+    [Fact(DisplayName = "Mutation webhook binds create request when object metadata UID is missing")]
+    [Trait("Area", "MutationWebhookModelBinding")]
+    public async Task HandleAsync_CreateRequestWithoutObjectMetadataUid_DoesNotFailModelValidation()
+    {
+        using var host = await TestHost.Create();
+        var client = host.GetTestClient();
+
+        var admissionRequest = CreateAdmissionReview(
+            uid: "issue-753-mutation-create-uid",
+            operation: "CREATE",
+            dryRun: false,
+            @object: CreateTestSpec("createvalue", "PT10M"));
+
+        var response = await PostWebhookAsync(
+            client,
+            $"/mutate/{nameof(TestEntityWithISODurationTimeSpan).ToLowerInvariant()}",
+            admissionRequest);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content
+            .ReadFromJsonAsync<AdmissionResponse>(
+                cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Should().NotBeNull();
+        result.Response.Uid.Should().Be("issue-753-mutation-create-uid");
+        result.Response.Allowed.Should().BeTrue();
+    }
+
     [Theory(DisplayName = "Mutation webhook binds request correctly")]
-    [Trait("Category", "MutationWebhookModelBinding")]
+    [Trait("Area", "MutationWebhookModelBinding")]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-create-iso-uid", "CREATE", false, "createvalue", "PT10M")]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-update-iso-uid", "UPDATE", false, "newvalue", "PT1H30M")]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-delete-iso-uid", "DELETE", false, "deletedvalue", "PT20M")]

@@ -16,8 +16,36 @@ namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Validation;
 
 public sealed class ValidationWebhookModelBindingTest : WebhookTestBase
 {
+    [Fact(DisplayName = "Validation webhook binds create request when object metadata UID is missing")]
+    [Trait("Area", "ModelBinding")]
+    public async Task HandleAsync_CreateRequestWithoutObjectMetadataUid_DoesNotFailModelValidation()
+    {
+        using var host = await TestHost.Create();
+        var client = host.GetTestClient();
+
+        var admissionRequest = CreateAdmissionReview(
+            uid: "issue-753-validation-create-uid",
+            operation: "CREATE",
+            dryRun: false,
+            @object: CreateTestSpec("createvalue", "PT10M"));
+
+        var response = await PostWebhookAsync(
+            client,
+            $"/validate/{nameof(TestEntityWithISODurationTimeSpan).ToLowerInvariant()}",
+            admissionRequest);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content
+            .ReadFromJsonAsync<AdmissionResponse>(
+                cancellationToken: TestContext.Current.CancellationToken);
+
+        result.Should().NotBeNull();
+        result.Response.Uid.Should().Be("issue-753-validation-create-uid");
+        result.Response.Allowed.Should().BeTrue();
+    }
+
     [Theory(DisplayName = "Validation webhook binds request correctly")]
-    [Trait("Category", "ValidationWebhookModelBinding")]
+    [Trait("Area", "ModelBinding")]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-create-iso-uid", "CREATE", false, "createvalue", "PT10M", true)]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-update-iso-uid", "UPDATE", false, "same", "PT1H30M", true)]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-update-iso-uid-fail", "UPDATE", false, "new", "PT1H30M", false)]

@@ -21,7 +21,7 @@ public sealed class AdmissionRequestModelBinderTest
     private readonly AdmissionRequestModelBinder _binder = new();
 
     [Theory(DisplayName = "BindModelAsync binds AdmissionRequest correctly")]
-    [Trait("Category", "AdmissionRequestModelBinder")]
+    [Trait("Area", "AdmissionRequestModelBinder")]
     [InlineData(typeof(AdmissionRequest<TestEntityWithISODurationTimeSpan>), "PT5M30S", 0, 5, 30)]
     [InlineData(typeof(AdmissionRequest<TestEntityWithTimeSpanConverter>), "05:30:00", 5, 30, 0)]
     public async Task BindModelAsync_WithValidAdmissionRequest_BindsExpectedRequest(
@@ -90,7 +90,7 @@ public sealed class AdmissionRequestModelBinderTest
     }
 
     [Fact(DisplayName = "BindModelAsync does not set model for empty value")]
-    [Trait("Category", "AdmissionRequestModelBinder")]
+    [Trait("Area", "AdmissionRequestModelBinder")]
     public async Task BindModelAsync_WithEmptyValue_DoesNotSetModel()
     {
         var bindingContext = CreateBindingContext(
@@ -104,7 +104,7 @@ public sealed class AdmissionRequestModelBinderTest
     }
 
     [Fact(DisplayName = "BindModelAsync does not set model for missing value")]
-    [Trait("Category", "AdmissionRequestModelBinder")]
+    [Trait("Area", "AdmissionRequestModelBinder")]
     public async Task BindModelAsync_WithMissingValue_DoesNotSetModel()
     {
         var bindingContext = CreateBindingContext(
