@@ -142,7 +142,7 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Category", "Partial")]
+    [Trait("Area", "Partial")]
     public void Should_Generate_Static_Initializer_For_Partial_Entity_With_Default_Ctor()
     {
         var inputCompilation = """
@@ -184,7 +184,7 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Category", "Partial")]
+    [Trait("Area", "Partial")]
     public void Should_Not_Generate_Static_Initializer_For_Partial_Entity()
     {
         var inputCompilation = """
@@ -219,7 +219,7 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Category", "Partial")]
+    [Trait("Area", "Partial")]
     public void Should_Generate_Default_Ctor_For_FileNamespaced_Partial_Entity()
     {
         var inputCompilation = """
@@ -260,7 +260,7 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Category", "Partial")]
+    [Trait("Area", "Partial")]
     public void Should_Generate_Default_Ctor_For_ScopeNamespaced_Partial_Entity()
     {
         var inputCompilation = """
@@ -306,7 +306,7 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Category", "Partial")]
+    [Trait("Area", "Partial")]
     public void Should_Generate_Default_Ctor_For_Global_Partial_Entity()
     {
         var inputCompilation = """
@@ -345,7 +345,7 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Category", "Partial")]
+    [Trait("Area", "Partial")]
     public void Should_Generate_Default_Ctor_For_Partial_Entity_With_Ctor()
     {
         var inputCompilation = """
@@ -385,7 +385,7 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Category", "Partial")]
+    [Trait("Area", "Partial")]
     public void Should_Generate_Default_Ctor_For_Partial_Entity_With_Controller_In_Same_Assembly()
     {
         var inputCompilation = """
@@ -433,7 +433,7 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Category", "FromReferencedAssembly")]
+    [Trait("Area", "FromReferencedAssembly")]
     public void Should_Generate_Static_Initializer_For_Referenced_Entity()
     {
         var inputCompilation = """
