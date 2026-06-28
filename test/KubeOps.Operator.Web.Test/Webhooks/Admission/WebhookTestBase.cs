@@ -21,7 +21,7 @@ public abstract class WebhookTestBase
         };
 
     protected static object CreateAdmissionReview(
-        string uid,
+        string admissionRequestUid,
         string operation,
         bool dryRun,
         object? @object = null,
@@ -32,7 +32,7 @@ public abstract class WebhookTestBase
             kind = "AdmissionReview",
             request = new
             {
-                uid,
+                uid = admissionRequestUid,
                 operation,
                 dryRun,
                 @object,
