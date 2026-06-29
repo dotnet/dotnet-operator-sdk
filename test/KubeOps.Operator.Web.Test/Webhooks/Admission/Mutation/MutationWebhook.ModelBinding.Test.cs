@@ -22,12 +22,13 @@ public sealed class MutationWebhookModelBindingTest : WebhookTestBase
     {
         using var host = await TestHost.Create();
         var client = host.GetTestClient();
+        var entityWithoutMetadataUid = CreateTestSpec("createvalue", "PT10M");
 
         var admissionRequest = CreateAdmissionReview(
-            uid: "issue-753-mutation-create-uid",
+            admissionRequestUid: "issue-753-mutation-create-uid",
             operation: "CREATE",
             dryRun: false,
-            @object: CreateTestSpec("createvalue", "PT10M"));
+            @object: entityWithoutMetadataUid);
 
         var response = await PostWebhookAsync(
             client,
@@ -67,7 +68,7 @@ public sealed class MutationWebhookModelBindingTest : WebhookTestBase
 
         var spec = CreateTestSpec(value, timeout);
         var admissionRequest = CreateAdmissionReview(
-            uid: uid,
+            admissionRequestUid: uid,
             operation: operation,
             dryRun: dryRun,
             @object: operation == "DELETE" ? null : spec,
