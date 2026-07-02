@@ -19,7 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -39,7 +40,7 @@ jobs:
             @semantic-release/github \
             @semantic-release/commit-analyzer \
             @semantic-release/release-notes-generator \
-            conventional-changelog-conventionalcommits \
+            conventional-changelog-conventionalcommits@^9 \
             semantic-release-net
 
       - name: Semantic Release
