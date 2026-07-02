@@ -34,6 +34,6 @@ internal sealed class EntityQueueFactory(IServiceProvider services)
                     retryCount > 0 ? $" (Retry: {retryCount})" : string.Empty,
                     timeSpan.TotalSeconds);
 
-            queue.Enqueue(entity, type, triggerSource, timeSpan, retryCount, cancellationToken);
+            return queue.Enqueue(entity, type, triggerSource, timeSpan, retryCount, cancellationToken);
         };
 }

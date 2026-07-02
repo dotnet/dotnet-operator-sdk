@@ -14,7 +14,6 @@ using KubeOps.KubernetesClient;
 using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Queue;
@@ -60,58 +59,30 @@ namespace KubeOps.Operator.Queue;
 /// unbounded task accumulation.
 /// </para>
 /// </remarks>
-internal sealed class EntityQueueBackgroundService<TEntity>(
+public class EntityQueueBackgroundService<TEntity>(
     ActivitySource activitySource,
     IKubernetesClient client,
     OperatorSettings operatorSettings,
     ITimedEntityQueue<TEntity> queue,
     IReconciler<TEntity> reconciler,
     ILogger<EntityQueueBackgroundService<TEntity>> logger,
-    OperatorMetrics? metrics = null) : IHostedService, IDisposable, IAsyncDisposable
+    OperatorMetrics? metrics = null) : RestartableHostedService, IEntityQueueConsumer<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, UidEntry> _uidEntries = new();
     private readonly SemaphoreSlim _parallelismSemaphore = new(
         operatorSettings.ParallelReconciliation.MaxParallelReconciliations,
         operatorSettings.ParallelReconciliation.MaxParallelReconciliations);
 
-    private volatile bool _disposed;
-
-    /// <inheritdoc cref="IHostedService.StartAsync"/>
-    /// <remarks>
-    /// Schedules the queue processing loop as a background task using <see cref="Task.Run(Func{Task}, CancellationToken)"/>.
-    /// The <paramref name="cancellationToken"/> passed to this method is intentionally not used for the processing loop;
-    /// cancellation is managed via an internal <see cref="CancellationTokenSource"/> that is signaled by <see cref="StopAsync"/>.
-    /// This avoids cancelling the scheduled work during the host startup phase.
-    /// </remarks>
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
-        // The current implementation of IHostedService expects that StartAsync is "really" asynchronous.
-        // Blocking calls are not allowed, they would stop the rest of the startup flow.
-        //
-        // This has been an open issue since 2019 and is not expected to be closed soon. (https://github.com/dotnet/runtime/issues/36063)
-        // For reasons unknown at the time of writing this code, "await Task.Yield()" didn't work as expected, it caused
-        // a deadlock in 1/10 of the cases.
-        //
-        // Therefore, we use Task.Run() and put the work to queue. The passed cancellation token of the StartAsync
-        // method is not used because it would only cancel the scheduling (which we definitely don't want to cancel).
-        // To make this intention explicit, CancellationToken.None gets passed.
-        _ = Task.Run(() => WatchAsync(_cts.Token), CancellationToken.None);
-
-        return Task.CompletedTask;
-    }
+    /// <summary>
+    /// Gets the timed entity queue this service consumes. Exposed for leadership-aware subclasses that need
+    /// to suspend intake or clear the queue on a leadership transition.
+    /// </summary>
+    protected ITimedEntityQueue<TEntity> Queue => queue;
 
     /// <inheritdoc/>
-    public Task StopAsync(CancellationToken cancellationToken)
-        => _disposed
-            ? Task.CompletedTask
-            : _cts.CancelAsync();
-
-    /// <inheritdoc/>
-    public void Dispose()
+    protected override void DisposeManagedResources()
     {
-        _cts.Dispose();
         _parallelismSemaphore.Dispose();
 
         lock (_uidEntries)
@@ -126,42 +97,31 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
 
         client.Dispose();
         queue.Dispose();
-
-        _disposed = true;
     }
 
     /// <inheritdoc/>
-    public async ValueTask DisposeAsync()
+    protected override async ValueTask DisposeManagedResourcesAsync()
     {
-        await CastAndDispose(_cts);
-        await CastAndDispose(_parallelismSemaphore);
+        await CastAndDisposeAsync(_parallelismSemaphore);
 
         foreach (var entry in _uidEntries.Values)
         {
-            await CastAndDispose(entry.Semaphore);
+            await CastAndDisposeAsync(entry.Semaphore);
         }
 
         _uidEntries.Clear();
-        await CastAndDispose(client);
-        await CastAndDispose(queue);
-
-        _disposed = true;
-        return;
-
-        static async ValueTask CastAndDispose(IDisposable resource)
-        {
-            if (resource is IAsyncDisposable resourceAsyncDisposable)
-            {
-                await resourceAsyncDisposable.DisposeAsync();
-            }
-            else
-            {
-                resource.Dispose();
-            }
-        }
+        await CastAndDisposeAsync(client);
+        await CastAndDisposeAsync(queue);
     }
 
-    private async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
+    /// <inheritdoc/>
+    protected override void OnLoopFaulted(Exception exception) =>
+        logger.LogError(
+            exception,
+            "The queue processing loop for {Entity} exited unexpectedly and stopped consuming the queue.",
+            typeof(TEntity).Name);
+
+    protected virtual async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
         logger
             .LogTrace(
@@ -189,7 +149,8 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
         return ReconciliationResult<TEntity>.Failure(entry.Entity, "Entity was not found.");
     }
 
-    private async Task WatchAsync(CancellationToken cancellationToken)
+    /// <inheritdoc/>
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var tasks = new List<Task>(operatorSettings.ParallelReconciliation.MaxParallelReconciliations);
 
@@ -208,12 +169,25 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                     tasks.RemoveAll(t => t.IsCompleted);
                 }
             }
-
-            await Task.WhenAll(tasks);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Expected during shutdown, no action needed.
+            // Expected during shutdown / leadership loss, no action needed.
+        }
+        finally
+        {
+            // Drain the worker tasks already spawned so the loop does not return — and its CancellationTokenSource
+            // is not disposed (see RunLoopAsync), nor shared resources torn down, nor a new leadership
+            // term started — while reconciliations are still in flight. Individual worker failures are already
+            // handled inside ProcessEntryAsync; cancellation surfaces here as OperationCanceledException.
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Workers cancelled as part of the stop; their outcomes are already handled in ProcessEntryAsync.
+            }
         }
     }
 
@@ -319,7 +293,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
             // Catches all unexpected errors, including OperationCanceledException that was NOT triggered
             // by the operator's own cancellation token (i.e. an internal abort from within the reconciler).
             // Intentional shutdown cancellations (IsCancellationRequested == true) are re-thrown and handled
-            // by the caller in WatchAsync.
+            // by the caller in ExecuteAsync.
             logger
                 .LogError(
                     e,
@@ -348,15 +322,20 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                 // what event originally caused this reconciliation (e.g. ApiServer or Operator).
                 // RetryCount is incremented and passed explicitly so the back-off calculation
                 // stays correct across successive failures without losing state.
-                await queue.Enqueue(
+                var scheduled = await queue.Enqueue(
                     entry.Entity,
                     entry.ReconciliationType,
                     entry.ReconciliationTriggerSource,
                     delay,
                     nextRetryCount,
-                    CancellationToken.None);
+                    cancellationToken);
 
-                metrics?.RecordRequeue(typeof(TEntity).Name, "error_retry");
+                // Only count the retry when it was actually scheduled. A leadership-aware queue with
+                // suspended intake (leadership just lost) drops the entry and returns false.
+                if (scheduled)
+                {
+                    metrics?.RecordRequeue(typeof(TEntity).Name, "error_retry");
+                }
             }
             else
             {
@@ -398,7 +377,7 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                     entry.Entity.ToIdentifierString(),
                     requeueDelay.TotalSeconds);
 
-                await queue.Enqueue(
+                var scheduled = await queue.Enqueue(
                     entry.Entity,
                     entry.ReconciliationType,
                     entry.ReconciliationTriggerSource,
@@ -406,11 +385,16 @@ internal sealed class EntityQueueBackgroundService<TEntity>(
                     retryCount: 0,
                     cancellationToken);
 
-                metrics?.RecordRequeue(typeof(TEntity).Name, "conflict");
+                // Only count the requeue when it was actually scheduled (a suspended gate drops it).
+                if (scheduled)
+                {
+                    metrics?.RecordRequeue(typeof(TEntity).Name, "conflict");
+                }
+
                 break;
 
             default:
-                throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliation.ConflictStrategy} is not supported in HandleUidConflictAsync.");
+                throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliation.ConflictStrategy} is not supported in HandleLockingConflictAsync.");
         }
     }
 

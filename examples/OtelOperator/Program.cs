@@ -7,8 +7,6 @@ using KubeOps.Operator;
 using KubeOps.Operator.Web.Builder;
 
 using OpenTelemetry;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Trace;
 
 const string operatorName = "otel-operator";
 

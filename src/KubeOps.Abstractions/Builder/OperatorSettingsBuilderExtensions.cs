@@ -161,6 +161,21 @@ public static class OperatorSettingsBuilderExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Sets whether the operator validates, on host startup, that its dependency injection registrations
+    /// are complete and consistent with the configuration. Disabled by default. See
+    /// <see cref="OperatorSettings.ValidateRegistrations"/> for details.
+    /// </summary>
+    /// <param name="builder">The builder to configure.</param>
+    /// <param name="value"><c>true</c> to enable validation (default); <c>false</c> to disable.</param>
+    /// <returns>The same <paramref name="builder"/> instance for chaining.</returns>
+    public static OperatorSettingsBuilder WithRegistrationValidation(
+        this OperatorSettingsBuilder builder, bool value = true)
+    {
+        builder.ValidateRegistrations = value;
+        return builder;
+    }
+
     /// <summary>Configures parallel reconciliation settings inline via a delegate.</summary>
     /// <param name="builder">The builder to configure.</param>
     /// <param name="configure">An action that configures the <see cref="ParallelReconciliationSettingsBuilder"/>.</param>
