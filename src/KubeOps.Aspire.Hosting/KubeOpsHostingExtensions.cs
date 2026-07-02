@@ -4,6 +4,7 @@
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 
 using Aspire.Hosting.ApplicationModel;
@@ -329,6 +330,10 @@ public static class KubeOpsHostingExtensions
         }
     }
 
+    [SuppressMessage(
+        "Major Code Smell",
+        "S4036:Searching OS commands in PATH is security-sensitive",
+        Justification = "kubectl is intentionally resolved from PATH; its location is environment-specific and cannot be hardcoded.")]
     private static async Task<int> RunKubectlAsync(
         KubernetesEnvironmentResource target,
         IReadOnlyList<string> arguments,
@@ -717,23 +722,23 @@ public static class KubeOpsHostingExtensions
 
     private static bool TryGetInt32(JsonNode? node, out int value)
     {
-        if (node is JsonValue jsonValue && jsonValue.TryGetValue<int>(out value))
+        if (node is JsonValue jsonValue && jsonValue.TryGetValue(out value))
         {
             return true;
         }
 
-        value = default;
+        value = 0;
         return false;
     }
 
     private static bool TryGetInt64(JsonNode? node, out long value)
     {
-        if (node is JsonValue jsonValue && jsonValue.TryGetValue<long>(out value))
+        if (node is JsonValue jsonValue && jsonValue.TryGetValue(out value))
         {
             return true;
         }
 
-        value = default;
+        value = 0;
         return false;
     }
 
