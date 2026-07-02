@@ -27,9 +27,7 @@ internal static class CacheExtensions
     /// <returns>The modified service collection with resource watcher caching configured.</returns>
     internal static IServiceCollection WithResourceWatcherEntityCaching(this IServiceCollection services, OperatorSettings settings)
     {
-        var cacheName = settings.ReconcileStrategy == ReconcileStrategy.ByResourceVersion
-            ? CacheConstants.CacheNames.ResourceWatcherByResourceVersion
-            : CacheConstants.CacheNames.ResourceWatcher;
+        var cacheName = CacheConstants.ResourceWatcherCacheNameFor(settings.ReconcileStrategy);
 
         var builder = services.AddFusionCache(cacheName);
 

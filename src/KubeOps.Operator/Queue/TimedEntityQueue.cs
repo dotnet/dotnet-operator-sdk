@@ -33,7 +33,7 @@ namespace KubeOps.Operator.Queue;
 /// for reconciliation operations.
 /// </para>
 /// </remarks>
-public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
+public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISuspendableEntityQueue
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     /// <summary>
@@ -56,8 +56,18 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
     // Cancellation token source for the timer loop.
     private readonly CancellationTokenSource _timerCts = new();
 
+    // Guards the intake gate together with all mutations of _management/_queue that must be atomic with the
+    // gate check (Enqueue scheduling, Clear, and timer promotion). Without this, a leadership transition has
+    // a TOCTOU race: Enqueue passes the gate check, SuspendIntake + Clear run, and Enqueue then re-adds an
+    // entry after the clear.
+    private readonly object _gateLock = new();
+
     // Task that runs the timer loop.
     private readonly Task _timerTask;
+
+    // Set while the instance does not hold leadership; guarded by _gateLock. When true, Enqueue drops new
+    // entries and the timer promotes nothing.
+    private bool _intakeSuspended;
 
     // Read by the meter's observation thread (queue-depth gauge) and written on the dispose thread,
     // hence volatile to ensure the disposed state is observed promptly across threads.
@@ -80,61 +90,140 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
 
     internal int Count => _management.Count;
 
+    // Number of entries already promoted to the ready queue.
+    internal int ReadyCount => _queue.Count;
+
     /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Enqueue"/>
-    public Task Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken)
+    public Task<bool> Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromResult(false);
+        }
+
         var key = this.GetKey(entity) ?? throw new InvalidOperationException("Cannot enqueue entities without name.");
 
-        _management
-            .AddOrUpdate(
-                key,
-                _ =>
-                {
-                    _logger
-                        .LogTrace(
-                            """Scheduling entity "{Identifier}" to reconcile in {Seconds}s.""",
-                            entity.ToIdentifierString(),
-                            queueIn.TotalSeconds);
+        // The gate check and the scheduling mutation must be atomic with SuspendIntake/Clear (see _gateLock),
+        // otherwise a former leader could re-add an entry right after the queue was cleared on leadership loss.
+        lock (_gateLock)
+        {
+            if (_intakeSuspended)
+            {
+                _logger
+                    .LogTrace(
+                        """Intake suspended for {Entity}; dropping enqueue of "{Identifier}" (trigger {Trigger}).""",
+                        typeof(TEntity).Name,
+                        entity.ToIdentifierString(),
+                        reconciliationTriggerSource.ToMetricString());
+                return Task.FromResult(false);
+            }
 
-                    return new(entity, type, reconciliationTriggerSource, queueIn, retryCount);
-                },
-                (_, oldEntry) =>
-                {
-                    var newQueueIn = queueIn;
-                    var oldQueueIn = TimeSpan.FromTicks(Math.Max(0, oldEntry.EnqueueAt.Subtract(DateTimeOffset.UtcNow).Ticks));
-
-                    // the earliest execution time should be kept,
-                    if (oldQueueIn <= newQueueIn)
-                    {
-                        newQueueIn = oldQueueIn;
-
-                        _logger
-                            .LogTrace(
-                                """Keeping scheduled entity "{Identifier}" to reconcile in {Seconds}s.""",
-                                entity.ToIdentifierString(),
-                                newQueueIn.TotalSeconds);
-                    }
-                    else
+            _management
+                .AddOrUpdate(
+                    key: key,
+                    addValueFactory: _ =>
                     {
                         _logger
                             .LogTrace(
-                                """Updating scheduled entity "{Identifier}" to reconcile in {Seconds}s.""",
+                                """Scheduling entity "{Identifier}" to reconcile in {Seconds}s.""",
                                 entity.ToIdentifierString(),
-                                newQueueIn.TotalSeconds);
-                    }
+                                queueIn.TotalSeconds);
 
-                    // schedule deleted reconciliations must not be cancelled
-                    var newReconciliationType = oldEntry.ReconciliationType == ReconciliationType.Deleted
-                        ? oldEntry.ReconciliationType
-                        : type;
+                        return new(entity, type, reconciliationTriggerSource, queueIn, retryCount);
+                    },
+                    updateValueFactory: (_, oldEntry) =>
+                    {
+                        var newQueueIn = queueIn;
+                        var oldQueueIn = TimeSpan.FromTicks(
+                            Math.Max(0, oldEntry.EnqueueAt.Subtract(DateTimeOffset.UtcNow).Ticks));
 
-                    oldEntry.Cancel();
-                    return new(entity, newReconciliationType, reconciliationTriggerSource, newQueueIn, retryCount);
-                });
+                        // the earliest execution time should be kept,
+                        if (oldQueueIn <= newQueueIn)
+                        {
+                            newQueueIn = oldQueueIn;
+
+                            _logger
+                                .LogTrace(
+                                    """Keeping scheduled entity "{Identifier}" to reconcile in {Seconds}s.""",
+                                    entity.ToIdentifierString(),
+                                    newQueueIn.TotalSeconds);
+                        }
+                        else
+                        {
+                            _logger
+                                .LogTrace(
+                                    """Updating scheduled entity "{Identifier}" to reconcile in {Seconds}s.""",
+                                    entity.ToIdentifierString(),
+                                    newQueueIn.TotalSeconds);
+                        }
+
+                        // schedule deleted reconciliations must not be cancelled
+                        var newReconciliationType = oldEntry.ReconciliationType == ReconciliationType.Deleted
+                            ? oldEntry.ReconciliationType
+                            : type;
+
+                        oldEntry.Cancel();
+                        return new(entity, newReconciliationType, reconciliationTriggerSource, newQueueIn, retryCount);
+                    });
+        }
 
         _metrics?.RecordEnqueue(typeof(TEntity).Name, reconciliationTriggerSource.ToMetricString());
 
-        return Task.CompletedTask;
+        return Task.FromResult(true);
+    }
+
+    /// <inheritdoc cref="ISuspendableEntityQueue.Clear"/>
+    public void Clear()
+    {
+        // Drain both collections atomically with the intake gate, but never CompleteAdding() the
+        // BlockingCollection — the queue must stay usable after ResumeIntake() once leadership is regained.
+        lock (_gateLock)
+        {
+            var scheduled = _management.Count;
+            _management.Clear();
+
+            var ready = 0;
+            while (_queue.TryTake(out _))
+            {
+                // Discard the ready entry; draining only, never CompleteAdding().
+                ready++;
+            }
+
+            _logger
+                .LogDebug(
+                    "Cleared entity queue for {Entity} on leadership loss: discarded {Scheduled} scheduled and {Ready} ready entries.",
+                    typeof(TEntity).Name,
+                    scheduled,
+                    ready);
+        }
+    }
+
+    /// <inheritdoc cref="ISuspendableEntityQueue.SuspendIntake"/>
+    public void SuspendIntake()
+    {
+        lock (_gateLock)
+        {
+            _intakeSuspended = true;
+        }
+
+        _logger
+            .LogTrace(
+                "Intake gate for {Entity} suspended; new and scheduled entries are dropped until resumed.",
+                typeof(TEntity).Name);
+    }
+
+    /// <inheritdoc cref="ISuspendableEntityQueue.ResumeIntake"/>
+    public void ResumeIntake()
+    {
+        lock (_gateLock)
+        {
+            _intakeSuspended = false;
+        }
+
+        _logger
+            .LogTrace(
+                "Intake gate for {Entity} resumed; accepting new entries again.",
+                typeof(TEntity).Name);
     }
 
     /// <inheritdoc cref="IDisposable.Dispose"/>
@@ -204,12 +293,33 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>
                             continue;
                         }
 
-                        if (entry.EnqueueAt > now || !_management.TryRemove(key, out _))
+                        if (entry.EnqueueAt > now)
                         {
                             continue;
                         }
 
-                        _queue.TryAdd(entry.ToQueueEntry());
+                        // Promote atomically with the intake gate: while intake is suspended nothing is
+                        // promoted, and a Clear() on leadership loss cannot be raced by a concurrent
+                        // promotion re-adding an entry to the ready queue after the clear.
+                        lock (_gateLock)
+                        {
+                            if (_intakeSuspended)
+                            {
+                                _logger
+                                    .LogTrace(
+                                        """Intake suspended for {Entity}; skipping promotion of scheduled entry "{Identifier}".""",
+                                        typeof(TEntity).Name,
+                                        entry.GetEntityIdentifierString());
+                                continue;
+                            }
+
+                            if (!_management.TryRemove(key, out _))
+                            {
+                                continue;
+                            }
+
+                            _queue.TryAdd(entry.ToQueueEntry());
+                        }
 
                         _logger
                             .LogTrace(

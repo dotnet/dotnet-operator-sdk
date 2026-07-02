@@ -36,6 +36,12 @@ namespace KubeOps.Abstractions.Reconciliation.Queue;
 /// <param name="cancellationToken">
 /// A token to monitor for cancellation requests while waiting for the queue duration to elapse.
 /// </param>
+/// <returns>
+/// A task whose result is <see langword="true"/> if the entity was scheduled, or <see langword="false"/> if it
+/// was dropped (for example because <paramref name="cancellationToken"/> was already cancelled, or the queue's
+/// intake is suspended on a leadership transition). Await it to observe failures of a custom queue and to react
+/// to a dropped enqueue.
+/// </returns>
 /// <remarks>
 /// <para>
 /// This delegate is injected into controllers and other components via dependency injection to enable
@@ -62,6 +68,6 @@ namespace KubeOps.Abstractions.Reconciliation.Queue;
 /// <seealso cref="ReconciliationType"/>
 /// <seealso cref="ReconciliationTriggerSource"/>
 /// <seealso cref="IEntityQueueFactory"/>
-public delegate void EntityQueue<in TEntity>(
+public delegate Task<bool> EntityQueue<in TEntity>(
     TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken)
     where TEntity : IKubernetesObject<V1ObjectMeta>;

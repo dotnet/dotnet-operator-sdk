@@ -11,7 +11,6 @@ using KubeOps.Operator.Web.Builder;
 
 using Microsoft.Extensions.DependencyInjection;
 
-using OpenTelemetry;
 using OpenTelemetry.Metrics;
 
 namespace KubeOps.Operator.Web.Test.Metrics;

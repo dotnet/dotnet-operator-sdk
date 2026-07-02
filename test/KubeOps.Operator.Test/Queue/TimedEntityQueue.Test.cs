@@ -183,11 +183,147 @@ public sealed class TimedEntityQueueTest
     }
 
     [Fact]
+    [Trait("Area", "LeaderLoss")]
+    public async Task Clear_Should_Remove_Scheduled_And_Ready_Entries()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+
+        // One entry ready immediately (gets promoted to the ready queue by the timer) and one scheduled.
+        await queue.Enqueue(
+            CreateSecret("ns", "ready"),
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.Zero,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+        await queue.Enqueue(
+            CreateSecret("ns", "scheduled"),
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.FromSeconds(5),
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+
+        // Give the timer time to promote the ready entry into the ready queue.
+        await WaitUntil(() => queue.ReadyCount == 1, TimeSpan.FromSeconds(2));
+
+        queue.Clear();
+
+        queue.Count.Should().Be(0);
+        queue.ReadyCount.Should().Be(0);
+        (await DrainQueue(queue, TimeSpan.FromMilliseconds(200))).Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Area", "LeaderLoss")]
+    public async Task Enqueue_Should_Be_Dropped_While_Intake_Is_Suspended()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+
+        queue.SuspendIntake();
+
+        var scheduled = await queue.Enqueue(
+            CreateSecret("ns", "secret"),
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.Zero,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+
+        // Returning false lets callers avoid counting a requeue that was not scheduled.
+        scheduled.Should().BeFalse();
+        queue.Count.Should().Be(0);
+        (await DrainQueue(queue, TimeSpan.FromMilliseconds(200))).Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Area", "LeaderLoss")]
+    public async Task Enqueue_Should_Be_Accepted_After_Intake_Is_Resumed()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+
+        queue.SuspendIntake();
+        queue.ResumeIntake();
+
+        var scheduled = await queue.Enqueue(
+            CreateSecret("ns", "secret"),
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.Zero,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+
+        scheduled.Should().BeTrue();
+        (await DrainQueue(queue, TimeSpan.FromMilliseconds(500))).Should().ContainSingle();
+    }
+
+    [Fact]
+    [Trait("Area", "LeaderLoss")]
+    public async Task Enqueue_Should_Be_Dropped_When_Token_Already_Cancelled()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+
+        var scheduled = await queue.Enqueue(
+            CreateSecret("ns", "secret"),
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.Zero,
+            retryCount: 0,
+            new CancellationToken(canceled: true));
+
+        scheduled.Should().BeFalse();
+        queue.Count.Should().Be(0);
+        (await DrainQueue(queue, TimeSpan.FromMilliseconds(200))).Should().BeEmpty();
+    }
+
+    // Regression guard for the TOCTOU race: gate check + scheduling must be atomic with SuspendIntake/Clear.
+    // Stressed over many iterations so that a missing lock reliably surfaces (a single parallel round would
+    // be probabilistic). Without the lock in Enqueue/Clear, an entry survives the clear and this fails.
+    [Fact]
+    [Trait("Area", "LeaderLoss")]
+    public async Task Concurrent_Enqueue_With_Suspend_And_Clear_Leaves_Nothing()
+    {
+        const int iterations = 200;
+        const int enqueuesPerIteration = 32;
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        for (var i = 0; i < iterations; i++)
+        {
+            using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+
+            var enqueues = Enumerable.Range(0, enqueuesPerIteration).Select(n => Task.Run(
+                () => queue.Enqueue(
+                    CreateSecret("ns", $"secret-{n}"),
+                    ReconciliationType.Modified,
+                    ReconciliationTriggerSource.Operator,
+                    TimeSpan.Zero,
+                    retryCount: 0,
+                    cancellationToken),
+                cancellationToken));
+
+            var stop = Task.Run(
+                () =>
+                {
+                    queue.SuspendIntake();
+                    queue.Clear();
+                },
+                cancellationToken);
+
+            await Task.WhenAll(enqueues.Append(stop));
+
+            // Intake stays suspended, so anything enqueued after the clear is dropped and anything before is
+            // cleared: the queue must end up completely empty.
+            queue.Count.Should().Be(0);
+            queue.ReadyCount.Should().Be(0);
+        }
+    }
+
+    [Fact]
     public void Dispose_Should_Complete_Without_Exception()
     {
         using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
 
-        var act = () => queue.Dispose();
+        var act = queue.Dispose;
 
         act.Should().NotThrow();
     }
@@ -201,6 +337,15 @@ public sealed class TimedEntityQueueTest
         secret.Metadata.Name = secretName;
 
         return secret;
+    }
+
+    private static async Task WaitUntil(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        while (!condition() && DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
     }
 
     private static async Task<List<QueueEntry<V1Secret>>> DrainQueue(
