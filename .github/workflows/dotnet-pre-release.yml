@@ -42,10 +42,10 @@ jobs:
 
       - name: Setup Semantic Release
         run: |
-          # semantic-release is pulled from a Git fork; npm pins it as git+ssh in the
-          # lockfile, so rewrite to anonymous HTTPS (the CI runner has no SSH key).
-          git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
-          npm ci
+          # --ignore-scripts blocks all dependencies' lifecycle scripts; the one
+          # patch we need is then applied explicitly via patch-package.
+          npm ci --ignore-scripts
+          npx patch-package
         working-directory: ./.release
 
       - name: Semantic Release
