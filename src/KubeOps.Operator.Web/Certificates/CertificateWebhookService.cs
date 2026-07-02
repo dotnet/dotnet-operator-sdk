@@ -12,12 +12,12 @@ using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Web.Certificates;
 
-internal class CertificateWebhookService(ILogger<CertificateWebhookService> logger, IKubernetesClient client, WebhookLoader loader, WebhookConfig config, ICertificateProvider provider, IWebhookConfigurationFactory webhookConfigurationFactory)
+internal sealed class CertificateWebhookService(ILogger<CertificateWebhookService> logger, IKubernetesClient client, WebhookLoader loader, WebhookConfig config, ICertificateProvider provider, IWebhookConfigurationFactory webhookConfigurationFactory)
     : WebhookServiceBase(client, loader, config, webhookConfigurationFactory), IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        CaBundle = provider.Server.Certificate.EncodeToPemBytes();
+        CaBundle = provider.Root.Certificate.EncodeToPemBytes();
 
         logger.LogDebug("Registering webhooks");
         await RegisterAll();

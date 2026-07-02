@@ -722,6 +722,21 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
 
     [Trait("Area", "General")]
     [Fact]
+    public void Should_Use_Kubernetes_Json_Property_Naming_For_Acronym_Prefixes()
+    {
+        var crd = _mlc.Transpile(typeof(AcronymPropertyNameEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties;
+        specProperties.Should().ContainKey("ipAddress");
+        specProperties.Should().NotContainKey("iPAddress");
+
+        var itemProperties = ((V1JSONSchemaProps)specProperties["hostIPs"].Items!).Properties;
+        itemProperties.Should().ContainKey("ipAddress");
+        itemProperties.Should().NotContainKey("iPAddress");
+    }
+
+    [Trait("Area", "General")]
+    [Fact]
     public void Must_Not_Contain_Ignored_TopLevel_Properties()
     {
         var crd = _mlc.Transpile(typeof(Entity));
@@ -1538,6 +1553,19 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     {
         [JsonPropertyName("otherName")]
         public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class AcronymPropertyNameEntity : CustomKubernetesEntity
+    {
+        public string IPAddress { get; set; } = null!;
+
+        public HostIPCache[] HostIPs { get; set; } = [];
+
+        public class HostIPCache
+        {
+            public string IPAddress { get; set; } = null!;
+        }
     }
 
     #endregion
