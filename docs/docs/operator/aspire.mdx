@@ -209,6 +209,17 @@ builder.AddKubeOps<Projects.AspireOperator>("operator")
     .RunWithKubernetes(dev, run => run.WithPersistentCrds());
 ```
 
+Local development against a k3s cluster from the [CommunityToolkit Aspire k3s integration](https://github.com/CommunityToolkit/Aspire) (or any resource whose connection string is a kubeconfig path):
+
+```csharp
+var k3s = builder.AddK3sCluster("k3s");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(k3s, run => run.WithPersistentCrds());
+```
+
+The generic `RunWithKubernetes<TResource>` overload accepts any `IResourceWithConnectionString` whose connection string is a kubeconfig path. It injects the cluster's `KUBECONFIG` into the operator process, waits for the cluster to become ready, starts the operator automatically, and manages CRDs exactly like the `KubernetesEnvironmentResource` overload. Publishing (`PublishAsKubernetesOperator`) still requires a `KubernetesEnvironmentResource`.
+
 Azure deployment into AKS:
 
 ```csharp
