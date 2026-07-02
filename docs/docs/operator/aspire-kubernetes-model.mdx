@@ -223,15 +223,16 @@ builder.AddKubeOps<Projects.AspireOperator>("operator")
 
 KubeOps runtime watchers require a Kubernetes API server. Unit tests can replace `IKubernetesClient`, but the normal operator runtime is not an offline simulator.
 
-Additional targets can be modeled as Kubernetes environments if they provide Kubernetes API semantics:
+Cluster resources that are not `KubernetesEnvironmentResource`s but expose their kubeconfig path as a connection string — such as the `K3sClusterResource` from the [CommunityToolkit Aspire k3s integration](https://github.com/CommunityToolkit/Aspire) — are supported by the generic `RunWithKubernetes<TResource>` overload (constrained to `IResourceWithConnectionString`):
 
 ```csharp
 var k3s = builder.AddK3sCluster("k3s");
-var mock = builder.AddKubeOpsMockKubernetes("mock-kube");
 
 builder.AddKubeOps<Projects.AspireOperator>("operator")
     .RunWithKubernetes(k3s);
 ```
+
+This overload injects the cluster's `KUBECONFIG` into the operator process (`WithReference`), waits for the cluster (`WaitFor`), starts the operator automatically, and manages CRDs through the same lifecycle as the environment overload — no `KubernetesEnvironmentResource` inheritance required. Publishing still targets a `KubernetesEnvironmentResource`.
 
 A mock target would require operator-side runtime support to replace the Kubernetes client and watcher behavior. It should not be represented as a normal Kubernetes environment unless it provides Kubernetes API semantics.
 
