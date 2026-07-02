@@ -33,18 +33,23 @@ jobs:
         with:
           user: ${{ secrets.NUGET_USER }}
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: .release/package-lock.json
+
       - name: Setup Semantic Release
         run: |
-          npm install https://github.com/buehler/semantic-release#feat/force-pre-release
-          npm install \
-            @semantic-release/github \
-            @semantic-release/commit-analyzer \
-            @semantic-release/release-notes-generator \
-            conventional-changelog-conventionalcommits@^9 \
-            semantic-release-net
+          # semantic-release is pulled from a Git fork; npm pins it as git+ssh in the
+          # lockfile, so rewrite to anonymous HTTPS (the CI runner has no SSH key).
+          git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+          npm ci
+        working-directory: ./.release
 
       - name: Semantic Release
-        run: npx https://github.com/buehler/semantic-release#feat/force-pre-release -e ./.release/release.base.mjs -e ./.release/release.main-pre.mjs
+        run: ./.release/node_modules/.bin/semantic-release -e ./.release/release.base.mjs -e ./.release/release.main-pre.mjs
         env:
           DEBUG: semantic-release:*
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
