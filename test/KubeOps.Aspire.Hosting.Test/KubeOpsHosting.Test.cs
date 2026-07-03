@@ -87,6 +87,52 @@ public class KubeOpsHostingTest
     }
 
     [Fact]
+    public void RunWithKubernetes_With_ConnectionString_Resource_Enables_Local_Run_With_Ephemeral_Crds_By_Default()
+    {
+        var builder = CreateBuilder();
+        var cluster = builder.AddResource(new FakeClusterResource("fake-k3s"));
+
+        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+            .RunWithKubernetes(cluster);
+
+        resourceBuilder.Resource.Annotations
+            .Should().NotContain(annotation => annotation is ExplicitStartupAnnotation);
+        var runOptions = resourceBuilder.Resource.Annotations.OfType<KubeOpsRunAnnotation>()
+            .Should().ContainSingle().Which.Options;
+        runOptions.CrdMode.Should().Be(KubeOpsRunCrdMode.Ephemeral);
+        runOptions.Target.Should().BeNull();
+        runOptions.TargetResource.Should().BeSameAs(cluster.Resource);
+    }
+
+    [Fact]
+    public void RunWithKubernetes_With_ConnectionString_Resource_Adds_Reference_And_WaitFor()
+    {
+        var builder = CreateBuilder();
+        var cluster = builder.AddResource(new FakeClusterResource("fake-k3s"));
+
+        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+            .RunWithKubernetes(cluster);
+
+        resourceBuilder.Resource.Annotations
+            .Should().Contain(annotation => annotation is EnvironmentCallbackAnnotation)
+            .And.Contain(annotation => annotation is WaitAnnotation);
+    }
+
+    [Fact]
+    public void RunWithKubernetes_With_ConnectionString_Resource_Can_Use_Persistent_Crds()
+    {
+        var builder = CreateBuilder();
+        var cluster = builder.AddResource(new FakeClusterResource("fake-k3s"));
+
+        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+            .RunWithKubernetes(cluster, run => run.WithPersistentCrds());
+
+        resourceBuilder.Resource.Annotations.OfType<KubeOpsRunAnnotation>()
+            .Should().ContainSingle()
+            .Which.Options.CrdMode.Should().Be(KubeOpsRunCrdMode.Persistent);
+    }
+
+    [Fact]
     public void PublishAsKubernetesOperator_Configures_Service_Account()
     {
         var builder = CreateBuilder();
@@ -133,5 +179,15 @@ public class KubeOpsHostingTest
     private sealed class TestProjectMetadata : IProjectMetadata
     {
         public string ProjectPath => typeof(TestProjectMetadata).Assembly.Location;
+    }
+
+    // Mimics CommunityToolkit's K3sClusterResource: a non-KubernetesEnvironmentResource cluster that exposes its
+    // kubeconfig path as a connection string injected as KUBECONFIG.
+    private sealed class FakeClusterResource(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public string ConnectionStringEnvironmentVariable => "KUBECONFIG";
+
+        public ReferenceExpression ConnectionStringExpression =>
+            ReferenceExpression.Create($"/tmp/{Name}/kubeconfig.yaml");
     }
 }
