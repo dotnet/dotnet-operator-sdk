@@ -1,0 +1,18 @@
+{
+  "name": "kubeops-release-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pinned semantic-release toolchain for KubeOps releases. Not published; consumed only by the release GitHub Actions workflows via `npm ci`.",
+  "scripts": {
+    "postinstall": "patch-package"
+  },
+  "devDependencies": {
+    "@semantic-release/commit-analyzer": "13.0.1",
+    "@semantic-release/github": "12.0.9",
+    "@semantic-release/release-notes-generator": "14.1.1",
+    "conventional-changelog-conventionalcommits": "9.3.1",
+    "patch-package": "^8.0.1",
+    "semantic-release": "25.0.5",
+    "semantic-release-net": "1.3.2"
+  }
+}

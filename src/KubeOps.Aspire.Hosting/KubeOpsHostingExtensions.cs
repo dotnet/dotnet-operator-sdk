@@ -4,6 +4,7 @@
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 
 using Aspire.Hosting.ApplicationModel;
@@ -380,6 +381,10 @@ public static class KubeOpsHostingExtensions
         }
     }
 
+    [SuppressMessage(
+        "Major Code Smell",
+        "S4036:Searching OS commands in PATH is security-sensitive",
+        Justification = "kubectl is intentionally resolved from PATH; its location is environment-specific and cannot be hardcoded.")]
     private static async Task<int> RunKubectlAsync(
         string? kubeConfigPath,
         IReadOnlyList<string> arguments,

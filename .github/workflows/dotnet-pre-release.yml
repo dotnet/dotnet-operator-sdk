@@ -19,7 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 1
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -32,18 +33,23 @@ jobs:
         with:
           user: ${{ secrets.NUGET_USER }}
 
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: .release/package-lock.json
+
       - name: Setup Semantic Release
         run: |
-          npm install https://github.com/buehler/semantic-release#feat/force-pre-release
-          npm install \
-            @semantic-release/github \
-            @semantic-release/commit-analyzer \
-            @semantic-release/release-notes-generator \
-            conventional-changelog-conventionalcommits \
-            semantic-release-net
+          # --ignore-scripts blocks all dependencies' lifecycle scripts; the one
+          # patch we need is then applied explicitly via patch-package.
+          npm ci --ignore-scripts
+          npx patch-package
+        working-directory: ./.release
 
       - name: Semantic Release
-        run: npx https://github.com/buehler/semantic-release#feat/force-pre-release -e ./.release/release.base.mjs -e ./.release/release.main-pre.mjs
+        run: ./.release/node_modules/.bin/semantic-release -e ./.release/release.base.mjs -e ./.release/release.main-pre.mjs
         env:
           DEBUG: semantic-release:*
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}

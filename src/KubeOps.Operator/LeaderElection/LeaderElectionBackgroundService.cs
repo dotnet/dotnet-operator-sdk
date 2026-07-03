@@ -64,10 +64,18 @@ internal sealed class LeaderElectionBackgroundService(ILogger<LeaderElectionBack
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
+
+        // Stop and await the leadership loop before disposing the resources it observes, so a dispose without a
+        // prior StopAsync cannot tear down _cts/elector underneath the still-running task.
+        await _cts.CancelAsync();
+        if (_leadershipTask is not null)
+        {
+            await _leadershipTask;
+        }
+
         await CastAndDispose(_cts);
         await CastAndDispose(elector);
-
-        _disposed = true;
 
         static async ValueTask CastAndDispose(IDisposable resource)
         {
@@ -102,7 +110,17 @@ internal sealed class LeaderElectionBackgroundService(ILogger<LeaderElectionBack
 
                 var delay = ExponentialRetryBackoff.GetDelayWithJitter(leadershipRetries);
                 logger.LogError(exception, "Failed to hold leadership. Wait {Seconds}s before attempting to reacquire leadership.", delay.TotalSeconds);
-                await Task.Delay(delay);
+
+                // Honor the stop token so a shutdown during the back-off does not have to wait out the (growing)
+                // delay before StopAsync/DisposeAsync — both await this task.
+                try
+                {
+                    await Task.Delay(delay, _cts.Token);
+                }
+                catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+                {
+                    return;
+                }
             }
         }
     }

@@ -194,8 +194,9 @@ public class V1DemoEntityController(
         V1DemoEntity entity,
         CancellationToken cancellationToken)
     {
-        // Schedule a follow-up reconciliation in 30 seconds without returning a result
-        queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator,
+        // Schedule a follow-up reconciliation in 30 seconds without returning a result.
+        // The delegate returns Task<bool>; await it (false means the enqueue was dropped).
+        await queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator,
             TimeSpan.FromSeconds(30), retryCount: 0, cancellationToken);
 
         return ReconciliationResult<V1DemoEntity>.Success(entity);

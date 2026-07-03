@@ -129,6 +129,23 @@ builder.Services
             retryPeriod: TimeSpan.FromSeconds(2)));
 ```
 
+### Behavior on Leadership Loss
+
+With `LeaderElectionType.Single`, both the resource watcher **and** the reconciliation queue are gated on leadership. When an instance loses its lease it:
+
+1. **suspends the queue's intake** — any further enqueue is dropped, so a still-running reconciler's `RequeueAfter` and error retries cannot leave work behind;
+2. **cancels** the queue processing loop and any in-flight reconciliation; and
+3. **clears the queue** — pending and scheduled entries accumulated by the former leader are discarded.
+
+While the instance is not the leader the intake stays closed. On re-acquiring leadership the intake reopens and the watcher re-lists the current state, so processing resumes from a clean slate.
+
+**What this does and does not guarantee.** The gate protects the *queue* side: no stale entry, timed requeue, or error retry from a former leader survives a leadership transition. It does **not** terminate the process (unlike controller-runtime), so it cannot stop a **non-cooperative** reconciler that ignores its `CancellationToken` from performing external side effects while it was the leader. Therefore:
+
+- **Reconcilers must honor cancellation** and return promptly once their token is cancelled.
+- **Reconcilers must be idempotent.** As a second line of defense, concurrent writes to the same object are serialized by the API server via `resourceVersion`; a stale write fails with HTTP 409 Conflict.
+
+See the [Kubernetes leases documentation](https://kubernetes.io/docs/concepts/architecture/leases/) for leader-election semantics.
+
 ### Custom Leader Election
 
 The `Custom` leader election type allows you to implement your own coordination logic, such as namespace-based leader election.
@@ -147,6 +164,7 @@ public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
     ITimedEntityQueue<TEntity> entityQueue,
     OperatorSettings settings,
     IEntityLabelSelector<TEntity> labelSelector,
+    IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     INamespaceLeadershipManager namespaceLeadershipManager)
     : ResourceWatcher<TEntity>(
@@ -156,6 +174,7 @@ public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
         entityQueue,
         settings,
         labelSelector,
+        fieldSelector,
         client)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
@@ -222,15 +241,26 @@ public class NamespaceLeadershipManager : INamespaceLeadershipManager
 }
 ```
 
-**Step 3: Register the custom watcher**
+**Step 3: Register the controller, the custom watcher, and a queue consumer**
+
+`LeaderElectionType.Custom` intentionally registers **no** watcher and **no** queue consumer — with custom coordination the SDK cannot know how leadership should drive either. You therefore wire up the full pipeline yourself: `AddController` registers the reconciler and the entity queue, and you add the custom watcher plus a queue consumer as hosted services. A watcher without a consumer would enqueue events that nothing ever drains, so the consumer is required.
+
+Enabling `WithRegistrationValidation()` makes host startup fail fast with an `InvalidRegistrationException` if a piece is missing, instead of starting an operator that silently processes nothing.
 
 ```csharp
 builder.Services
     .AddKubernetesOperator(settings => settings
-        .WithLeaderElection(LeaderElectionType.Custom))
+        .WithLeaderElection(LeaderElectionType.Custom)
+        .WithRegistrationValidation())
+    .AddController<V1DemoEntityController, V1DemoEntity>();
+
+builder.Services
     .AddSingleton<INamespaceLeadershipManager, NamespaceLeadershipManager>()
-    .AddHostedService<NamespacedLeaderElectionResourceWatcher<V1DemoEntity>>();
+    .AddHostedService<NamespacedLeaderElectionResourceWatcher<V1DemoEntity>>()
+    .AddHostedService<EntityQueueBackgroundService<V1DemoEntity>>();
 ```
+
+The plain `EntityQueueBackgroundService<TEntity>` is the right consumer here: leadership is handled inside your watcher, so the queue does not need the leadership gate that `LeaderElectionType.Single` adds.
 
 ### Benefits of Custom Leader Election
 
@@ -238,6 +268,60 @@ builder.Services
 - **Namespace Isolation**: Different teams or environments can have dedicated operator instances
 - **Geographic Distribution**: Route requests to instances in specific regions
 - **Load Balancing**: Distribute work across multiple instances
+
+## Registration Validation
+
+The operator can verify, on host startup, that its service registrations are complete and consistent with
+the configured `LeaderElectionType` and `QueueStrategy`. This is **disabled by default**; enable it with:
+
+```csharp
+builder.Services.AddKubernetesOperator(settings => settings
+    .WithRegistrationValidation());
+```
+
+When enabled, every managed entity is checked for the components its configuration requires — an
+`IReconciler<TEntity>`, a resource watcher, an `ITimedEntityQueue<TEntity>`, and a queue consumer. If
+anything is missing, host startup aborts with an `InvalidRegistrationException` that lists the gaps —
+turning a silent misconfiguration (an operator that starts but processes nothing) into an immediate,
+actionable error.
+
+Most registrations are wired up by the SDK automatically, so validation simply passes. It is most useful
+when you register components yourself — for example with `LeaderElectionType.Custom`, where the watcher
+and queue consumer are your responsibility — and a forgotten registration would otherwise go unnoticed.
+It also:
+
+- flags entities that have a finalizer but no controller, since finalizers run as part of reconciliation
+  and need a controller to execute; and
+- with `LeaderElectionType.Single`, requires leadership-loss protection to actually be wired up: the
+  registered queue must implement `ISuspendableEntityQueue` (when its implementation type can be inspected)
+  **and** the consumer must implement `ILeaderAwareEntityQueueConsumer<TEntity>` (i.e. actually drive the
+  gate). The built-in `TimedEntityQueue<TEntity>` and `LeaderAwareEntityQueueBackgroundService<TEntity>`
+  already do.
+
+:::note
+Components are recognized by the SDK types they derive from / implement: the watcher from
+`ResourceWatcher<TEntity>`, the queue consumer from `IEntityQueueConsumer<TEntity>` (or, under `Single`,
+`ILeaderAwareEntityQueueConsumer<TEntity>`), and the queue's leadership gate from `ISuspendableEntityQueue`.
+`EntityQueueBackgroundService<TEntity>` / `LeaderAwareEntityQueueBackgroundService<TEntity>` implement
+these.
+
+Recognition is by **registered implementation type**, so components must be registered with a concrete
+type (`AddHostedService<TConcrete>()`, `AddSingleton<TService, TImpl>()`). Open-generic registrations such
+as `AddSingleton(typeof(ITimedEntityQueue<>), typeof(MyQueue<>))` are understood (the implementation is
+closed to the entity type). A component registered through a DI factory delegate exposes no type: a
+factory-registered watcher or consumer is reported as missing, and under `Single` a factory-registered
+queue is reported as unverifiable (its `ISuspendableEntityQueue` capability cannot be checked). Register
+these concretely, or keep validation disabled. Keyed registrations are ignored — the watcher, reconciler
+and consumer take their dependencies unkeyed, so a keyed registration would not satisfy them at runtime.
+:::
+
+:::info[Scope of the check]
+Validation confirms that the **registrations** required by your configuration are present and SDK-conform —
+that an `ITimedEntityQueue<TEntity>` implements `ISuspendableEntityQueue` and the consumer implements
+`ILeaderAwareEntityQueueConsumer<TEntity>` under `Single`. It does **not** prove those components behave
+correctly — for example that a custom consumer actually calls `SuspendIntake()`/`Clear()`/`ResumeIntake()`
+on leadership transitions. Treat it as a wiring check, not a behavioral guarantee.
+:::
 
 ## Queue Strategy
 
@@ -253,9 +337,16 @@ builder.Services
 // QueueStrategy defaults to QueueStrategy.InMemory
 ```
 
-With `InMemory`, KubeOps registers `TimedEntityQueue<TEntity>` as `ITimedEntityQueue<TEntity>` and
-starts `EntityQueueBackgroundService<TEntity>` as a hosted service. All scheduling state lives in
-the operator pod's heap.
+With `InMemory`, KubeOps registers `TimedEntityQueue<TEntity>` as `ITimedEntityQueue<TEntity>` and starts a
+queue-consumer hosted service. Which consumer is started depends on the configured `LeaderElectionType`:
+
+- `None`: `EntityQueueBackgroundService<TEntity>`.
+- `Single`: `LeaderAwareEntityQueueBackgroundService<TEntity>`, which drives the queue's leadership gate
+  (suspends intake and clears the queue on leadership loss). This is what provides the leadership-loss
+  protection.
+- `Custom`: no consumer is registered — you supply one yourself (see the Custom leader election example above).
+
+All scheduling state lives in the operator pod's heap.
 
 When the same entity is scheduled multiple times before it becomes ready, the in-memory queue keeps
 one entry per namespace/name key. The entry scheduled to run earliest is kept, and later enqueue calls
@@ -279,18 +370,72 @@ builder.Services
 // Register one ITimedEntityQueue<TEntity> per entity type
 builder.Services.AddSingleton<ITimedEntityQueue<V1DemoEntity>, MyCustomEntityQueue<V1DemoEntity>>();
 
-// Register one background service per entity type that drains the queue
+// Register one background service per entity type that drains the queue. Implement
+// IEntityQueueConsumer<TEntity> (or derive from EntityQueueBackgroundService<TEntity>) so that
+// registration validation can recognize it as the queue consumer.
 builder.Services.AddHostedService<MyCustomQueueBackgroundService<V1DemoEntity>>();
 ```
 
 :::note
 Register one `ITimedEntityQueue<TEntity>` implementation and one corresponding background service
-for each entity type that should use the custom queue.
+for each entity type that should use the custom queue. The consumer should implement
+`IEntityQueueConsumer<TEntity>` (the built-in `EntityQueueBackgroundService<TEntity>` already does) — it
+is not required at runtime, but [registration validation](#registration-validation) uses it to confirm a
+consumer exists. With `LeaderElectionType.Single`, implement `ILeaderAwareEntityQueueConsumer<TEntity>`
+instead (or derive from `LeaderAwareEntityQueueBackgroundService<TEntity>`) so validation can confirm the
+consumer drives the leadership gate.
 :::
 
 Custom queues should follow the same de-duplication contract as the built-in implementation: keep at
-most one pending entry per namespace/name key, preserve the earliest scheduled execution time, and do
-not expose cancellation/removal as part of `ITimedEntityQueue<TEntity>`.
+most one pending entry per namespace/name key and preserve the earliest scheduled execution time.
+
+`Enqueue` returns `Task<bool>`: return `true` when the entry was scheduled and `false` when it was
+dropped (for example because the `cancellationToken` was already cancelled, or — for a queue that
+implements `ISuspendableEntityQueue` — because intake is currently suspended). The reconciler and the
+queue consumer rely on this to avoid counting requeue metrics for work that was not actually scheduled,
+so returning the correct value keeps those metrics accurate.
+
+```csharp
+public Task<bool> Enqueue(
+    V1DemoEntity entity,
+    ReconciliationType type,
+    ReconciliationTriggerSource triggerSource,
+    TimeSpan queueIn,
+    int retryCount,
+    CancellationToken cancellationToken)
+{
+    if (cancellationToken.IsCancellationRequested)
+    {
+        return Task.FromResult(false); // dropped
+    }
+
+    // ... schedule the entry (de-duplicated by namespace/name) ...
+    return Task.FromResult(true); // scheduled
+}
+```
+
+:::warning[Leadership-loss semantics]
+The SDK's built-in queue discards a former leader's work on a leadership transition (see
+[Behavior on Leadership Loss](#behavior-on-leadership-loss)). It does so through the optional
+`ISuspendableEntityQueue` capability — `SuspendIntake()`, `Clear()`, `ResumeIntake()` — which the built-in
+`TimedEntityQueue<TEntity>` implements. With `QueueStrategy.Custom` **both** the queue **and** its
+background consumer are yours; the SDK does not wire up a leader-aware consumer for you.
+
+So if you combine `QueueStrategy.Custom` with `LeaderElectionType.Single` and want the same guarantee
+(no stale entries, timed requeues, or error retries surviving a leadership transition), you must:
+
+- have your queue implement **`ISuspendableEntityQueue`** so that `SuspendIntake()` drops subsequent
+  enqueues, `Clear()` discards pending and scheduled entries, and the suspend/clear/enqueue paths are
+  mutually atomic; **and**
+- have your custom background consumer call `SuspendIntake()` + `Clear()` when leadership is lost and
+  `ResumeIntake()` when it is (re)acquired — or simply derive from / reuse the SDK's public
+  `LeaderAwareEntityQueueBackgroundService<TEntity>`, which already does this.
+
+`ISuspendableEntityQueue` is **opt-in** and separate from `ITimedEntityQueue<TEntity>`: a queue that does
+not implement it keeps working but provides no leadership-loss protection, and the leader-aware consumer
+logs a warning to make that explicit. If you do not need the guarantee (for example with
+`LeaderElectionType.None`), you can ignore the capability entirely.
+:::
 
 Use this strategy when you need scheduling behaviour that differs from the built-in timer-based
 queue — for example, priority queues or implementations that integrate with your own observability
@@ -414,8 +559,9 @@ KubeOps makes this straightforward by exposing the `EntityQueue<TEntity>` delega
 any DI-registered component to enqueue an entity for reconciliation on demand.
 
 ```csharp
-// Signature (fire-and-forget; enqueue is synchronous)
-public delegate void EntityQueue<in TEntity>(
+// Signature — awaitable. The result is true if the entity was scheduled, or false if the enqueue was
+// dropped (for example because the queue's intake is suspended during a leadership transition).
+public delegate Task<bool> EntityQueue<in TEntity>(
     TEntity entity,
     ReconciliationType type,
     ReconciliationTriggerSource reconciliationTriggerSource,
@@ -424,6 +570,8 @@ public delegate void EntityQueue<in TEntity>(
     CancellationToken cancellationToken)
     where TEntity : IKubernetesObject<V1ObjectMeta>;
 ```
+
+Always `await` the delegate and, where it matters, react to a `false` result (a dropped enqueue).
 
 Always pass `ReconciliationTriggerSource.Operator` for externally triggered reconciliations.
 `ReconciliationTriggerSource.ApiServer` is reserved for events originating from the Kubernetes
@@ -448,7 +596,7 @@ app.MapPost("/reconcile/{namespace}/{name}", async (
         return Results.NotFound();
     }
 
-    entityQueue(
+    var scheduled = await entityQueue(
         entity,
         ReconciliationType.Modified,
         ReconciliationTriggerSource.Operator,
@@ -456,7 +604,10 @@ app.MapPost("/reconcile/{namespace}/{name}", async (
         retryCount: 0,
         cancellationToken);
 
-    return Results.Accepted();
+    // false means the enqueue was dropped (e.g. this instance is not the current leader).
+    return scheduled
+        ? Results.Accepted()
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
 });
 ```
 

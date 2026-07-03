@@ -1,0 +1,11 @@
+diff --git a/node_modules/semantic-release/lib/definitions/branches.js b/node_modules/semantic-release/lib/definitions/branches.js
+index 09f814e..e754216 100644
+--- a/node_modules/semantic-release/lib/definitions/branches.js
++++ b/node_modules/semantic-release/lib/definitions/branches.js
+@@ -18,5 +18,5 @@ export const prerelease = {
+ export const release = {
+   // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+   filter: (branch) => !maintenance.filter(branch) && !prerelease.filter(branch),
+-  branchesValidator: (branches) => branches.length <= 3 && branches.length > 0,
++  branchesValidator: (branches) => branches.length <= 3 && (branches.length > 0 || prerelease.branchesValidator(branches)),
+ };
