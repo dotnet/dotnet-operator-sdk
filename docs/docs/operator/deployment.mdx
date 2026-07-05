@@ -1,7 +1,7 @@
 ---
 title: Deployment
 description: Deploying your KubeOps Operator
-sidebar_position: 9
+sidebar_position: 12
 ---
 
 # Deployment
@@ -168,7 +168,8 @@ kubectl apply -f https://github.com/your-org/your-operator/releases/download/v1.
 2. **Security**:
 
    - Use non-root users in Docker images
-   - Implement proper RBAC rules
+   - Implement proper [RBAC](./rbac) rules following the principle of least privilege
+   - Serve webhooks over TLS with valid certificates (see [Webhooks — Local Development Considerations](./building-blocks/webhooks#local-development-considerations) for certificate options)
    - Scan images for vulnerabilities
 
 3. **Monitoring**:
@@ -180,7 +181,7 @@ kubectl apply -f https://github.com/your-org/your-operator/releases/download/v1.
 4. **High Availability**:
 
    - Run multiple replicas for redundancy
-   - Configure leader election for coordinated operation (see [Advanced Configuration - Leader Election](./advanced-configuration#custom-leader-election))
+   - Configure leader election for coordinated operation (see [Advanced Configuration - Leader Election](./configuration/leader-election#custom-leader-election))
    - Consider namespace-based distribution for horizontal scaling
 
 5. **Updates**:
@@ -201,6 +202,7 @@ kubectl apply -f https://github.com/your-org/your-operator/releases/download/v1.
    - Verify service account permissions
    - Check role bindings
    - Review operator logs
+   - See [RBAC](./rbac) for the attributes that declare the required permissions
 
 3. **CRD Installation**:
    - Check CRD compatibility

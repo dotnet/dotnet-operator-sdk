@@ -1,0 +1,188 @@
+---
+title: Leader Election
+description: Coordinating multiple operator instances
+sidebar_position: 4
+---
+
+# Leader Election
+
+KubeOps supports different leader election mechanisms through the `LeaderElectionType` setting. This allows you to control how multiple operator instances coordinate in a cluster.
+
+## Leader Election Types
+
+```csharp
+public enum LeaderElectionType
+{
+    None = 0,    // No leader election - all instances process events
+    Single = 1,  // Single leader election - only one instance processes events
+    Custom = 2   // Custom implementation - user-defined coordination
+}
+```
+
+## Configuration
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithLeaderElection(LeaderElectionType.Single)
+        .WithLeaderElectionTimings(
+            leaseDuration: TimeSpan.FromSeconds(15),
+            renewDeadline: TimeSpan.FromSeconds(10),
+            retryPeriod: TimeSpan.FromSeconds(2)));
+```
+
+## Behavior on Leadership Loss
+
+With `LeaderElectionType.Single`, both the resource watcher **and** the reconciliation queue are gated on leadership. When an instance loses its lease it:
+
+1. **suspends the queue's intake** — any further enqueue is dropped, so a still-running reconciler's `RequeueAfter` and error retries cannot leave work behind;
+2. **cancels** the queue processing loop and any in-flight reconciliation; and
+3. **clears the queue** — pending and scheduled entries accumulated by the former leader are discarded.
+
+While the instance is not the leader the intake stays closed. On re-acquiring leadership the intake reopens and the watcher re-lists the current state, so processing resumes from a clean slate.
+
+**What this does and does not guarantee.** The gate protects the *queue* side: no stale entry, timed requeue, or error retry from a former leader survives a leadership transition. It does **not** terminate the process (unlike controller-runtime), so it cannot stop a **non-cooperative** reconciler that ignores its `CancellationToken` from performing external side effects while it was the leader. Therefore:
+
+- **Reconcilers must honor cancellation** and return promptly once their token is cancelled.
+- **Reconcilers must be idempotent.** As a second line of defense, concurrent writes to the same object are serialized by the API server via `resourceVersion`; a stale write fails with HTTP 409 Conflict.
+
+See the [Kubernetes leases documentation](https://kubernetes.io/docs/concepts/architecture/leases/) for leader-election semantics.
+
+## Custom Leader Election
+
+The `Custom` leader election type allows you to implement your own coordination logic, such as namespace-based leader election.
+
+### Example: Namespace-Based Leader Election
+
+In some scenarios, you may want different operator instances to handle different namespaces. This enables horizontal scaling while maintaining isolation.
+
+**Step 1: Implement a custom ResourceWatcher**
+
+```csharp
+public sealed class NamespacedLeaderElectionResourceWatcher<TEntity>(
+    ActivitySource activitySource,
+    ILogger<NamespacedLeaderElectionResourceWatcher<TEntity>> logger,
+    IFusionCacheProvider cacheProvider,
+    ITimedEntityQueue<TEntity> entityQueue,
+    OperatorSettings settings,
+    IEntityLabelSelector<TEntity> labelSelector,
+    IEntityFieldSelector<TEntity> fieldSelector,
+    IKubernetesClient client,
+    INamespaceLeadershipManager namespaceLeadershipManager)
+    : ResourceWatcher<TEntity>(
+        activitySource,
+        logger,
+        cacheProvider,
+        entityQueue,
+        settings,
+        labelSelector,
+        fieldSelector,
+        client)
+    where TEntity : IKubernetesObject<V1ObjectMeta>
+{
+    protected override async Task OnEventAsync(
+        WatchEventType eventType,
+        TEntity entity,
+        CancellationToken cancellationToken)
+    {
+        // Check if this instance is responsible for the entity's namespace
+        if (!await namespaceLeadershipManager.IsResponsibleForNamespace(
+            entity.Namespace(),
+            cancellationToken))
+        {
+            // Skip processing - another instance handles this namespace
+            return;
+        }
+
+        // Process the event
+        await base.OnEventAsync(eventType, entity, cancellationToken);
+    }
+}
+```
+
+**Step 2: Implement the leadership manager**
+
+```csharp
+public interface INamespaceLeadershipManager
+{
+    Task<bool> IsResponsibleForNamespace(string @namespace, CancellationToken cancellationToken);
+}
+
+public class NamespaceLeadershipManager : INamespaceLeadershipManager
+{
+    private readonly ILeaderElector _leaderElector;
+    private readonly ConcurrentDictionary<string, bool> _namespaceResponsibility = new();
+
+    public async Task<bool> IsResponsibleForNamespace(
+        string @namespace,
+        CancellationToken cancellationToken)
+    {
+        // Implement your logic here:
+        // - Consistent hashing of namespace names
+        // - Lease-based namespace assignment
+        // - External coordination service (e.g., etcd, Consul)
+
+        return _namespaceResponsibility.GetOrAdd(
+            @namespace,
+            ns => CalculateResponsibility(ns));
+    }
+
+    private bool CalculateResponsibility(string @namespace)
+    {
+        // Example: Simple hash-based distribution
+        var instanceId = Environment.GetEnvironmentVariable("POD_NAME") ?? "instance-0";
+        var instanceCount = int.Parse(
+            Environment.GetEnvironmentVariable("REPLICA_COUNT") ?? "1");
+
+        var namespaceHash = @namespace.GetHashCode();
+        var assignedInstance = Math.Abs(namespaceHash % instanceCount);
+        var currentInstance = int.Parse(instanceId.Split('-').Last());
+
+        return assignedInstance == currentInstance;
+    }
+}
+```
+
+**Step 3: Register the controller, the custom watcher, and a queue consumer**
+
+`LeaderElectionType.Custom` intentionally registers **no** watcher and **no** queue consumer — with custom coordination the SDK cannot know how leadership should drive either. You therefore wire up the full pipeline yourself: `AddController` registers the reconciler and the entity queue, and you add the custom watcher plus a queue consumer as hosted services. A watcher without a consumer would enqueue events that nothing ever drains, so the consumer is required.
+
+Enabling `WithRegistrationValidation()` makes host startup fail fast with an `InvalidRegistrationException` if a piece is missing, instead of starting an operator that silently processes nothing.
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithLeaderElection(LeaderElectionType.Custom)
+        .WithRegistrationValidation())
+    .AddController<V1DemoEntityController, V1DemoEntity>();
+
+builder.Services
+    .AddSingleton<INamespaceLeadershipManager, NamespaceLeadershipManager>()
+    .AddHostedService<NamespacedLeaderElectionResourceWatcher<V1DemoEntity>>()
+    .AddHostedService<EntityQueueBackgroundService<V1DemoEntity>>();
+```
+
+The plain `EntityQueueBackgroundService<TEntity>` is the right consumer here: leadership is handled inside your watcher, so the queue does not need the leadership gate that `LeaderElectionType.Single` adds.
+
+### Benefits of Custom Leader Election
+
+- **Horizontal Scaling**: Multiple instances can process different subsets of resources
+- **Namespace Isolation**: Different teams or environments can have dedicated operator instances
+- **Geographic Distribution**: Route requests to instances in specific regions
+- **Load Balancing**: Distribute work across multiple instances
+
+## Best Practices
+
+1. **Start with `Single`** for simple deployments
+2. **Use `Custom`** only when you need advanced coordination
+3. **Test failover scenarios** to ensure seamless transitions
+4. **Monitor leader election** status in your logs
+5. **Set appropriate lease durations** based on your workload
+
+## Troubleshooting
+
+- Verify RBAC permissions for lease resources
+- Check network connectivity between instances
+- Review lease duration settings
+- Monitor logs for leader election events
+- Ensure cluster time and local time are synchronized (time drift can cause lease issues)

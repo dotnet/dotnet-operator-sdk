@@ -46,6 +46,24 @@ const config = {
     },
   },
 
+  plugins: [
+    [
+      "@docusaurus/plugin-client-redirects",
+      {
+        // Keep old URLs working after the docs restructuring
+        // (flat pages moved into the configuration/, observability/, and aspire/ categories).
+        redirects: [
+          { from: "/docs/operator/advanced-configuration", to: "/docs/operator/configuration" },
+          { from: "/docs/operator/caching", to: "/docs/operator/configuration/caching" },
+          { from: "/docs/operator/logging", to: "/docs/operator/observability/logging" },
+          { from: "/docs/operator/metrics", to: "/docs/operator/observability/metrics" },
+          { from: "/docs/operator/aspire-kubernetes-model", to: "/docs/operator/aspire/kubernetes-operator-model" },
+          { from: "/docs/operator/utilities", to: "/docs/operator/configuration/crd-installer" },
+        ],
+      },
+    ],
+  ],
+
   themes: [
     "@docusaurus/theme-mermaid",
     [

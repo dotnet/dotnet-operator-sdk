@@ -67,7 +67,7 @@ public class DemoEntityFinalizer(
 
 ## Using Finalizers
 
-By default, KubeOps automatically attaches finalizers to entities during reconciliation. This behavior can be configured through `OperatorSettings`. See [Advanced Configuration](../advanced-configuration#finalizer-management) for details on controlling automatic finalizer attachment.
+By default, KubeOps automatically attaches finalizers to entities during reconciliation. This behavior can be configured through `OperatorSettings`. See [Advanced Configuration](../configuration/finalizer-lifecycle) for details on controlling automatic finalizer attachment.
 
 If you need manual control, you can use the `EntityFinalizerAttacher` delegate, which is injected into your controller:
 

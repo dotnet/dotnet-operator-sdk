@@ -1,7 +1,6 @@
 ---
 title: .NET Aspire
 description: Orchestrate and observe a KubeOps operator with .NET Aspire
-sidebar_position: 9.5
 ---
 
 # .NET Aspire Integration
@@ -10,8 +9,8 @@ sidebar_position: 9.5
 
 | Package | Side | Purpose |
 | --- | --- | --- |
-| [`KubeOps.Aspire.Hosting`](../packages/aspire-hosting) | AppHost | Adds `AddKubeOps<TProject>(...)` so the operator is orchestrated as a resource. |
-| [`KubeOps.Aspire`](../packages/aspire) | Operator | Adds `AddKubeOpsServiceDefaults()` for OpenTelemetry, service discovery, resilience and health checks. |
+| [`KubeOps.Aspire.Hosting`](../../packages/aspire-hosting) | AppHost | Adds `AddKubeOps<TProject>(...)` so the operator is orchestrated as a resource. |
+| [`KubeOps.Aspire`](../../packages/aspire) | Operator | Adds `AddKubeOpsServiceDefaults()` for OpenTelemetry, service discovery, resilience and health checks. |
 
 Together they give you a local dashboard with the operator's logs, traces and metrics, automatic service discovery to other resources, and a single entry point to run, publish, or deploy the whole stack.
 
@@ -48,7 +47,7 @@ await host.RunAsync();
 
 `AddKubeOpsServiceDefaults()` configures:
 
-- **OpenTelemetry** logging (with scopes and formatted messages), metrics (runtime + `HttpClient`) and tracing. It subscribes to the operator's `ActivitySource`, which KubeOps registers under the operator name (see [Logging, Tracing, and OpenTelemetry](./logging)).
+- **OpenTelemetry** logging (with scopes and formatted messages), metrics (runtime + `HttpClient`) and tracing. It subscribes to the operator's `ActivitySource`, which KubeOps registers under the operator name (see [Logging, Tracing, and OpenTelemetry](../observability/logging)).
 - **OTLP export** &mdash; enabled automatically when the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable is present. Aspire sets this for you, so traces and metrics show up in the dashboard with no extra code.
 - **Service discovery** &mdash; `HttpClient` instances resolve logical Aspire resource names (e.g. `https://apiservice`).
 - **HTTP resilience** &mdash; the standard resilience handler (retries, circuit breaker, timeouts) is applied to all `HttpClient` instances.
@@ -142,7 +141,7 @@ The operator process runs locally and authenticates through the selected Kuberne
 
 `KubeOps.Aspire` is usable from a plain console operator and therefore does **not** force an ASP.NET Core dependency. The default health checks are registered in the service collection, but exposing them over HTTP requires an HTTP server.
 
-If your operator already hosts webhooks via [`KubeOps.Operator.Web`](../packages/operator-web), map the endpoints on the `WebApplication`:
+If your operator already hosts webhooks via [`KubeOps.Operator.Web`](../../packages/operator-web), map the endpoints on the `WebApplication`:
 
 ```csharp
 app.MapHealthChecks("/health");
@@ -244,4 +243,4 @@ builder.AddKubeOps<Projects.AspireOperator>("operator")
     .PublishAsKubernetesOperator(aks, publish => publish.WithServiceAccount("operator"));
 ```
 
-For the deeper run/publish model, see [Aspire Kubernetes Operator Model](./aspire-kubernetes-model).
+For the deeper run/publish model, see [Aspire Kubernetes Operator Model](./kubernetes-operator-model).

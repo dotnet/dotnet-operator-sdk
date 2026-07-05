@@ -1,7 +1,7 @@
 ---
 title: RBAC
 description: RBAC for your Entities
-sidebar_position: 5
+sidebar_position: 7
 ---
 
 # Role-Based Access Control (RBAC)
@@ -19,7 +19,7 @@ Kubernetes RBAC works through four main resources:
 
 ## Operator RBAC Configuration
 
-When you generate installation files for your operator, KubeOps automatically creates the necessary RBAC configurations for the operator's service account. These configurations define what resources and operations your operator is allowed to perform.
+When you generate installation files for your operator (via the [CLI](./cli) or as part of the [build](./build-customization)), KubeOps automatically creates the necessary RBAC configurations for the operator's service account. These configurations define what resources and operations your operator is allowed to perform and are applied as part of the [deployment](./deployment).
 
 :::note[Local Development]
 During local development, you typically use an admin account that has full cluster access. Therefore, RBAC restrictions don't apply, and you don't need to worry about permissions. However, it's still good practice to define the required RBAC rules for production use.
@@ -129,7 +129,7 @@ KubeOps automatically adds default RBAC rules for:
 
    - Operator fails to perform required operations
    - Watch operations don't work
-   - Leader election fails
+   - Leader election fails (the lease permissions are part of the [default RBAC rules](#default-rbac-rules); see also [Leader Election — Troubleshooting](./configuration/leader-election#troubleshooting))
 
 2. **Excessive Permissions**:
 

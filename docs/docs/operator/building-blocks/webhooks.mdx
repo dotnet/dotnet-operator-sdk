@@ -286,10 +286,16 @@ public class DemoConversionWebhook : ConversionWebhook<V3DemoEntity>
    - Consider the impact on validation
 
 3. **Conversion Webhooks**:
+
    - Implement bidirectional conversions
    - Handle all fields explicitly
    - Add validation to prevent data loss
    - Test conversions thoroughly
+
+4. **Security**:
+   - Always serve webhooks over TLS — the API server refuses plain HTTP (see [Local Development Considerations](#local-development-considerations) for certificate options during development)
+   - Choose the `FailurePolicy` consciously: `Fail` blocks resource operations when the webhook is down, `Ignore` silently skips it — both can be customized via the [webhook configuration factory](../configuration/generation-customization#customizing-webhook-configuration-generation)
+   - Restrict webhooks to the namespaces they need via a `NamespaceSelector` instead of intercepting cluster-wide traffic
 
 ## Common Pitfalls
 

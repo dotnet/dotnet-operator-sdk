@@ -1,0 +1,10 @@
+{
+  "position": 14,
+  "label": "Contribution",
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "description": "How to contribute to the KubeOps SDK: reporting issues, creating pull requests, setting up a development environment, and running the SDK's own test suites."
+  }
+}

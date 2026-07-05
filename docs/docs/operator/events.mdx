@@ -1,7 +1,7 @@
 ---
 title: Events
 description: Attach Events to your Entities
-sidebar_position: 4.5
+sidebar_position: 6
 ---
 
 # Events
@@ -57,7 +57,14 @@ Message: Started container myapp
 
 ## Publishing Events in KubeOps
 
-KubeOps provides an `EventPublisher` to create and update events for your custom resources. The publisher is available through dependency injection in your controllers.
+KubeOps provides an `EventPublisher` to create and update events for your custom resources. The publisher is available through dependency injection in your [controllers](./building-blocks/controllers) and [finalizers](./building-blocks/finalizer).
+
+:::note
+Publishing events requires write permissions on the `events` resource — these are part of the
+[default RBAC rules](./rbac#default-rbac-rules) KubeOps generates. To change how the event
+objects themselves are constructed (naming, labels, additional metadata), see
+[Customizing Resource Generation](./configuration/generation-customization#customizing-event-generation).
+:::
 
 ### Basic Usage
 
