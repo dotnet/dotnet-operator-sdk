@@ -289,19 +289,14 @@ public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
 
 ## Important Considerations
 
-### Status Updates
+### What Triggers Reconciliation
 
-- Status updates do not trigger new reconciliation cycles
-- Only changes to the `Spec` section trigger reconciliation
-- Use status updates to track the current state of your resource
-
-### Generation-Based Deduplication
-
-KubeOps skips `MODIFIED` events that do not represent a spec change. The `ResourceWatcher` compares
-the incoming `.metadata.generation` against the last cached value. If the generation has not
-increased (e.g., a status-only update), the event is dropped before it reaches the queue. Your
-controller only sees events for which the spec has actually changed, or for which a
-`DeletionTimestamp` is set (finalizer handling).
+With the default settings, your controller only sees events for **spec changes** (and deletion
+handling): status, label, and annotation updates are deduplicated away before they reach the
+queue. This is intentional — write status from your controller without re-triggering yourself.
+The exact rules and the `ByResourceVersion` alternative are described in
+[Reconcile Strategy](../configuration/reconcile-strategy); the cache mechanics behind the
+deduplication in [Caching](../configuration/caching).
 
 ### Parallel Reconciliation
 

@@ -119,9 +119,12 @@ KubeOps automatically adds default RBAC rules for:
    - Document why each rule is necessary
 
 4. **Testing**:
-   - Test your operator with minimal RBAC permissions
-   - Verify that all required operations work
-   - Check that unnecessary operations are properly restricted
+   - Test against a cluster **using the generated service account**, not your admin kubeconfig —
+     locally everything works because admin bypasses RBAC (see the note above), so missing rules
+     only surface in-cluster
+   - A quick check without deploying: `kubectl auth can-i watch <resource> --as=system:serviceaccount:<ns>:<operator-sa>`
+   - Watch the operator logs for `Forbidden` errors after every RBAC change (see
+     [Troubleshooting — 403 Forbidden](./troubleshooting#403-forbidden--rbac-errors))
 
 ## Common Pitfalls
 
