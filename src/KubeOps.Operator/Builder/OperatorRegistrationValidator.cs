@@ -5,12 +5,10 @@
 using System.Globalization;
 
 using KubeOps.Abstractions.Builder;
-using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.Operator.Constants;
 using KubeOps.Operator.Exceptions;
 using KubeOps.Operator.Queue;
-using KubeOps.Operator.Watcher;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -219,10 +217,11 @@ internal sealed class OperatorRegistrationValidator(
         var services = registry.Services;
         var entityName = entityType.Name;
 
-        // Without a controller there is no reconciliation pipeline at all, so the remaining checks would
+        // Without a controller pipeline there is no reconciliation at all, so the remaining checks would
         // only add noise. If the entity is only present because a finalizer was registered for it, point
         // at the actual mistake: finalizers run as part of reconciliation and require a controller.
-        if (!HasService(services, typeof(IReconciler<>).MakeGenericType(entityType)))
+        var pipelineType = typeof(ControllerPipeline<>).MakeGenericType(entityType);
+        if (!services.Any(d => !d.IsKeyedService && d.ServiceType == pipelineType))
         {
             problems.Add(HasKeyedFinalizer(services, entityType)
                 ? string.Format(
@@ -232,15 +231,25 @@ internal sealed class OperatorRegistrationValidator(
                     entityName)
                 : string.Format(
                     CultureInfo.InvariantCulture,
-                    "Entity '{0}': no IReconciler<{0}> is registered.",
+                    "Entity '{0}': no controller pipeline is registered.",
                     entityName));
             return;
         }
 
-        // Hosted services are recognized by their registered implementation type. A component registered
-        // through a DI factory delegate exposes no type and is therefore reported as missing. Register the
-        // watcher and consumer with a concrete type so validation can inspect them.
-        if (!HasHostedServiceAssignableTo(services, typeof(ResourceWatcher<>).MakeGenericType(entityType)))
+        // With QueueStrategy.InMemory every pipeline owns its queue, reconciler, watcher, and consumer.
+        // They are wired together by the builder and complete by construction, so only the custom queue
+        // strategy and custom leader election (fully manual wiring) leave components to the user.
+        var customLeaderElection = settings.LeaderElectionType == LeaderElectionType.Custom;
+        if (!customLeaderElection && settings.QueueStrategy != QueueStrategy.Custom)
+        {
+            return;
+        }
+
+        // With custom leader election the SDK registers no watcher; the user must supply one. Hosted
+        // services are recognized by their registered implementation type, so a watcher registered
+        // through a DI factory delegate is reported as missing — register it with a concrete type.
+        if (customLeaderElection &&
+            !HasHostedServiceAssignableTo(services, typeof(Watcher.ResourceWatcher<>).MakeGenericType(entityType)))
         {
             problems.Add(string.Format(
                 CultureInfo.InvariantCulture,
@@ -248,10 +257,9 @@ internal sealed class OperatorRegistrationValidator(
                 entityName));
         }
 
-        // ITimedEntityQueue<TEntity> is always required: both the resource watcher and the reconciler take
-        // it as a constructor dependency, regardless of queue strategy. With QueueStrategy.Custom the SDK
-        // does not register it, so a user who forgets to supply one would only fail at host startup with a
-        // DI error.
+        // ITimedEntityQueue<TEntity> is required: the watcher, the reconciler, and (with multiple
+        // pipelines) all of them share it. With QueueStrategy.Custom the SDK does not register it, so a
+        // user who forgets to supply one would only fail at host startup with a DI error.
         var queueType = typeof(ITimedEntityQueue<>).MakeGenericType(entityType);
         var queueRegistered = HasService(services, queueType);
         if (!queueRegistered)
@@ -264,8 +272,7 @@ internal sealed class OperatorRegistrationValidator(
 
         // A queue consumer is always required. Under Single leader election it must be leadership-aware
         // (drive the queue gate), so a stronger marker is required there; otherwise the base consumer marker
-        // is enough. The SDK registers one for the in-memory strategy; with QueueStrategy.Custom the user
-        // supplies it and marks it accordingly.
+        // is enough. With QueueStrategy.Custom the user supplies it and marks it accordingly.
         var single = settings.LeaderElectionType == LeaderElectionType.Single;
         var consumerType = single
             ? typeof(ILeaderAwareEntityQueueConsumer<>).MakeGenericType(entityType)

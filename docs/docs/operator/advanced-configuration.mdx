@@ -441,6 +441,62 @@ Use this strategy when you need scheduling behaviour that differs from the built
 queue — for example, priority queues or implementations that integrate with your own observability
 stack.
 
+## Watch Strategy
+
+The watch strategy controls how the operator creates watch connections to the Kubernetes API
+server. It is set via `OperatorSettings.WatchStrategy` and defaults to `PerController`.
+
+### `PerController` (Default)
+
+Every registered controller gets its own watch connection with its label and field selectors
+applied **server-side** — the API server only delivers matching objects:
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(); // WatchStrategy defaults to WatchStrategy.PerController
+```
+
+This works out of the box and is the most efficient mode for the common cases: one controller per
+entity type, or multiple controllers with disjoint selectors over large object sets (each watcher
+only receives its slice). The cost scales with the controller count: N controllers on the same
+entity type maintain N watch connections, and overlapping selectors mean events are transferred
+and deduplicated once per controller.
+
+### `SharedPerEntity` (Optimized for Many Controllers)
+
+One shared watch connection per entity type. Events are deduplicated **once** and then dispatched
+to every controller whose label selector matches the entity, evaluated client-side:
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithWatchStrategy(WatchStrategy.SharedPerEntity));
+```
+
+Compared to `PerController` this reduces API server connections and deduplication cache entries to
+one per entity type, independent of the controller count. Choose it when many controllers watch the
+same entity type, especially with overlapping selectors or a high number of objects.
+
+Trade-offs to be aware of:
+
+- With multiple controllers per entity type, the shared watch runs **without** a server-side label
+  selector, so the operator receives all objects of that type. A single narrow selector over a huge
+  object set is cheaper with `PerController`.
+- If only one controller is registered for an entity type, the shared strategy automatically falls
+  back to a dedicated watcher with server-side selectors — there is nothing to share.
+- Controllers with a **field selector** always keep a dedicated watch connection; field selectors
+  cannot be evaluated client-side.
+- Client-side matching parses the selector string returned by `IEntityLabelSelector<TEntity>`
+  (full standard syntax: equality, set-based, existence). To skip parsing or apply custom matching
+  logic, implement `IClientSideEntitySelector<TEntity>` on the selector — the shared watcher then
+  calls `MatchesAsync(entity, cancellationToken)` directly.
+- With `ReconcileStrategy.ByGeneration`, a label-only change never re-triggers reconciliation.
+  Under `PerController`, a label change that makes an object newly match a controller's server-side
+  selector still delivers an `Added` event to that controller; under `SharedPerEntity` the event is
+  deduplicated by generation before matching, so a newly matching controller only fires on the next
+  generation change. Use `ReconcileStrategy.ByResourceVersion` when controllers must react to label
+  transitions in shared mode.
+
 ## Reconcile Strategy
 
 The reconcile strategy controls which watch events actually trigger a reconciliation cycle.

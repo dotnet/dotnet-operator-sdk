@@ -4,33 +4,40 @@
 
 using FluentAssertions;
 
+using k8s;
+
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Queue;
+using KubeOps.KubernetesClient;
 using KubeOps.Operator.Builder;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+
+using Moq;
 
 namespace KubeOps.Operator.Test.Builder;
 
 public sealed class OperatorBuilderQueueStrategyTest
 {
     [Fact]
-    public void Should_Register_TimedEntityQueue_And_BackgroundService_For_InMemory_Strategy()
+    public void Should_Register_BackgroundService_For_InMemory_Strategy()
     {
         var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { QueueStrategy = QueueStrategy.InMemory }.Build());
         builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
 
-        builder.Services.Should().Contain(s =>
-            s.ServiceType == typeof(ITimedEntityQueue<V1OperatorIntegrationTestEntity>) &&
-            s.Lifetime == ServiceLifetime.Singleton);
-        builder.Services.Should().Contain(s =>
-            s.ServiceType == typeof(IHostedService) &&
-            s.ImplementationType == typeof(EntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
+        // The queue is owned by the pipeline (not part of the service collection); the consumer is
+        // factory-registered per pipeline.
+        builder.Services.Should().NotContain(s =>
+            s.ServiceType == typeof(ITimedEntityQueue<V1OperatorIntegrationTestEntity>));
+
+        var hostedServices = ResolveHostedServices(builder);
+        hostedServices.Should().ContainSingle(s => s.GetType() == typeof(EntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
     }
 
     [Fact]
@@ -46,12 +53,9 @@ public sealed class OperatorBuilderQueueStrategyTest
             }.Build());
         builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
 
-        builder.Services.Should().Contain(s =>
-            s.ServiceType == typeof(IHostedService) &&
-            s.ImplementationType == typeof(LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
-        builder.Services.Should().NotContain(s =>
-            s.ServiceType == typeof(IHostedService) &&
-            s.ImplementationType == typeof(EntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
+        var hostedServices = ResolveHostedServices(builder);
+        hostedServices.Should().ContainSingle(s => s.GetType() == typeof(LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
+        hostedServices.Should().NotContain(s => s.GetType() == typeof(EntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
     }
 
     [Fact]
@@ -62,9 +66,11 @@ public sealed class OperatorBuilderQueueStrategyTest
 
         builder.Services.Should().NotContain(s =>
             s.ServiceType == typeof(ITimedEntityQueue<V1OperatorIntegrationTestEntity>));
-        builder.Services.Should().NotContain(s =>
-            s.ServiceType == typeof(IHostedService) &&
-            s.ImplementationType == typeof(EntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
+
+        // Only the watcher remains as a per-pipeline hosted service; the consumer is user-supplied.
+        builder.Services
+            .Count(s => s.ServiceType == typeof(IHostedService) && s.ImplementationFactory is not null)
+            .Should().Be(1);
     }
 
     [Fact]
@@ -76,6 +82,52 @@ public sealed class OperatorBuilderQueueStrategyTest
         builder.Services.Should().Contain(s =>
             s.ServiceType == typeof(EntityQueue<V1OperatorIntegrationTestEntity>) &&
             s.Lifetime == ServiceLifetime.Transient);
+    }
+
+    [Fact]
+    public async Task Should_Route_EntityQueue_Delegate_To_Custom_Queue_For_Custom_Strategy()
+    {
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { QueueStrategy = QueueStrategy.Custom }.Build());
+        builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+
+        var customQueue = new Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        builder.Services.AddSingleton(customQueue.Object);
+
+        using var provider = BuildResolvableProvider(builder);
+        var entityQueue = provider.GetRequiredService<EntityQueue<V1OperatorIntegrationTestEntity>>();
+
+        var entity = new V1OperatorIntegrationTestEntity { Metadata = new() { Name = "test", Uid = "uid" } };
+        await entityQueue(
+            entity,
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.Zero,
+            0,
+            TestContext.Current.CancellationToken);
+
+        customQueue.Verify(
+            q => q.Enqueue(
+                entity,
+                ReconciliationType.Modified,
+                ReconciliationTriggerSource.Operator,
+                TimeSpan.Zero,
+                0,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    private static List<IHostedService> ResolveHostedServices(OperatorBuilder builder)
+    {
+        using var provider = BuildResolvableProvider(builder);
+        return provider.GetServices<IHostedService>().ToList();
+    }
+
+    private static ServiceProvider BuildResolvableProvider(OperatorBuilder builder)
+    {
+        builder.Services.AddLogging();
+        builder.Services.Replace(ServiceDescriptor.Singleton(Mock.Of<IKubernetesClient>()));
+        builder.Services.Replace(ServiceDescriptor.Singleton(Mock.Of<IKubernetes>()));
+        return builder.Services.BuildServiceProvider();
     }
 
     private sealed class TestController : IEntityController<V1OperatorIntegrationTestEntity>

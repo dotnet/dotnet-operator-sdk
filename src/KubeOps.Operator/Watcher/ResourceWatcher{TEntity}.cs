@@ -36,6 +36,7 @@ public class ResourceWatcher<TEntity>(
     IEntityLabelSelector<TEntity> labelSelector,
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
+    string cachePartition = "",
     OperatorMetrics? metrics = null)
     : RestartableHostedService
     where TEntity : IKubernetesObject<V1ObjectMeta>
@@ -135,7 +136,7 @@ public class ResourceWatcher<TEntity>(
                     break;
                 case ReconcileStrategy.ByGeneration when deletionTrackingEntry is null:
                     var cachedGeneration = await EntityCache.TryGetAsync<long>(
-                        entity.Uid(),
+                        GetCacheKey(entity),
                         token: cancellationToken);
 
                     // skip reconcile if generation did not increase.
@@ -153,7 +154,7 @@ public class ResourceWatcher<TEntity>(
                 case ReconcileStrategy.ByResourceVersion:
                     // reconcile on every change; resourceVersion changes for all mutations, including finalizer removals
                     var cachedResourceVersion = await EntityCache.TryGetAsync<string>(
-                        entity.Uid(),
+                        GetCacheKey(entity),
                         token: cancellationToken);
 
                     if (cachedResourceVersion.HasValue && cachedResourceVersion.Value == entity.ResourceVersion())
@@ -172,14 +173,7 @@ public class ResourceWatcher<TEntity>(
             }
         }
 
-        var enqueued = await entityQueue
-            .Enqueue(
-                entity,
-                eventType.ToReconciliationType(),
-                ReconciliationTriggerSource.ApiServer,
-                queueIn: TimeSpan.Zero,
-                retryCount: 0,
-                cancellationToken);
+        var enqueued = await EnqueueEventAsync(eventType, entity, cancellationToken);
 
         if (!enqueued)
         {
@@ -192,7 +186,7 @@ public class ResourceWatcher<TEntity>(
 
         if (eventType == WatchEventType.Deleted)
         {
-            await EntityCache.RemoveAsync(entity.Uid(), token: cancellationToken);
+            await EntityCache.RemoveAsync(GetCacheKey(entity), token: cancellationToken);
             await EntityCache.RemoveAsync(GetDeletionCacheKey(entity), token: cancellationToken);
         }
         else
@@ -209,7 +203,7 @@ public class ResourceWatcher<TEntity>(
                     break;
                 case ReconcileStrategy.ByGeneration when deletionTrackingEntry is null:
                     await EntityCache.SetAsync(
-                        entity.Uid(),
+                        GetCacheKey(entity),
                         entity.Generation() ?? 1,
                         tags: _entityCacheTags,
                         token: cancellationToken);
@@ -217,7 +211,7 @@ public class ResourceWatcher<TEntity>(
                     break;
                 case ReconcileStrategy.ByResourceVersion:
                     await EntityCache.SetAsync(
-                        entity.Uid(),
+                        GetCacheKey(entity),
                         entity.ResourceVersion(),
                         tags: _entityCacheTags,
                         token: cancellationToken);
@@ -306,8 +300,26 @@ public class ResourceWatcher<TEntity>(
         }
     }
 
-    private static string GetDeletionCacheKey(TEntity entity)
-        => $"{entity.Uid()}:deletion";
+    /// <summary>
+    /// Enqueues a received (and deduplicated) watch event for reconciliation. The default implementation
+    /// enqueues into this watcher's entity queue; a shared watcher (one watch connection serving multiple
+    /// controller pipelines) overrides this to dispatch the event to every matching pipeline's queue.
+    /// </summary>
+    /// <param name="eventType">The watch event type.</param>
+    /// <param name="entity">The entity received from the watch stream.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// <see langword="true"/> when the event was scheduled on at least one queue; <see langword="false"/>
+    /// when it was dropped (the deduplication cache is then left unchanged).
+    /// </returns>
+    protected virtual Task<bool> EnqueueEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken) =>
+        entityQueue.Enqueue(
+            entity,
+            eventType.ToReconciliationType(),
+            ReconciliationTriggerSource.ApiServer,
+            queueIn: TimeSpan.Zero,
+            retryCount: 0,
+            cancellationToken);
 
     private static string GetDeletionFingerprint(TEntity entity)
         => string.Join(
@@ -317,6 +329,14 @@ public class ResourceWatcher<TEntity>(
             entity.Metadata.DeletionGracePeriodSeconds,
             entity.Generation(),
             string.Join(',', entity.Finalizers() ?? []));
+
+    // The dedup cache is shared by all watchers of an entity type. When multiple controller pipelines watch
+    // the same entity type (each with its own watcher), the partition token isolates their entries so one
+    // pipeline's dedup token cannot suppress another pipeline's event for the same object.
+    private string GetCacheKey(TEntity entity) =>
+        cachePartition.Length == 0 ? entity.Uid() : $"{cachePartition}:{entity.Uid()}";
+
+    private string GetDeletionCacheKey(TEntity entity) => $"{GetCacheKey(entity)}:deletion";
 
     private async Task OnWatchErrorAsync(Exception e, CancellationToken cancellationToken)
     {

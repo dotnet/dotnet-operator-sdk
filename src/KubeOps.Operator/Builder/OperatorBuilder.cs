@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
@@ -21,6 +21,7 @@ using KubeOps.Operator.Crds;
 using KubeOps.Operator.Events;
 using KubeOps.Operator.Finalizer;
 using KubeOps.Operator.LeaderElection;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Reconciliation;
@@ -28,11 +29,15 @@ using KubeOps.Operator.Watcher;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace KubeOps.Operator.Builder;
 
 internal sealed class OperatorBuilder : IOperatorBuilder
 {
+    private readonly HashSet<Type> _sharedWatcherEntities = [];
+
     private OperatorRegistrationRegistry? _registrationRegistry;
 
     public OperatorBuilder(IServiceCollection services, OperatorSettings settings)
@@ -49,67 +54,19 @@ internal sealed class OperatorBuilder : IOperatorBuilder
     public IOperatorBuilder AddController<TImplementation, TEntity>()
         where TImplementation : class, IEntityController<TEntity>
         where TEntity : IKubernetesObject<V1ObjectMeta>
-    {
-        Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
-        Services.TryAddSingleton<IReconciler<TEntity>, Reconciler<TEntity>>();
-
-        RegisterRegistrationValidation(typeof(TEntity));
-
-        // Queue
-        Services.TryAddTransient<IEntityQueueFactory, EntityQueueFactory>();
-        Services.TryAddTransient<EntityQueue<TEntity>>(services =>
-            services.GetRequiredService<IEntityQueueFactory>().Create<TEntity>());
-
-        if (Settings.QueueStrategy == QueueStrategy.InMemory)
-        {
-            Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
-
-            switch (Settings.LeaderElectionType)
-            {
-                case LeaderElectionType.None:
-                    Services.AddHostedService<EntityQueueBackgroundService<TEntity>>();
-                    break;
-                case LeaderElectionType.Single:
-                    Services.AddHostedService<LeaderAwareEntityQueueBackgroundService<TEntity>>();
-                    break;
-            }
-        }
-
-        // Leader Election
-        switch (Settings.LeaderElectionType)
-        {
-            case LeaderElectionType.None:
-                Services.AddHostedService<ResourceWatcher<TEntity>>();
-                break;
-            case LeaderElectionType.Single:
-                Services.AddHostedService<LeaderAwareResourceWatcher<TEntity>>();
-                break;
-        }
-
-        return this;
-    }
+        => AddControllerCore<TImplementation, TEntity>(labelSelectorType: null, fieldSelectorType: null);
 
     public IOperatorBuilder AddControllerWithLabelSelector<TImplementation, TEntity, TLabelSelector>()
         where TImplementation : class, IEntityController<TEntity>
         where TEntity : IKubernetesObject<V1ObjectMeta>
         where TLabelSelector : class, IEntityLabelSelector<TEntity>
-    {
-        AddController<TImplementation, TEntity>();
-        Services.TryAddSingleton<IEntityLabelSelector<TEntity>, TLabelSelector>();
-
-        return this;
-    }
+        => AddControllerCore<TImplementation, TEntity>(typeof(TLabelSelector), fieldSelectorType: null);
 
     public IOperatorBuilder AddControllerWithFieldSelector<TImplementation, TEntity, TFieldSelector>()
         where TImplementation : class, IEntityController<TEntity>
         where TEntity : IKubernetesObject<V1ObjectMeta>
         where TFieldSelector : class, IEntityFieldSelector<TEntity>
-    {
-        AddController<TImplementation, TEntity>();
-        Services.TryAddSingleton<IEntityFieldSelector<TEntity>, TFieldSelector>();
-
-        return this;
-    }
+        => AddControllerCore<TImplementation, TEntity>(labelSelectorType: null, typeof(TFieldSelector));
 
     public IOperatorBuilder AddFinalizer<TImplementation, TEntity>(string identifier)
         where TImplementation : class, IEntityFinalizer<TEntity>
@@ -133,6 +90,186 @@ internal sealed class OperatorBuilder : IOperatorBuilder
 
         Services.AddSingleton(settingsBuilder.Build());
         Services.AddHostedService<CrdInstaller>();
+        return this;
+    }
+
+    private static EntityQueue<TEntity> CreateEntityQueueDelegate<TEntity>(IServiceProvider services)
+        where TEntity : IKubernetesObject<V1ObjectMeta>
+    {
+        var logger = services.GetService<ILogger<EntityQueue<TEntity>>>();
+
+        return (entity, type, triggerSource, queueIn, retryCount, cancellationToken) =>
+        {
+            var queue = ResolveQueue();
+
+            logger?
+                .LogTrace(
+                    """Queue entity "{Identifier}"{Retry} in {Seconds}s.""",
+                    entity.ToIdentifierString(),
+                    retryCount > 0 ? $" (Retry: {retryCount})" : string.Empty,
+                    queueIn.TotalSeconds);
+
+            return queue.Enqueue(entity, type, triggerSource, queueIn, retryCount, cancellationToken);
+        };
+
+        ITimedEntityQueue<TEntity> ResolveQueue()
+        {
+            // Inside a reconciliation scope, the reconciler published the originating pipeline's queue,
+            // so requeues flow back into the pipeline the reconciliation came from.
+            try
+            {
+                if (services.GetService<ActivePipelineQueue<TEntity>>()?.Current is { } activeQueue)
+                {
+                    return activeQueue;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Resolved from the root provider with scope validation enabled — fall through to the
+                // scope-independent resolutions below.
+            }
+
+            // QueueStrategy.Custom: the user-registered queue, shared by all pipelines of the entity.
+            if (services.GetService<ITimedEntityQueue<TEntity>>() is { } customQueue)
+            {
+                return customQueue;
+            }
+
+            // Outside a reconciliation scope the target queue is only unambiguous with a single pipeline.
+            var pipelines = services.GetServices<ControllerPipeline<TEntity>>().ToList();
+            return pipelines switch
+            {
+                [var single] => single.Queue(services),
+                [] => throw new InvalidOperationException(
+                    $"No controller pipeline is registered for entity '{typeof(TEntity).Name}'."),
+                _ => throw new InvalidOperationException(
+                    $"Multiple controller pipelines are registered for entity '{typeof(TEntity).Name}'; " +
+                    $"an EntityQueue<{typeof(TEntity).Name}> delegate resolved outside a reconciliation scope " +
+                    "cannot determine the target queue. Inject the delegate into the controller (or another " +
+                    "scoped service) instead."),
+            };
+        }
+    }
+
+    private static IHostedService CreateSharedWatcher<TEntity>(IServiceProvider services)
+        where TEntity : IKubernetesObject<V1ObjectMeta>
+    {
+        var settings = services.GetRequiredService<OperatorSettings>();
+        var pipelines = services.GetServices<ControllerPipeline<TEntity>>()
+            .Where(p => p.FieldSelectorType is null)
+            .ToList();
+
+        if (pipelines.Count == 1)
+        {
+            // A single pipeline shares nothing: use a dedicated watcher so its label selector is
+            // applied server-side, exactly as with WatchStrategy.PerController.
+            return pipelines[0].CreateWatcher(services);
+        }
+
+        var targets = pipelines
+            .Select(p => new SharedPipelineDispatcher<TEntity>.PipelineTarget(
+                p.Key,
+                p.Queue(services),
+                p.LabelSelector(services)))
+            .ToList();
+        var dispatcher = new SharedPipelineDispatcher<TEntity>(
+            targets,
+            services.GetRequiredService<ILogger<ResourceWatcher<TEntity>>>());
+
+        // The shared watch runs without server-side selectors; matching happens client-side per
+        // pipeline. The queue passed to the base constructor is unused (event dispatch is overridden),
+        // but the constructor requires one.
+        var labelSelector = new DefaultEntityLabelSelector<TEntity>();
+        var fieldSelector = new DefaultEntityFieldSelector<TEntity>();
+        var unusedQueue = targets[0].Queue;
+
+        return settings.LeaderElectionType switch
+        {
+            LeaderElectionType.Single => ActivatorUtilities.CreateInstance<LeaderAwareSharedResourceWatcher<TEntity>>(
+                services, unusedQueue, labelSelector, fieldSelector, dispatcher),
+            _ => ActivatorUtilities.CreateInstance<SharedResourceWatcher<TEntity>>(
+                services, unusedQueue, labelSelector, fieldSelector, dispatcher),
+        };
+    }
+
+    private IOperatorBuilder AddControllerCore<TImplementation, TEntity>(Type? labelSelectorType, Type? fieldSelectorType)
+        where TImplementation : class, IEntityController<TEntity>
+        where TEntity : IKubernetesObject<V1ObjectMeta>
+    {
+        var pipeline = new ControllerPipeline<TEntity>(typeof(TImplementation), labelSelectorType, fieldSelectorType);
+
+        if (Services.Any(d => d.ImplementationInstance is ControllerPipeline<TEntity> existing && existing.Key == pipeline.Key))
+        {
+            throw new InvalidOperationException(
+                $"A controller pipeline for '{typeof(TImplementation).Name}' with the same label/field selector " +
+                $"is already registered for entity '{typeof(TEntity).Name}'. Registering the identical " +
+                "combination twice would open a redundant watch stream.");
+        }
+
+        // The reconciler resolves the controller by its concrete type, since multiple controllers may be
+        // registered for the same entity type. The interface mapping is kept so existing code resolving
+        // IEntityController<TEntity> still gets the first registered controller.
+        Services.AddScoped<TImplementation>();
+        Services.TryAddScoped<IEntityController<TEntity>, TImplementation>();
+
+        if (labelSelectorType is not null)
+        {
+            Services.TryAddSingleton(labelSelectorType);
+            Services.TryAddSingleton(typeof(IEntityLabelSelector<TEntity>), s => s.GetRequiredService(labelSelectorType));
+        }
+
+        if (fieldSelectorType is not null)
+        {
+            Services.TryAddSingleton(fieldSelectorType);
+            Services.TryAddSingleton(typeof(IEntityFieldSelector<TEntity>), s => s.GetRequiredService(fieldSelectorType));
+        }
+
+        Services.AddSingleton(pipeline);
+        Services.TryAddScoped<ActivePipelineQueue<TEntity>>();
+        Services.TryAddTransient<EntityQueue<TEntity>>(CreateEntityQueueDelegate<TEntity>);
+
+        RegisterRegistrationValidation(typeof(TEntity));
+
+        if (Settings.LeaderElectionType == LeaderElectionType.Custom)
+        {
+            // With custom leader election the user wires the watcher and queue consumer themselves; the
+            // SDK only provides the queue (for the in-memory strategy) and the reconciler through the
+            // container. This manual wiring supports a single controller per entity type.
+            if (Settings.QueueStrategy == QueueStrategy.InMemory)
+            {
+                Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
+            }
+
+            Services.TryAddSingleton<IReconciler<TEntity>>(services =>
+                ActivatorUtilities.CreateInstance<Reconciler<TEntity>>(
+                    services,
+                    services.GetRequiredService<ITimedEntityQueue<TEntity>>(),
+                    typeof(TImplementation)));
+
+            return this;
+        }
+
+        // The queue consumer is registered (and therefore started) before the watcher so that, under
+        // leader election, its intake gate is open by the time the watcher starts enqueuing. With
+        // QueueStrategy.Custom the user registers their own consumer. Hosted services are registered
+        // via AddSingleton<IHostedService> (not AddHostedService) because the latter deduplicates by
+        // implementation type and would drop the second pipeline's services.
+        if (Settings.QueueStrategy == QueueStrategy.InMemory)
+        {
+            Services.AddSingleton<IHostedService>(pipeline.CreateQueueConsumer);
+        }
+
+        if (Settings.WatchStrategy == WatchStrategy.PerController || fieldSelectorType is not null)
+        {
+            // Dedicated watcher with server-side selectors. Pipelines with a field selector always get a
+            // dedicated watcher: field selectors cannot be evaluated client-side on a shared watch.
+            Services.AddSingleton<IHostedService>(pipeline.CreateWatcher);
+        }
+        else if (_sharedWatcherEntities.Add(typeof(TEntity)))
+        {
+            Services.AddSingleton<IHostedService>(CreateSharedWatcher<TEntity>);
+        }
+
         return this;
     }
 

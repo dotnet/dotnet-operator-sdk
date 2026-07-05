@@ -58,26 +58,49 @@ internal sealed class ControllerRegistrationGenerator : IIncrementalGenerator
                             .Where(c => entities.Any(e =>
                                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))
                             .OrderBy(c => c.FullyQualifiedEntityName, StringComparer.Ordinal)
-                            .Select(c => (c.FullyQualifiedController, Entity: entities.First(e =>
+                            .Select(c => (Controller: c, Entity: entities.First(e =>
                                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName)))
                             .Select(e => ExpressionStatement(
                                 InvocationExpression(
                                     MemberAccessExpression(
                                         SyntaxKind.SimpleMemberAccessExpression,
                                         IdentifierName("builder"),
-                                        GenericName(Identifier("AddController"))
-                                            .WithTypeArgumentList(
-                                                TypeArgumentList(
-                                                    SeparatedList<TypeSyntax>(new[]
-                                                    {
-                                                        IdentifierName(e.FullyQualifiedController),
-                                                        IdentifierName(e.Entity.ClassDeclaration.FullyQualifiedName),
-                                                    })))))))
+                                        RegistrationMethodFor(e.Controller, e.Entity)))))
                             .Append<StatementSyntax>(ReturnStatement(IdentifierName("builder"))))))))
             .NormalizeWhitespace();
 
         context.AddSource(
             "ControllerRegistrations.g.cs",
             SourceText.From(declaration.ToFullString(), Encoding.UTF8, SourceHashAlgorithm.Sha256));
+    }
+
+    // Chooses the builder method matching the controller's selector attributes: a [LabelSelector] or
+    // [FieldSelector] attribute switches to the corresponding AddControllerWith…Selector registration.
+    private static GenericNameSyntax RegistrationMethodFor(ControllerRegistration controller, AttributedEntity entity)
+    {
+        var typeArguments = new List<TypeSyntax>
+        {
+            IdentifierName(controller.FullyQualifiedController),
+            IdentifierName(entity.ClassDeclaration.FullyQualifiedName),
+        };
+
+        string methodName;
+        switch (controller)
+        {
+            case { FullyQualifiedLabelSelector: { } labelSelector }:
+                methodName = "AddControllerWithLabelSelector";
+                typeArguments.Add(IdentifierName(labelSelector));
+                break;
+            case { FullyQualifiedFieldSelector: { } fieldSelector }:
+                methodName = "AddControllerWithFieldSelector";
+                typeArguments.Add(IdentifierName(fieldSelector));
+                break;
+            default:
+                methodName = "AddController";
+                break;
+        }
+
+        return GenericName(Identifier(methodName))
+            .WithTypeArgumentList(TypeArgumentList(SeparatedList(typeArguments)));
     }
 }

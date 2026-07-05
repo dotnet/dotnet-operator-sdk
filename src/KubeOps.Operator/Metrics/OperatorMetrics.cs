@@ -38,8 +38,9 @@ public sealed class OperatorMetrics
 
     // Depth providers per entity type, observed by a single shared gauge. Using one instrument for
     // all entity types (rather than one per closed generic queue) avoids duplicate-instrument
-    // registration warnings from the OpenTelemetry SDK.
-    private readonly ConcurrentDictionary<string, QueueDepthProvider> _queueDepthProviders = new();
+    // registration warnings from the OpenTelemetry SDK. An entity type may have several providers
+    // (one per controller pipeline); their depths are summed into one measurement per entity type.
+    private readonly ConcurrentDictionary<string, ConcurrentQueue<QueueDepthProvider>> _queueDepthProviders = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="OperatorMetrics"/> class.
@@ -170,22 +171,35 @@ public sealed class OperatorMetrics
     /// <param name="scheduledDepth">A callback returning the number of scheduled (delayed) entries.</param>
     /// <param name="readyDepth">A callback returning the number of ready entries.</param>
     public void RegisterQueueDepthGauge(string entityType, Func<int> scheduledDepth, Func<int> readyDepth)
-        => _queueDepthProviders[entityType] = new QueueDepthProvider(scheduledDepth, readyDepth);
+        => _queueDepthProviders
+            .GetOrAdd(entityType, _ => new ConcurrentQueue<QueueDepthProvider>())
+            .Enqueue(new QueueDepthProvider(scheduledDepth, readyDepth));
 
     private IEnumerable<Measurement<int>> ObserveQueueDepth()
     {
-        foreach (var (entityType, provider) in _queueDepthProviders)
+        foreach (var (entityType, providers) in _queueDepthProviders)
         {
-            int scheduled, ready;
-            try
+            var scheduled = 0;
+            var ready = 0;
+            var observed = false;
+
+            foreach (var provider in providers)
             {
-                scheduled = provider.ScheduledDepth();
-                ready = provider.ReadyDepth();
+                try
+                {
+                    scheduled += provider.ScheduledDepth();
+                    ready += provider.ReadyDepth();
+                    observed = true;
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The queue backing this provider was torn down (e.g. during shutdown). Skip it so a
+                    // single disposed queue does not abort the observation for all other queues.
+                }
             }
-            catch (ObjectDisposedException)
+
+            if (!observed)
             {
-                // The queue backing this provider was torn down (e.g. during shutdown). Skip it so a
-                // single disposed queue does not abort the observation for all other entity types.
                 continue;
             }
 

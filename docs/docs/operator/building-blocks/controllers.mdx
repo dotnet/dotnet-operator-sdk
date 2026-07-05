@@ -45,6 +45,43 @@ When you create a controller, KubeOps automatically creates a resource watcher (
 - Triggers reconciliation when resources are added, modified, or deleted
 - Maintains a local cache of resources to reduce API server load
 
+## The Event Pipeline
+
+When a watch event arrives from the Kubernetes API server, KubeOps routes it through a fixed pipeline before your controller code runs:
+
+```mermaid
+flowchart TB
+    API[Kubernetes<br/>API Server]
+    W[ResourceWatcher]
+    Q[(TimedEntityQueue)]
+    B[EntityQueueBackgroundService]
+    R[Reconciler]
+    C[Your Controller<br/>ReconcileAsync / DeletedAsync]
+    F[Your Finalizer<br/>FinalizeAsync]
+
+    API -->|watch event| W
+    W -->|generation check / enqueue| Q
+    Q -->|dequeue after delay| B
+    B -->|acquire semaphore / UID lock| R
+    R -->|reconcile| C
+    R -->|finalize| F
+    C -.->|requeueAfter| Q
+    F -.->|requeueAfter| Q
+```
+
+| Component | Responsibility |
+|---|---|
+| `ResourceWatcher` | Receives raw watch events, skips events without a generation change, enqueues the rest |
+| `TimedEntityQueue` | Holds entries until their scheduled time; supports immediate and delayed dispatch |
+| `EntityQueueBackgroundService` | Controls parallelism via a global semaphore and per-UID locks before handing off to the reconciler |
+| `Reconciler` | Resolves the controller, manages finalizer attach/detach, calls either `ReconcileAsync`/`DeletedAsync` on the controller or `FinalizeAsync` on a registered finalizer |
+| Your Controller | Implements the business logic for desired-state reconciliation |
+| Your Finalizer | Runs cleanup logic before a resource is deleted; invoked instead of the controller when finalization is required |
+
+The `requeueAfter` path (dashed) is triggered when your controller returns a `ReconciliationResult` with a non-zero `RequeueAfter` value.
+
+KubeOps creates one such pipeline — watcher, queue, and background service — **per registered controller**. Multiple controllers for the same entity type (for example with different label selectors) therefore run fully independent pipelines that never suppress each other's events — see [Multiple Controllers per Entity](#multiple-controllers-per-entity). With the opt-in `WatchStrategy.SharedPerEntity`, a single shared watcher per entity type replaces the per-controller watchers and dispatches each event to all pipelines whose label selectors match — see [Advanced Configuration](../advanced-configuration) for the trade-offs.
+
 ## Reconciliation Loop
 
 The reconciliation loop is the core of your operator's functionality. It consists of two main methods:
@@ -421,6 +458,55 @@ When no field selector is needed, the built-in `DefaultEntityFieldSelector<TEnti
 | `AddController<TImpl, TEntity>()` | Default (none) | Default (none) |
 | `AddControllerWithLabelSelector<TImpl, TEntity, TLabel>()` | Custom | Default (none) |
 | `AddControllerWithFieldSelector<TImpl, TEntity, TField>()` | Default (none) | Custom |
+
+### Declaring Selectors with Attributes
+
+Instead of calling the `AddControllerWith…Selector` methods manually, you can annotate the
+controller class. The source generator picks the attribute up and emits the matching registration
+into `RegisterControllers()` / `RegisterComponents()`:
+
+```csharp
+[LabelSelector(typeof(MyDemoEntityLabelSelector))]
+public class V1DemoEntityController : IEntityController<V1DemoEntity>
+{
+    // ...
+}
+
+// or
+[FieldSelector(typeof(MyDemoEntityFieldSelector))]
+public class V1DemoEntityController : IEntityController<V1DemoEntity>
+{
+    // ...
+}
+```
+
+A controller supports one selector kind at a time (label **or** field selector), matching the
+builder methods.
+
+## Multiple Controllers per Entity
+
+The same entity type can be served by **multiple independent controllers**, each with its own label
+or field selector. Every registration creates a fully separate watch → queue → reconcile pipeline,
+so controllers with overlapping selectors both reconcile an entity that matches both:
+
+```csharp
+builder.Services.AddKubernetesOperator()
+    .AddControllerWithLabelSelector<ManagedController, V1DemoEntity, ManagedLabelSelector>()
+    .AddControllerWithLabelSelector<ConfigController, V1DemoEntity, ConfigLabelSelector>();
+```
+
+Notes:
+
+- Each pipeline maintains its own watch connection, queue, and deduplication cache, so the
+  controllers never suppress each other's events — even for the same object.
+- Registering the exact same controller/selector combination twice throws at registration time
+  (it would only open a redundant watch stream).
+- The `EntityQueue<TEntity>` requeue delegate routes to the pipeline the current reconciliation
+  originated from. Inject it into the controller (or another scoped service); with multiple
+  controllers per entity it cannot be resolved from a singleton.
+- N controllers means N watch connections per entity type by default. If that becomes a concern
+  (many controllers, many objects, overlapping selectors), switch to the shared watch mode — see
+  [`WatchStrategy` in Advanced Configuration](../advanced-configuration).
 
 ## Common Pitfalls
 
