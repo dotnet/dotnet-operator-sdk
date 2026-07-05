@@ -1,5 +1,8 @@
 # KubeOps.Aspire.Hosting
 
+[![NuGet](https://img.shields.io/nuget/v/KubeOps.Aspire.Hosting?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Aspire.Hosting)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.Aspire.Hosting?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Aspire.Hosting)
+
 `KubeOps.Aspire.Hosting` is the [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) **hosting** integration for KubeOps operators. It lets you orchestrate a KubeOps operator project as a resource inside a .NET Aspire AppHost.
 
 It is the AppHost-side counterpart to the [`KubeOps.Aspire`](https://www.nuget.org/packages/KubeOps.Aspire) service-defaults integration.

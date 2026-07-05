@@ -275,38 +275,50 @@ public class DemoConversionWebhook : ConversionWebhook<V3DemoEntity>
 
 1. **Validation Webhooks**:
 
-   - Keep validation rules simple and focused
-   - Return clear error messages
-   - Consider using the `dryRun` parameter for testing
+   - Webhooks sit in the **write path of the API server** and run under a strict timeout
+     (10 seconds by default, 30 at most): validate only from the request payload and avoid calls
+     to external systems — a slow validator delays or fails every create/update of that resource
+   - Return error messages that tell the user *which field* is wrong and *what a valid value
+     looks like* — the message surfaces directly in `kubectl` output
+   - Remember validation also runs for `dryRun` requests: it must be side-effect free
 
 2. **Mutation Webhooks**:
 
-   - Make minimal necessary changes
-   - Document all mutations
-   - Consider the impact on validation
+   - Mutations must be **idempotent** — the API server may invoke the webhook again on the
+     already-mutated object (reinvocation), and applying the mutation twice must yield the same
+     result
+   - Only set defaults and normalize values; reject invalid input in a validation webhook instead
+     of "fixing" it silently
+   - The mutated object still passes validation webhooks afterwards — make sure your own
+     validator accepts everything your mutator produces
 
 3. **Conversion Webhooks**:
-   - Implement bidirectional conversions
-   - Handle all fields explicitly
-   - Add validation to prevent data loss
-   - Test conversions thoroughly
+
+   - Conversions must be **lossless roundtrips**: converting v1 → v2 → v1 has to reproduce the
+     original object, otherwise data is destroyed on the next write of an old client
+   - Fields that only exist in the newer version need a defined representation in the older one
+     (commonly an annotation), or the roundtrip breaks
+   - Test conversions with real stored objects of every served version, not just constructed
+     samples
+
+4. **Security**:
+   - Always serve webhooks over TLS — the API server refuses plain HTTP (see [Local Development Considerations](#local-development-considerations) for certificate options during development)
+   - Choose the `FailurePolicy` consciously: `Fail` blocks resource operations when the webhook is down, `Ignore` silently skips it — both can be customized via the [webhook configuration factory](../configuration/generation-customization#customizing-webhook-configuration-generation)
+   - Restrict webhooks to the namespaces they need via a `NamespaceSelector` instead of intercepting cluster-wide traffic
 
 ## Common Pitfalls
 
-1. **Validation**:
+1. **The webhook blocks the whole cluster resource type**: With `FailurePolicy: Fail`, an
+   unreachable webhook (operator down, wrong service reference, expired certificate) blocks
+   **every** create/update of the resource — including the operator's own writes. Decide
+   consciously between `Fail` and `Ignore` (see the
+   [Security best practices](#best-practices)).
 
-   - Overly complex validation rules
-   - Missing validation for critical fields
-   - Inconsistent error messages
+2. **Webhook intercepts its own operator**: A mutating/validating webhook without a
+   `NamespaceSelector` or `objectSelector` also intercepts writes made *by the operator itself*
+   during reconciliation — a subtle source of loops and latency.
 
-2. **Mutation**:
-
-   - Unintended side effects
-   - Missing validation after mutation
-   - Inconsistent mutations
-
-3. **Conversion**:
-   - Incomplete conversion paths
-   - Data loss during conversion
-   - Missing validation
-   - Incorrect storage version selection
+3. **Conversion changes break stored objects**: Objects are persisted in the **storage version**.
+   Changing the storage version or shipping an incomplete conversion path makes existing objects
+   unreadable for old clients. Roll out new versions as `served: true` first and only switch
+   `storage` after the conversion has proven itself.

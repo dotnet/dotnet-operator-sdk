@@ -1,0 +1,185 @@
+---
+title: External Reconciliation Triggers
+description: Triggering reconciliation from outside the watch stream
+sidebar_position: 6
+---
+
+# External Reconciliation Triggers
+
+The standard reconciliation loop is driven by the Kubernetes watch stream: every `ADDED`,
+`MODIFIED`, and `DELETED` event the API server emits flows through the watcher into the queue and
+eventually reaches your controller. This covers the vast majority of real-world use cases.
+
+However, some architectures require a way for systems _outside the operator_ to request
+reconciliation — for example:
+
+- A CI/CD pipeline that just deployed a new image and wants the operator to react immediately.
+- An event bus consumer that receives domain events and needs to reconcile the corresponding custom resource.
+- An admin HTTP endpoint used during development or incident response.
+
+KubeOps makes this straightforward by exposing the `EntityQueue<TEntity>` delegate. Inject it into
+any DI-registered component to enqueue an entity for reconciliation on demand.
+
+```csharp
+// Signature — awaitable. The result is true if the entity was scheduled, or false if the enqueue was
+// dropped (for example because the queue's intake is suspended during a leadership transition).
+public delegate Task<bool> EntityQueue<in TEntity>(
+    TEntity entity,
+    ReconciliationType type,
+    ReconciliationTriggerSource reconciliationTriggerSource,
+    TimeSpan queueIn,
+    int retryCount,
+    CancellationToken cancellationToken)
+    where TEntity : IKubernetesObject<V1ObjectMeta>;
+```
+
+Always `await` the delegate and, where it matters, react to a `false` result (a dropped enqueue).
+
+Always pass `ReconciliationTriggerSource.Operator` for externally triggered reconciliations.
+`ReconciliationTriggerSource.ApiServer` is reserved for events originating from the Kubernetes
+watch stream.
+
+## HTTP Endpoint
+
+An ASP.NET Core minimal API endpoint is the simplest way to expose an on-demand reconciliation
+trigger. This pattern is useful for admin tooling, CI/CD pipelines, and testing.
+
+```csharp
+app.MapPost("/reconcile/{namespace}/{name}", async (
+    string @namespace,
+    string name,
+    IKubernetesClient kubernetesClient,
+    EntityQueue<V1DemoEntity> entityQueue,
+    CancellationToken cancellationToken) =>
+{
+    var entity = await kubernetesClient.GetAsync<V1DemoEntity>(name, @namespace, cancellationToken);
+    if (entity is null)
+    {
+        return Results.NotFound();
+    }
+
+    var scheduled = await entityQueue(
+        entity,
+        ReconciliationType.Modified,
+        ReconciliationTriggerSource.Operator,
+        TimeSpan.Zero,
+        retryCount: 0,
+        cancellationToken);
+
+    // false means the enqueue was dropped (e.g. this instance is not the current leader).
+    return scheduled
+        ? Results.Accepted()
+        : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+});
+```
+
+:::note
+Secure this endpoint appropriately. In a Kubernetes-native deployment, consider restricting access
+via a `NetworkPolicy` or an Ingress authentication annotation rather than exposing it publicly.
+:::
+
+## Message Queue Consumer
+
+For event-driven architectures, a background service can receive messages from an external message
+broker and enqueue the affected entity for reconciliation. The message bus acts as a
+**notification channel** — it signals that something has changed, but the operator always fetches
+the authoritative resource state from the Kubernetes API before reconciling.
+
+```csharp
+public sealed class DemoEntityReconcileTriggerService(
+    ServiceBusClient serviceBusClient,
+    IKubernetesClient kubernetesClient,
+    EntityQueue<V1DemoEntity> entityQueue,
+    ILogger<DemoEntityReconcileTriggerService> logger)
+    : BackgroundService
+{
+    private readonly ServiceBusProcessor _processor = serviceBusClient.CreateProcessor(
+        "demo-entity-reconcile-triggers",
+        new ServiceBusProcessorOptions { MaxConcurrentCalls = 1, AutoCompleteMessages = false });
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _processor.ProcessMessageAsync += ProcessMessageAsync;
+        _processor.ProcessErrorAsync += ProcessErrorAsync;
+
+        await _processor.StartProcessingAsync(stoppingToken);
+        await Task.Delay(Timeout.Infinite, stoppingToken).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+    }
+
+    private async Task ProcessMessageAsync(ProcessMessageEventArgs args)
+    {
+        var trigger = args.Message.Body.ToObjectFromJson<ReconcileTrigger>();
+
+        var entity = await kubernetesClient.GetAsync<V1DemoEntity>(
+            trigger.Name,
+            trigger.Namespace,
+            args.CancellationToken);
+
+        if (entity is null)
+        {
+            logger.LogWarning("Entity {Name}/{Namespace} no longer exists — skipping trigger.",
+                trigger.Name, trigger.Namespace);
+            await args.CompleteMessageAsync(args.Message, args.CancellationToken);
+            return;
+        }
+
+        entityQueue(
+            entity,
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.Zero,
+            retryCount: 0,
+            args.CancellationToken);
+
+        await args.CompleteMessageAsync(args.Message, args.CancellationToken);
+    }
+
+    private Task ProcessErrorAsync(ProcessErrorEventArgs args)
+    {
+        logger.LogError(args.Exception, "Error processing reconcile trigger.");
+        return Task.CompletedTask;
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await _processor.StopProcessingAsync(cancellationToken);
+        _processor.ProcessMessageAsync -= ProcessMessageAsync;
+        _processor.ProcessErrorAsync -= ProcessErrorAsync;
+        await _processor.DisposeAsync();
+        await base.StopAsync(cancellationToken);
+    }
+}
+
+public sealed record ReconcileTrigger(string Name, string Namespace);
+```
+
+Register the background service alongside your operator:
+
+```csharp
+builder.Services
+    .AddSingleton<ServiceBusClient>(_ =>
+        new ServiceBusClient(configuration["ServiceBus:ConnectionString"]))
+    .AddKubernetesOperator()
+    .RegisterComponents();
+
+builder.Services.AddHostedService<DemoEntityReconcileTriggerService>();
+```
+
+:::note
+The message bus carries only a **pointer** to the resource (name and namespace), not a full
+resource snapshot. The operator always re-fetches the current state from the Kubernetes API.
+This keeps the operator's view of the world consistent with the API server — the single source
+of truth for all custom resource data.
+:::
+
+## Best Practices
+
+1. **Monitor consumer lag** on any external trigger channel to detect processing issues early.
+2. **Always re-fetch entity state** from the API server in external trigger consumers rather than deserialising resource state from the message payload.
+
+## Troubleshooting
+
+- Check queue permissions and quotas when using an external message broker as a reconciliation trigger
+- Monitor message processing errors in external trigger consumers
+- Ensure entities still exist before enqueuing — the Kubernetes API is the authoritative source of truth
+- If externally triggered reconciliations are not running, confirm the background service is registered and started correctly

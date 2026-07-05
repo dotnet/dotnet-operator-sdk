@@ -1,0 +1,268 @@
+---
+title: Customizing Resource Generation
+description: Replacing or extending the CRD, webhook, and event factories
+sidebar_position: 9
+---
+
+# Customizing Resource Generation
+
+KubeOps generates several Kubernetes resources at runtime through factory interfaces: CRDs (for the
+built-in installer), webhook configurations, and events. Each factory is registered with
+`TryAddSingleton`, so registering your own implementation **before** the operator registration takes
+precedence over the default. This page shows how to replace or extend each factory.
+
+## Customizing CRD generation
+
+:::note
+This section explains how you can customize CRD generation when using the built-in (runtime) [`CrdInstaller`](./crd-installer).
+CRD generation using the CLI is not affected.
+:::
+
+KubeOps uses `ICrdResourceFactory` to generate `V1CustomResourceDefinition` resources from your entity types. The default implementation (`KubeOpsCrdResourceFactory`) uses the transpiler to produce CRDs, but you can replace or extend this behavior.
+
+All factory interfaces are registered with `TryAddSingleton`, so registering your own implementation **before** calling `AddKubernetesOperator()` takes precedence over the default.
+
+### Replacing the factory
+
+Implement `ICrdResourceFactory` to take full control of CRD generation:
+
+```csharp
+public class CustomCrdResourceFactory : ICrdResourceFactory
+{
+    public IEnumerable<V1CustomResourceDefinition> CreateCustomResourceDefinitions(
+        IReadOnlyCollection<Type> entityTypes)
+    {
+        // Build CRDs however you need — from YAML files, a database, or custom logic.
+        foreach (var entityType in entityTypes)
+        {
+            yield return BuildCrdFromYaml(entityType);
+        }
+    }
+}
+```
+
+Register it before the operator:
+
+```csharp
+builder.Services.AddSingleton<ICrdResourceFactory, CustomCrdResourceFactory>();
+builder.Services.AddKubernetesOperator();
+```
+
+### Extending the default factory
+
+If you only need to tweak individual CRDs, inherit from `KubeOpsCrdResourceFactory` and override `CreateCrdForEntityType`:
+
+```csharp
+public class AnnotatedCrdResourceFactory : KubeOpsCrdResourceFactory
+{
+    protected override V1CustomResourceDefinition CreateCrdForEntityType(
+        MetadataLoadContext context, Type entityType)
+    {
+        var crd = base.CreateCrdForEntityType(context, entityType);
+
+        // Add custom labels to every generated CRD
+        crd.Metadata.Labels ??= new Dictionary<string, string>();
+        crd.Metadata.Labels["managed-by"] = "my-operator";
+
+        return crd;
+    }
+}
+```
+
+Register it the same way:
+
+```csharp
+builder.Services.AddSingleton<ICrdResourceFactory, AnnotatedCrdResourceFactory>();
+builder.Services.AddKubernetesOperator();
+```
+
+## Customizing webhook configuration generation
+
+KubeOps uses `IWebhookConfigurationFactory` to build the `V1MutatingWebhookConfiguration` and `V1ValidatingWebhookConfiguration` resources that are registered with the Kubernetes API server. The default implementation (`KubeOpsWebhookConfigurationFactory`) produces standard configurations, but you can replace or extend this behavior.
+
+All factory interfaces are registered with `TryAddSingleton`, so registering your own implementation **before** calling `UseCertificateProvider()` or `AddDevelopmentTunnel()` takes precedence over the default.
+
+### Replacing the Factory
+
+Implement `IWebhookConfigurationFactory` to take full control:
+
+```csharp
+public class CustomWebhookConfigurationFactory : IWebhookConfigurationFactory
+{
+    public V1MutatingWebhookConfiguration CreateMutatingConfiguration(
+        IEnumerable<MutatingWebhookRegistration> registrations)
+    {
+        // Build the configuration from scratch
+        return new V1MutatingWebhookConfiguration
+        {
+            Metadata = new() { Name = "my-operator-mutators" },
+            Webhooks = registrations.Select(r => new V1MutatingWebhook
+            {
+                Name = $"mutate.{r.Metadata.SingularName}",
+                // ... your custom configuration
+            }).ToList(),
+        }.Initialize();
+    }
+
+    public V1ValidatingWebhookConfiguration CreateValidatingConfiguration(
+        IEnumerable<ValidatingWebhookRegistration> registrations)
+    {
+        return new V1ValidatingWebhookConfiguration
+        {
+            Metadata = new() { Name = "my-operator-validators" },
+            Webhooks = registrations.Select(r => new V1ValidatingWebhook
+            {
+                Name = $"validate.{r.Metadata.SingularName}",
+                // ... your custom configuration
+            }).ToList(),
+        }.Initialize();
+    }
+}
+```
+
+Register it before the operator web configuration:
+
+```csharp
+builder.Services.AddSingleton<IWebhookConfigurationFactory, CustomWebhookConfigurationFactory>();
+builder.Services
+    .AddKubernetesOperator()
+    .RegisterComponents()
+    .UseCertificateProvider(/* ... */);
+```
+
+### Extending the Default Factory
+
+If you only need to customize individual webhooks, inherit from `KubeOpsWebhookConfigurationFactory` and override `CreateMutatingWebhook` or `CreateValidatingWebhook`:
+
+```csharp
+public class CustomWebhookFactory : KubeOpsWebhookConfigurationFactory
+{
+    protected override V1MutatingWebhook CreateMutatingWebhook(MutatingWebhookRegistration reg)
+    {
+        var webhook = base.CreateMutatingWebhook(reg);
+
+        // Customize the failure policy
+        webhook.FailurePolicy = "Ignore";
+
+        // Restrict to a specific namespace
+        webhook.NamespaceSelector = new V1LabelSelector
+        {
+            MatchLabels = new Dictionary<string, string>
+            {
+                ["kubernetes.io/metadata.name"] = "my-namespace",
+            },
+        };
+
+        return webhook;
+    }
+}
+```
+
+Register it the same way:
+
+```csharp
+builder.Services.AddSingleton<IWebhookConfigurationFactory, CustomWebhookFactory>();
+
+builder.Services
+    .AddKubernetesOperator()
+    .RegisterComponents()
+    .UseCertificateProvider(/* ... */);
+```
+
+Each registration record (`MutatingWebhookRegistration` / `ValidatingWebhookRegistration`) carries the entity `Metadata`, the webhook `Uri`, and the optional `CaBundle`, giving you all the information you need to build a fully customized webhook entry.
+
+## Customizing event generation
+
+KubeOps uses `IEventResourceFactory` to construct the `Corev1Event` instances that are published to Kubernetes. The default implementation (`KubeOpsEventResourceFactory`) creates events with a SHA-512 hashed name for Kubernetes naming compliance and populates standard fields from the operator settings. You can replace or extend this behavior.
+
+The factory is registered with `TryAddSingleton`, so registering your own implementation **before** calling `AddKubernetesOperator()` takes precedence over the default.
+
+### How the Default Works
+
+The default factory:
+
+1. Builds a composite string from the entity's UID, name, namespace, and the event's reason, message, and type.
+2. Hashes this string (SHA-512) to produce a deterministic, Kubernetes-compliant event name.
+3. Events with the same reason, message, and type for the same entity share the same name — the publisher increments `Count` and updates `LastTimestamp` instead of creating duplicates.
+
+### Replacing the Factory
+
+Implement `IEventResourceFactory` to take full control of event construction:
+
+```csharp
+public class CustomEventResourceFactory(OperatorSettings settings) : IEventResourceFactory
+{
+    public Corev1Event CreateEvent(
+        IKubernetesObject<V1ObjectMeta> entity,
+        string reason,
+        string message,
+        EventType type)
+    {
+        return new Corev1Event
+        {
+            Metadata = new()
+            {
+                Name = $"{entity.Name()}-{reason}-{Guid.NewGuid():N}",
+                NamespaceProperty = entity.Namespace() ?? "default",
+                Labels = new Dictionary<string, string>
+                {
+                    ["app.kubernetes.io/managed-by"] = settings.Name,
+                },
+            },
+            Type = type.ToString(),
+            Reason = reason,
+            Message = message,
+            ReportingComponent = settings.Name,
+            ReportingInstance = Environment.MachineName,
+            Source = new() { Component = settings.Name },
+            InvolvedObject = entity.MakeObjectReference(),
+        }.Initialize();
+    }
+}
+```
+
+Register it before the operator:
+
+```csharp
+builder.Services.AddSingleton<IEventResourceFactory, CustomEventResourceFactory>();
+builder.Services.AddKubernetesOperator();
+```
+
+Note that the above example will create a new distinct `Corev1Event` object for every event, because it is adding a new GUID to each event's name.
+
+### Extending the Default Factory
+
+Inherit from `KubeOpsEventResourceFactory` and override `CreateEvent` to add extra metadata while keeping the default naming and structure:
+
+```csharp
+public class EnrichedEventResourceFactory(OperatorSettings settings, ILogger<EventPublisher> logger)
+    : KubeOpsEventResourceFactory(settings, logger)
+{
+    public override Corev1Event CreateEvent(
+        IKubernetesObject<V1ObjectMeta> entity,
+        string reason,
+        string message,
+        EventType type)
+    {
+        var evt = base.CreateEvent(entity, reason, message, type);
+
+        // Add custom annotations
+        evt.Metadata.Annotations ??= new Dictionary<string, string>();
+        evt.Metadata.Annotations["my-operator/version"] = "1.0.0";
+
+        return evt;
+    }
+}
+```
+
+Register it the same way:
+
+```csharp
+builder.Services.AddSingleton<IEventResourceFactory, EnrichedEventResourceFactory>();
+builder.Services.AddKubernetesOperator();
+```
+
+:::note
+The `EventPublisher` handles get-or-create logic, count incrementing, and timestamp updates. Your factory only controls the initial shape of the `Corev1Event` — the publisher manages its lifecycle.
+To completely replace how events are published, add your own `IEventPublisherFactory` implementation to the service collection before calling `AddKubernetesOperator`.
+:::

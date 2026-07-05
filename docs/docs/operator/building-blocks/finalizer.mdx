@@ -67,7 +67,7 @@ public class DemoEntityFinalizer(
 
 ## Using Finalizers
 
-By default, KubeOps automatically attaches finalizers to entities during reconciliation. This behavior can be configured through `OperatorSettings`. See [Advanced Configuration](../advanced-configuration#finalizer-management) for details on controlling automatic finalizer attachment.
+By default, KubeOps automatically attaches finalizers to entities during reconciliation. This behavior can be configured through `OperatorSettings`. See [Advanced Configuration](../configuration/finalizer-lifecycle) for details on controlling automatic finalizer attachment.
 
 If you need manual control, you can use the `EntityFinalizerAttacher` delegate, which is injected into your controller:
 
@@ -233,21 +233,21 @@ To fix stuck resources:
 Only remove finalizers manually as a last resort. This can lead to orphaned resources and inconsistent cluster state.
 :::
 
-### 2. Race Conditions
+### 2. Assuming Finalizers Run in Parallel
 
-- Multiple finalizers running concurrently
-- Resources being deleted by other controllers
-- Network issues during cleanup
+KubeOps executes finalizers **sequentially, one at a time, in the order of the entity's finalizer
+list**: only the first finalizer is invoked; once it succeeds and is removed, the resulting
+`MODIFIED` event triggers the next one. Don't build finalizers that wait on each other — the
+later one simply won't run until the earlier one has completed. `DeletedAsync` on the controller
+fires only after **all** finalizers are removed.
 
-Solution: Implement proper error handling and retry logic.
+### 3. Blocking Deletion on an Unavailable Dependency
 
-### 3. Infinite Loops
-
-- Finalizer logic that never completes
-- Resources that can't be deleted
-- External dependencies that are unavailable
-
-Solution: Implement timeouts and fallback mechanisms.
+A finalizer that requires an external system to respond will keep the resource in `Terminating`
+for as long as that system is down. Decide per dependency what "cleanup impossible" means: fail
+and retry (default), or log and succeed when the external resource is already gone / the cleanup
+is not critical. Treat "not found" responses from external systems as success — that is the
+idempotency case from Best Practice 1.
 
 ## When to Use Finalizers
 

@@ -1,6 +1,10 @@
 {
-  "position": 4,
+  "position": 5,
   "label": "Building Blocks of an Operator",
   "collapsible": true,
-  "collapsed": false
+  "collapsed": false,
+  "link": {
+    "type": "generated-index",
+    "description": "The core components of every KubeOps operator: custom entities define your API, controllers reconcile the desired state, finalizers guarantee cleanup, and webhooks add admission control."
+  }
 }

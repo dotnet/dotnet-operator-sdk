@@ -1,6 +1,10 @@
 {
-  "position": 10,
+  "position": 11,
   "label": "Testing",
   "collapsible": true,
-  "collapsed": true
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "description": "How to test your operator: fast unit tests for controllers, finalizers, and webhooks, and integration tests against a real Kubernetes cluster."
+  }
 }

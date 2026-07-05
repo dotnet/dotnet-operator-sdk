@@ -45,6 +45,41 @@ When you create a controller, KubeOps automatically creates a resource watcher (
 - Triggers reconciliation when resources are added, modified, or deleted
 - Maintains a local cache of resources to reduce API server load
 
+## The Event Pipeline
+
+When a watch event arrives from the Kubernetes API server, KubeOps routes it through a fixed pipeline before your controller code runs:
+
+```mermaid
+flowchart TB
+    API[Kubernetes<br/>API Server]
+    W[ResourceWatcher]
+    Q[(TimedEntityQueue)]
+    B[EntityQueueBackgroundService]
+    R[Reconciler]
+    C[Your Controller<br/>ReconcileAsync / DeletedAsync]
+    F[Your Finalizer<br/>FinalizeAsync]
+
+    API -->|watch event| W
+    W -->|generation check / enqueue| Q
+    Q -->|dequeue after delay| B
+    B -->|acquire semaphore / UID lock| R
+    R -->|reconcile| C
+    R -->|finalize| F
+    C -.->|requeueAfter| Q
+    F -.->|requeueAfter| Q
+```
+
+| Component | Responsibility |
+|---|---|
+| `ResourceWatcher` | Receives raw watch events, skips events without a generation change, enqueues the rest |
+| `TimedEntityQueue` | Holds entries until their scheduled time; supports immediate and delayed dispatch |
+| `EntityQueueBackgroundService` | Controls parallelism via a global semaphore and per-UID locks before handing off to the reconciler |
+| `Reconciler` | Resolves the controller, manages finalizer attach/detach, calls either `ReconcileAsync`/`DeletedAsync` on the controller or `FinalizeAsync` on a registered finalizer |
+| Your Controller | Implements the business logic for desired-state reconciliation |
+| Your Finalizer | Runs cleanup logic before a resource is deleted; invoked instead of the controller when finalization is required |
+
+The `requeueAfter` path (dashed) is triggered when your controller returns a `ReconciliationResult` with a non-zero `RequeueAfter` value.
+
 ## Reconciliation Loop
 
 The reconciliation loop is the core of your operator's functionality. It consists of two main methods:
@@ -206,7 +241,7 @@ public class V1DemoEntityController(
 ```
 
 :::info[Durable Queue]
-By default, queue entries are held in memory and lost on operator restart. To back the queue with an external system, see [Advanced Configuration — Queue Strategy](../advanced-configuration#queue-strategy).
+By default, queue entries are held in memory and lost on operator restart. To back the queue with an external system, see [Advanced Configuration — Queue Strategy](../configuration/queue-strategy).
 :::
 
 ### Error Handling with Results
@@ -254,19 +289,14 @@ public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
 
 ## Important Considerations
 
-### Status Updates
+### What Triggers Reconciliation
 
-- Status updates do not trigger new reconciliation cycles
-- Only changes to the `Spec` section trigger reconciliation
-- Use status updates to track the current state of your resource
-
-### Generation-Based Deduplication
-
-KubeOps skips `MODIFIED` events that do not represent a spec change. The `ResourceWatcher` compares
-the incoming `.metadata.generation` against the last cached value. If the generation has not
-increased (e.g., a status-only update), the event is dropped before it reaches the queue. Your
-controller only sees events for which the spec has actually changed, or for which a
-`DeletionTimestamp` is set (finalizer handling).
+With the default settings, your controller only sees events for **spec changes** (and deletion
+handling): status, label, and annotation updates are deduplicated away before they reach the
+queue. This is intentional — write status from your controller without re-triggering yourself.
+The exact rules and the `ByResourceVersion` alternative are described in
+[Reconcile Strategy](../configuration/reconcile-strategy); the cache mechanics behind the
+deduplication in [Caching](../configuration/caching).
 
 ### Parallel Reconciliation
 
@@ -277,7 +307,7 @@ controller only sees events for which the spec has actually changed, or for whic
 
 When a second event for the same UID arrives while a reconciliation is in progress, the configured
 `ConflictStrategy` applies (`WaitForCompletion` by default). See
-[Advanced Configuration — Parallel Reconciliation](../advanced-configuration#parallel-reconciliation)
+[Advanced Configuration — Parallel Reconciliation](../configuration/parallel-reconciliation)
 to change the defaults.
 
 ### RBAC Requirements

@@ -1,0 +1,137 @@
+---
+title: Troubleshooting
+description: Diagnosing common operator problems
+sidebar_position: 13
+---
+
+# Troubleshooting
+
+This page collects the most common problems when running a KubeOps operator, their causes, and
+where to find the relevant configuration.
+
+## Reconciliation does not fire
+
+**Symptom:** You change a resource, but `ReconcileAsync` is never called.
+
+The most common causes, in order of likelihood:
+
+1. **The change does not increment `metadata.generation`.** With the default
+   [Reconcile Strategy](./configuration/reconcile-strategy) (`ByGeneration`), label and annotation
+   changes never trigger reconciliation, and status updates don't either when the CRD has a status
+   subresource (the default for KubeOps entities). Switch to `ByResourceVersion` only if your
+   controller must react to every write.
+2. **The event was deduplicated.** The watcher caches the last seen generation/resourceVersion per
+   object — see [Caching](./configuration/caching) for exactly which events are skipped.
+3. **The resource is outside the watched scope.** Check `OperatorSettings.Namespace` and any
+   [label or field selectors](./building-blocks/controllers#filtering-watched-resources) on the
+   controller — the API server only delivers matching objects.
+4. **The controller is not registered.** Verify `RegisterComponents()` (or an explicit
+   `AddController<,>()`) is called. Enable
+   [Registration Validation](./configuration/registration-validation) to fail fast at startup on
+   wiring gaps.
+
+## Reconciliation fires in an endless loop
+
+**Symptom:** The same entity is reconciled over and over without external changes.
+
+- With `ByResourceVersion`, **every write your controller performs** (including status updates)
+  produces a new watch event. Guard all writes: only update when the value actually changed — see
+  the [infinite-loop warning](./configuration/reconcile-strategy#byresourceversion).
+- A `RequeueAfter` returned unconditionally creates a periodic loop by design; make sure that is
+  intended.
+- Updating the **spec** inside `ReconcileAsync` re-triggers reconciliation even under
+  `ByGeneration` (spec changes increment the generation). Reconcilers should write status, not spec.
+
+## HTTP 409 Conflict on updates
+
+**Symptom:** `UpdateAsync`/`UpdateStatusAsync` fails with `Conflict`.
+
+Every mutating call returns the entity with a **new `resourceVersion`**. Reusing a stale reference
+for a subsequent call fails with 409. Always continue working with the entity instance returned by
+the client:
+
+```csharp
+entity = await client.UpdateStatusAsync(entity, cancellationToken); // use the returned entity
+```
+
+409s can also come from another actor (or a second operator instance without
+[leader election](./configuration/leader-election)) writing the same object concurrently. Treat
+them as retryable: re-fetch, re-apply, or simply let the failed reconciliation retry.
+
+## Entity is stuck in "Terminating"
+
+**Symptom:** A resource has a `DeletionTimestamp` but is never deleted.
+
+Kubernetes only deletes an object once its finalizer list is empty. The object stays in
+`Terminating` when:
+
+- a registered [finalizer](./building-blocks/finalizer) keeps failing or never returns success —
+  check the operator logs for the finalizer's errors;
+- the operator is **not running** (nothing processes the finalizer); or
+- a finalizer identifier is left over from a previous operator version that no longer registers it.
+
+As a last resort in development, remove the finalizer manually:
+
+```bash
+kubectl patch <resource> <name> --type merge -p '{"metadata":{"finalizers":null}}'
+```
+
+:::warning
+Manually removing finalizers skips your cleanup logic. Never do this routinely in production.
+:::
+
+## 403 Forbidden / RBAC errors
+
+**Symptom:** The operator logs `Forbidden` errors, watches never start, or leader election fails.
+
+The operator's service account is missing permissions. Declare what your operator needs with the
+[RBAC attributes](./rbac#rbac-attributes), regenerate the installation manifests (see
+[CLI](./cli)), and re-apply them. Leader election additionally needs the `leases` permissions from
+the [default RBAC rules](./rbac#default-rbac-rules). Note that RBAC problems rarely show up during
+local development, where you typically run with an admin kubeconfig.
+
+## Webhooks are not called or block resource operations
+
+**Symptom:** Admission requests fail, or creates/updates hang and fail with a webhook timeout.
+
+- The API server **requires TLS** for webhook endpoints — a webhook served over plain HTTP is
+  never called. See [Local Development Considerations](./building-blocks/webhooks#local-development-considerations)
+  for certificate options during development.
+- A webhook configuration with `FailurePolicy: Fail` **blocks resource operations** while the
+  webhook is unreachable. Decide consciously between `Fail` and `Ignore` — customizable via the
+  [webhook configuration factory](./configuration/generation-customization#customizing-webhook-configuration-generation).
+- Check that the webhook `Service`/URL in the generated configuration actually points at your
+  operator and that the CA bundle matches the serving certificate.
+
+## Watcher keeps reconnecting / `410 Gone` in logs
+
+**Symptom:** Log messages about the watcher reconnecting or restarting with a reset bookmark.
+
+This is usually **normal behavior**: the Kubernetes API server terminates long-running watch
+connections periodically, and `410 Gone` simply means the cached resource version expired — the
+watcher re-lists and continues. KubeOps reconnects automatically with exponential backoff.
+Investigate only if the operator makes no progress between reconnects; then check API server
+availability, network policies, and RBAC `watch` permissions.
+
+## CRDs are missing in the cluster
+
+**Symptom:** The operator starts, but watching fails because the CRD kind is unknown.
+
+Install the CRDs before or with the operator: generate them with the [CLI](./cli)
+(`kubeops generate operator`), apply them as part of the [deployment](./deployment), or — for
+development only — use the [CRD Installer](./configuration/crd-installer).
+
+## Leader election issues
+
+See [Leader Election — Troubleshooting](./configuration/leader-election#troubleshooting) for lease
+permissions, timing settings, and diagnosing leadership transitions.
+
+## Still stuck?
+
+- Raise the log level for the `KubeOps` category to `Trace` (see
+  [Logging](./observability/logging)) — the watcher and queue log every decision, including why an
+  event was skipped.
+- Check the [metrics](./observability/metrics) (`kubeops.operator.queue.depth`,
+  `kubeops.operator.reconciliation`, watcher events) to see where the pipeline stops.
+- Search the [GitHub issues](https://github.com/dotnet/dotnet-operator-sdk/issues) or ask on the
+  [Discord](https://discord.gg/ucUcxpPW8P).

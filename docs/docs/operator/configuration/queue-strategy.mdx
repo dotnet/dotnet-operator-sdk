@@ -1,0 +1,129 @@
+---
+title: Queue Strategy
+description: How reconciliation work is scheduled and dispatched
+sidebar_position: 2
+---
+
+# Queue Strategy
+
+KubeOps uses an internal queue to schedule and dispatch reconciliation work. The queue buffers events
+from the Kubernetes watch stream and feeds them to the reconciler at a controlled rate. The strategy
+is controlled via `OperatorSettings.QueueStrategy`.
+
+## `InMemory` (Default)
+
+```csharp
+builder.Services
+    .AddKubernetesOperator();
+// QueueStrategy defaults to QueueStrategy.InMemory
+```
+
+With `InMemory`, KubeOps registers `TimedEntityQueue<TEntity>` as `ITimedEntityQueue<TEntity>` and starts a
+queue-consumer hosted service. Which consumer is started depends on the configured `LeaderElectionType`:
+
+- `None`: `EntityQueueBackgroundService<TEntity>`.
+- `Single`: `LeaderAwareEntityQueueBackgroundService<TEntity>`, which drives the queue's leadership gate
+  (suspends intake and clears the queue on leadership loss). This is what provides the leadership-loss
+  protection.
+- `Custom`: no consumer is registered — you supply one yourself (see the
+  [custom leader election example](./leader-election#custom-leader-election)).
+
+All scheduling state lives in the operator pod's heap.
+
+When the same entity is scheduled multiple times before it becomes ready, the in-memory queue keeps
+one entry per namespace/name key. The entry scheduled to run earliest is kept, and later enqueue calls
+can update the reconciliation metadata for that scheduled entry. Scheduled entries are not removed by
+the reconciler while processing an API-server event.
+
+- **Advantages**: Zero configuration. Minimal latency between watch event and reconciliation call.
+- **Disadvantages**: Pending requeue timers are lost when the pod restarts. In practice this is
+  rarely critical because the Kubernetes watch list provides a full snapshot of existing resources
+  on startup and drives the operator back to convergence automatically.
+
+## `Custom`
+
+Setting `QueueStrategy.Custom` instructs KubeOps to skip registration of `ITimedEntityQueue<TEntity>`
+and `EntityQueueBackgroundService<TEntity>`. You supply both implementations yourself.
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings.WithQueueStrategy(QueueStrategy.Custom));
+
+// Register one ITimedEntityQueue<TEntity> per entity type
+builder.Services.AddSingleton<ITimedEntityQueue<V1DemoEntity>, MyCustomEntityQueue<V1DemoEntity>>();
+
+// Register one background service per entity type that drains the queue. Implement
+// IEntityQueueConsumer<TEntity> (or derive from EntityQueueBackgroundService<TEntity>) so that
+// registration validation can recognize it as the queue consumer.
+builder.Services.AddHostedService<MyCustomQueueBackgroundService<V1DemoEntity>>();
+```
+
+:::note
+Register one `ITimedEntityQueue<TEntity>` implementation and one corresponding background service
+for each entity type that should use the custom queue. The consumer should implement
+`IEntityQueueConsumer<TEntity>` (the built-in `EntityQueueBackgroundService<TEntity>` already does) — it
+is not required at runtime, but [registration validation](./registration-validation) uses it to confirm a
+consumer exists. With `LeaderElectionType.Single`, implement `ILeaderAwareEntityQueueConsumer<TEntity>`
+instead (or derive from `LeaderAwareEntityQueueBackgroundService<TEntity>`) so validation can confirm the
+consumer drives the leadership gate.
+:::
+
+Custom queues should follow the same de-duplication contract as the built-in implementation: keep at
+most one pending entry per namespace/name key and preserve the earliest scheduled execution time.
+
+`Enqueue` returns `Task<bool>`: return `true` when the entry was scheduled and `false` when it was
+dropped (for example because the `cancellationToken` was already cancelled, or — for a queue that
+implements `ISuspendableEntityQueue` — because intake is currently suspended). The reconciler and the
+queue consumer rely on this to avoid counting requeue metrics for work that was not actually scheduled,
+so returning the correct value keeps those metrics accurate.
+
+```csharp
+public Task<bool> Enqueue(
+    V1DemoEntity entity,
+    ReconciliationType type,
+    ReconciliationTriggerSource triggerSource,
+    TimeSpan queueIn,
+    int retryCount,
+    CancellationToken cancellationToken)
+{
+    if (cancellationToken.IsCancellationRequested)
+    {
+        return Task.FromResult(false); // dropped
+    }
+
+    // ... schedule the entry (de-duplicated by namespace/name) ...
+    return Task.FromResult(true); // scheduled
+}
+```
+
+:::warning[Leadership-loss semantics]
+The SDK's built-in queue discards a former leader's work on a leadership transition (see
+[Behavior on Leadership Loss](./leader-election#behavior-on-leadership-loss)). It does so through the optional
+`ISuspendableEntityQueue` capability — `SuspendIntake()`, `Clear()`, `ResumeIntake()` — which the built-in
+`TimedEntityQueue<TEntity>` implements. With `QueueStrategy.Custom` **both** the queue **and** its
+background consumer are yours; the SDK does not wire up a leader-aware consumer for you.
+
+So if you combine `QueueStrategy.Custom` with `LeaderElectionType.Single` and want the same guarantee
+(no stale entries, timed requeues, or error retries surviving a leadership transition), you must:
+
+- have your queue implement **`ISuspendableEntityQueue`** so that `SuspendIntake()` drops subsequent
+  enqueues, `Clear()` discards pending and scheduled entries, and the suspend/clear/enqueue paths are
+  mutually atomic; **and**
+- have your custom background consumer call `SuspendIntake()` + `Clear()` when leadership is lost and
+  `ResumeIntake()` when it is (re)acquired — or simply derive from / reuse the SDK's public
+  `LeaderAwareEntityQueueBackgroundService<TEntity>`, which already does this.
+
+`ISuspendableEntityQueue` is **opt-in** and separate from `ITimedEntityQueue<TEntity>`: a queue that does
+not implement it keeps working but provides no leadership-loss protection, and the leader-aware consumer
+logs a warning to make that explicit. If you do not need the guarantee (for example with
+`LeaderElectionType.None`), you can ignore the capability entirely.
+:::
+
+Use this strategy when you need scheduling behaviour that differs from the built-in timer-based
+queue — for example, priority queues or implementations that integrate with your own observability
+stack.
+
+## Best Practices
+
+1. **Use `InMemory`** for development and most production operators — the Kubernetes watch stream guarantees convergence on restart.
+2. **Use `Custom`** only when you need scheduling behaviour that the built-in queue cannot provide.

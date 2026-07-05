@@ -189,15 +189,15 @@ public class DemoFinalizer : IEntityFinalizer<V1DemoEntity>
 }
 ```
 
-:::info[Next Steps]
-The following sections will dive deeper into:
+:::info[Where to go next]
+A recommended reading path from here to a production-ready operator:
 
-- [CLI Usage](./cli) - Detailed CLI commands and options
-- [Custom Resources](./building-blocks/entities) - Creating and managing custom resources
-- [Controllers](./building-blocks/controllers) - Implementing reconciliation logic
-- [Finalizers](./building-blocks/finalizer) - Handling resource cleanup
-- [Webhooks](./building-blocks/webhooks) - Implementing validation and mutation webhooks
-- [Advanced Configuration](./advanced-configuration) - Leader election, durable queues, and finalizer management
+1. **Learn the building blocks** — [Custom Entities](./building-blocks/entities), [Controllers](./building-blocks/controllers), [Finalizers](./building-blocks/finalizer), and (if you need admission control) [Webhooks](./building-blocks/webhooks). The [Examples](./examples) show each of them in a runnable project.
+2. **Secure it** — declare the permissions your operator needs with [RBAC](./rbac).
+3. **Configure it** — tune reconciliation, queuing, and leader election in [Advanced Configuration](./configuration).
+4. **Test it** — write [unit and integration tests](./testing/unit-tests) for your controllers and finalizers.
+5. **Observe it** — wire up [logging, tracing, and metrics](./observability/logging).
+6. **Ship it** — generate manifests and deploy with the [CLI](./cli) and the [Deployment guide](./deployment).
 
 Make sure to read these sections before deploying your operator to production.
 :::

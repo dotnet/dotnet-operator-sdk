@@ -1,7 +1,7 @@
 ---
 title: Events
 description: Attach Events to your Entities
-sidebar_position: 4.5
+sidebar_position: 6
 ---
 
 # Events
@@ -57,7 +57,14 @@ Message: Started container myapp
 
 ## Publishing Events in KubeOps
 
-KubeOps provides an `EventPublisher` to create and update events for your custom resources. The publisher is available through dependency injection in your controllers.
+KubeOps provides an `EventPublisher` to create and update events for your custom resources. The publisher is available through dependency injection in your [controllers](./building-blocks/controllers) and [finalizers](./building-blocks/finalizer).
+
+:::note
+Publishing events requires write permissions on the `events` resource — these are part of the
+[default RBAC rules](./rbac#default-rbac-rules) KubeOps generates. To change how the event
+objects themselves are constructed (naming, labels, additional metadata), see
+[Customizing Resource Generation](./configuration/generation-customization#customizing-event-generation).
+:::
 
 ### Basic Usage
 
@@ -186,19 +193,18 @@ kubectl describe demo-entity my-entity
 
 ## Common Pitfalls
 
-1. **Too Many Events**:
+1. **Event spam from the reconcile loop**: Publishing an event on *every* `ReconcileAsync` call
+   floods etcd — reconciliations run on every spec change, requeue, and retry. Publish events for
+   **state transitions** (created, became ready, failed), not for no-op reconciliations. KubeOps
+   deduplicates identical events for you: the same entity + reason + message + type maps to the
+   same event name, so the publisher increments `Count` instead of creating a new object (see
+   [how the default factory works](./configuration/generation-customization#customizing-event-generation)).
 
-   - Creating events for every small change
-   - Not using the count field for repeated events
-   - Creating events that don't provide value
+2. **Dynamic values defeat deduplication**: Putting timestamps, counters, or exception `.ToString()`
+   output into the message makes every event unique — the `Count` aggregation stops working and
+   each occurrence becomes a separate object. Keep `reason` and `message` stable and put variable
+   details into logs instead.
 
-2. **Poor Event Quality**:
-
-   - Unclear or inconsistent messages
-   - Missing important context
-   - Not distinguishing between normal and warning events
-
-3. **Event Timing**:
-   - Creating events too early in the process
-   - Not updating events when conditions change
-   - Missing important state transitions
+3. **Wrong event type**: `EventType.Warning` should mean "a human may need to act" — using it for
+   routine conditions trains users to ignore warnings, while reporting real failures as `Normal`
+   hides them from `kubectl get events --field-selector type=Warning`.
