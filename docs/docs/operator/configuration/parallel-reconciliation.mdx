@@ -1,0 +1,62 @@
+---
+title: Parallel Reconciliation
+description: Concurrency limits and conflict handling
+sidebar_position: 3
+---
+
+# Parallel Reconciliation
+
+`EntityQueueBackgroundService` controls how many entities are reconciled simultaneously and what
+happens when two events for the same entity UID arrive at the same time.
+Both settings live on `OperatorSettings.ParallelReconciliation` and are configured through
+`OperatorSettingsBuilder.ParallelReconciliation` or via
+the `WithParallelReconciliation` fluent method.
+
+## Maximum Concurrency
+
+`MaxParallelReconciliations` sets the upper bound on concurrently running reconciliations across all
+entity types. The default is `Environment.ProcessorCount * 2`.
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithParallelReconciliation(p => p.WithMaxParallelReconciliations(16)));
+```
+
+A global `SemaphoreSlim` is acquired **before** an entry is dequeued, which means the queue acts as
+a natural buffer and back-pressure mechanism: producers (the watcher) can continue enqueuing while
+all reconciler slots are occupied.
+
+## Conflict Strategy
+
+When a second reconciliation event arrives for an entity that is already being reconciled, the
+`ConflictStrategy` determines what happens:
+
+| Strategy | Behaviour | Use when |
+|---|---|---|
+| `WaitForCompletion` _(default)_ | Blocks until the running reconciliation finishes, then processes the new request immediately | Ordering matters; no events should be dropped |
+| `Discard` | Drops the incoming request | Reconciler always reads fresh state from the API; duplicate events are safe to ignore |
+| `RequeueAfterDelay` | Places the incoming request back into the queue after `RequeueDelay` (default 5 s) | Events must not be dropped, but immediate blocking is undesirable |
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithParallelReconciliation(p => p
+            .WithMaxParallelReconciliations(8)
+            .WithConflictStrategy(ParallelReconciliationConflictStrategy.RequeueAfterDelay)
+            .WithRequeueDelay(TimeSpan.FromSeconds(3))));
+```
+
+:::note
+The per-UID lock is independent of the global semaphore. Even with `MaxParallelReconciliations = 1`,
+two events for *different* entities are never serialised by the UID lock; only events for the *same*
+UID are affected by `ConflictStrategy`.
+:::
+
+## Best Practices
+
+1. **Leave defaults for most operators** — `WaitForCompletion` with `ProcessorCount * 2` is a safe starting point
+2. **Use `Discard`** only when your reconciler always re-fetches entity state from the API server
+3. **Use `RequeueAfterDelay`** when events must not be dropped but you want to avoid blocking a worker slot
+4. **Raise `MaxParallelReconciliations`** if reconciliation is I/O-bound and CPU is not a constraint
+5. **Lower `MaxParallelReconciliations`** if the Kubernetes API server is rate-limiting your requests

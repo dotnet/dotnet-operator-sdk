@@ -1,0 +1,55 @@
+---
+title: How to Contribute
+description: Contributing to the KubeOps SDK
+sidebar_position: 1
+---
+
+# How to Contribute
+
+First of all, thank you for considering contributing to KubeOps! This is an open source project
+driven by the community. This project and everyone participating in it is governed by the
+[.NET Foundation Code of Conduct](https://dotnetfoundation.org/about/policies/code-of-conduct).
+
+The authoritative contribution guide lives in
+[`CONTRIBUTING.md`](https://github.com/dotnet/dotnet-operator-sdk/blob/main/CONTRIBUTING.md)
+in the repository; this section summarizes it and adds practical guidance for working on the SDK.
+
+## Creating / Reporting Issues
+
+Feel free to open an issue in the
+[issues section](https://github.com/dotnet/dotnet-operator-sdk/issues). There are three issue
+templates:
+
+- **Bug**: to report an issue/bug that prevents usage or is an inconvenience of KubeOps
+- **Feature request**: to report a new feature that would enhance KubeOps
+- **Documentation**: to report missing / wrong documentation
+
+Please search through the already created issues to find similarities before opening a new one.
+
+## Creating Pull Requests
+
+To directly contribute to the solution, create a fork of the repository and implement your
+addition. Keep in mind that reviewing takes some time and is not done instantly — the people
+working on the project are volunteers.
+
+- Adhere to the linting rules and the general code style in the repository. Do not change the
+  linting rules without creating a discussion/issue first.
+- Add tests for your changes (see [Running the SDK Tests](./running-sdk-tests)).
+- Name your PR following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary),
+  for example:
+  - `fix: Null exception during watcher process`
+  - `feat(core): Add new functionality`
+  - `feat(testing): expose kubernetes client for testing`
+  - `refactor: changed this and that`
+  - `docs: Add docs about KubeOps core`
+- **State breaking changes in the PR description.** The review process is faster when breaking
+  changes are well documented.
+
+PRs are squashed and merged into the default branch.
+
+## Documentation Changes
+
+The documentation (this site) lives in the repository under `docs/` and is built with
+[Docusaurus](https://docusaurus.io/). When a code change alters behavior — new settings, changed
+interfaces, new lifecycle steps, altered defaults — update the corresponding `.mdx` pages in the
+same PR.

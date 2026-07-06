@@ -1,0 +1,85 @@
+---
+title: Migration Guide
+description: Upgrading between major KubeOps versions
+sidebar_position: 14
+---
+
+# Migration Guide
+
+KubeOps releases follow [semantic versioning](https://semver.org/): breaking changes only happen in
+major versions, and every breaking change is flagged in the
+[release notes](https://github.com/dotnet/dotnet-operator-sdk/releases) (commits follow
+[Conventional Commits](https://www.conventionalcommits.org/), so breaking PRs are marked with `!`
+or a `BREAKING CHANGE` footer). This page summarizes the changes that require action when
+upgrading, starting with v11.
+
+## Upgrading from v10 to v11
+
+### Selector namespace renamed
+
+The `LabelSelectors` namespace was renamed to `Selectors` (it now also hosts the field selector
+types).
+
+```csharp
+// before (v10)
+using KubeOps.KubernetesClient.LabelSelectors;
+
+// after (v11)
+using KubeOps.KubernetesClient.Selectors;
+```
+
+**Migration:** rename the namespace in your `using` directives.
+
+### `DefaultEntityLabelSelector<TEntity>` is sealed
+
+Subclassing the default label selector is no longer possible.
+
+**Migration:** implement `IEntityLabelSelector<TEntity>` directly (the intended extension point)
+and register it via
+[`AddControllerWithLabelSelector`](./building-blocks/controllers#label-selectors):
+
+```csharp
+public class MySelector : IEntityLabelSelector<V1DemoEntity>
+{
+    public ValueTask<string?> GetLabelSelectorAsync(CancellationToken cancellationToken) =>
+        ValueTask.FromResult<string?>("app=my-operator");
+}
+```
+
+### New in v11 (non-breaking)
+
+- **Field selectors**: watches can now be filtered server-side by resource fields via
+  `IEntityFieldSelector<TEntity>` and `AddControllerWithFieldSelector` — see
+  [Filtering Watched Resources](./building-blocks/controllers#filtering-watched-resources).
+- **YamlDotNet 18**: the CLI/transpiler dependency was upgraded across v11 releases. If your
+  project serializes YAML itself and pins an older YamlDotNet, align the versions.
+
+## Unreleased changes (next major)
+
+The `main` branch — which this documentation describes — already contains breaking changes that
+will ship with the next major release:
+
+### Leader-loss-aware queue and reconciliation
+
+With `LeaderElectionType.Single`, the reconciliation queue is now gated on leadership: on
+leadership loss the queue's intake is suspended, in-flight reconciliations are cancelled, and
+pending entries are cleared (see
+[Behavior on Leadership Loss](./configuration/leader-election#behavior-on-leadership-loss)).
+
+Action required if you use custom queue components:
+
+- The `EntityQueue<TEntity>` delegate (formerly fire-and-forget) now returns **`Task<bool>`** —
+  `true` when the entry was scheduled, `false` when it was dropped (for example while intake is
+  suspended). `await` the delegate and handle a `false` result where it matters.
+- Custom `ITimedEntityQueue<TEntity>` implementations must return the correct scheduled/dropped
+  result from `Enqueue` and should implement `ISuspendableEntityQueue` when combined with
+  `LeaderElectionType.Single` — see [Queue Strategy](./configuration/queue-strategy).
+- Reconcilers must honor their `CancellationToken`, since leadership loss now cancels in-flight
+  reconciliations.
+
+:::tip
+This documentation is built from the `main` branch and may describe behavior that is not yet part
+of the release you are using. Check the
+[release notes](https://github.com/dotnet/dotnet-operator-sdk/releases) of your installed version
+when something does not match.
+:::

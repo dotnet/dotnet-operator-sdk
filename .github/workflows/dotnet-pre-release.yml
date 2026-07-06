@@ -41,6 +41,8 @@ jobs:
           cache-dependency-path: .release/package-lock.json
 
       - name: Setup Semantic Release
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
         run: |
           # --ignore-scripts blocks all dependencies' lifecycle scripts; the one
           # patch we need is then applied explicitly via patch-package.

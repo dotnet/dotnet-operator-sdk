@@ -1,0 +1,30 @@
+---
+title: Examples
+description: Runnable example operators in the repository
+sidebar_position: 3
+---
+
+# Examples
+
+The repository contains a set of small, runnable example operators under
+[`examples/`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples). They are the
+quickest way to see a working setup for a specific feature — clone the repository, point your
+kubeconfig at a local cluster, and run them from the IDE or with `dotnet run`.
+
+| Example | Demonstrates |
+|---|---|
+| [`Operator`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/Operator) | The core building blocks: custom entities, a controller, and a finalizer |
+| [`WebhookOperator`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/WebhookOperator) | Validation and mutation webhooks with `KubeOps.Operator.Web` |
+| [`ConversionWebhookOperator`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/ConversionWebhookOperator) | Conversion webhooks between entity versions |
+| [`OtelOperator`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/OtelOperator) | OpenTelemetry integration: logging with scopes, tracing, and metrics |
+| [`AspireOperator`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/AspireOperator) | An operator using the `KubeOps.Aspire` service defaults |
+| [`AspireAppHost`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/AspireAppHost) | A .NET Aspire AppHost orchestrating the operator via `KubeOps.Aspire.Hosting` |
+
+Where to go next:
+
+- New to KubeOps? Start with [Getting Started](./getting-started) and use
+  [`Operator`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/Operator) as a reference.
+- Building webhooks? See [Webhooks](./building-blocks/webhooks) together with the two webhook examples.
+- Wiring up telemetry? See [Observability](./observability/logging) and the
+  [`OtelOperator`](https://github.com/dotnet/dotnet-operator-sdk/tree/main/examples/OtelOperator) example.
+- Using .NET Aspire? See [.NET Aspire](./aspire) and the two Aspire examples.

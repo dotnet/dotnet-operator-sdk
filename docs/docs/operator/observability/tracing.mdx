@@ -1,0 +1,106 @@
+---
+title: Tracing
+description: Distributed tracing and OpenTelemetry
+sidebar_position: 2
+---
+
+# Tracing
+
+## Tracing with `System.Diagnostics` and `ActivitySource`
+
+For [distributed tracing](https://learn.microsoft.com/en-us/dotnet/core/diagnostics/distributed-tracing-concepts), this project uses `System.Diagnostics` in combination with `ActivitySource`.
+Activities can be started using `ActivitySource.StartActivity`.
+
+The operator registers an `ActivitySource` instance with the operator name in the dependency injection (DI) container. To use a custom `ActivitySource`, simply register your own, the DI will provide the last registered instance when requested.
+
+:::tip
+You can configure the operator name (and thus the `ActivitySource` name) via `OperatorSettings`:
+
+```csharp
+const string OperatorName = "my-operator";
+
+builder
+    .Services
+    .AddKubernetesOperator(settings => settings.Name = OperatorName);
+```
+
+If you're using OpenTelemetry, tracing must be explicitly configured in code. Make sure to add the same source name used when creating the `ActivitySource`.
+
+Also, create a `ResourceBuilder` to name your service properly in trace output:
+
+```csharp
+builder.Services
+    .AddOpenTelemetry()
+    .WithTracing(tracerProviderBuilder =>
+        tracerProviderBuilder
+            .SetResourceBuilder(
+                ResourceBuilder.CreateDefault()
+                    .AddService(serviceName: OperatorName, serviceVersion: "1.0.0"))
+            .AddSource(OperatorName));
+```
+
+:::
+
+## OpenTelemetry Configuration for Azure Logging
+
+To use OpenTelemetry with Azure, it is recommended to adopt the [Azure Monitor OpenTelemetry Distro](https://learn.microsoft.com/en-us/azure/azure-monitor/app/opentelemetry-enable).
+You can enable it via code:
+
+```csharp
+builder.Services
+    .AddOpenTelemetry()
+    .UseAzureMonitor();
+```
+
+### Full Example Configuration in `Program.cs` (or `Startup.cs`)
+
+A complete setup with logging, tracing, and OpenTelemetry might look like this:
+
+**`appsettings.json`:**
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "KubeOps": "Trace"
+    },
+    "Console": {
+      "FormatterName": "Simple",
+      "FormatterOptions": {
+        "IncludeScopes": true,
+        "SingleLine": true
+      }
+    },
+    "OpenTelemetry": {
+      "IncludeScopes": true,
+      "ParseStateValues": true,
+      "IncludeFormattedMessage": true
+    }
+  }
+}
+```
+
+**`Program.cs`:**
+
+```csharp
+const string OperatorName = "my-platform-operator";
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder
+    .Services
+    .AddKubernetesOperator(settings => settings.Name = OperatorName)
+    .RegisterComponents();
+
+builder
+    .Services
+    .AddOpenTelemetry()
+    .WithTracing(tracerProviderBuilder =>
+        tracerProviderBuilder
+            .SetResourceBuilder(
+                ResourceBuilder.CreateDefault()
+                    .AddService(serviceName: OperatorName, serviceVersion: "1.0.0"))
+            .AddSource(OperatorName))
+    .UseAzureMonitor();
+```

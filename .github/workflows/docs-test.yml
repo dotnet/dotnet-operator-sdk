@@ -25,6 +25,8 @@ jobs:
 
       - name: Install Dependencies
         working-directory: docs
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
         run: npm ci
 
       - name: Build Docusaurus

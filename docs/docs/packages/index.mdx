@@ -8,6 +8,22 @@ sidebar_position: 1
 
 KubeOps is designed to be modular, allowing you to include only the packages you need for your specific use case. This section provides detailed information about each package and its features.
 
+## Guide vs. Packages — where to read what
+
+The documentation is split into two sidebars:
+
+- **[Documentation](../operator)** (the operator guide) explains *concepts and how-tos*: how
+  controllers, finalizers, and webhooks work, how to configure, test, observe, and deploy an
+  operator. Start there when you want to *build* something.
+- **Packages** (this section) is the *per-package reference*: what each NuGet package contains,
+  when you need it, and how to install it. Each page embeds the package README and ends with an
+  **API Reference** section linking to the full public API surface on FuGet/NuGet. Come here when
+  you need to know *which package provides a type* or what a package's exact API looks like.
+
+As a rule of thumb: most operators only reference `KubeOps.Operator` (which pulls in
+`KubeOps.Abstractions` and `KubeOps.KubernetesClient`), add `KubeOps.Operator.Web` for webhooks,
+and use `KubeOps.Cli` as a tool — everything else is opt-in.
+
 ## Core Packages
 
 - [KubeOps.Abstractions](./abstractions) - Core interfaces and attributes

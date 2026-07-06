@@ -1,0 +1,49 @@
+---
+title: Running the SDK Tests
+description: Executing the SDK's unit and integration test suites
+sidebar_position: 3
+---
+
+# Running the SDK Tests
+
+The SDK's test projects live under `test/`, one per package. Two kinds of tests exist:
+
+- **Unit tests** run without any external dependency.
+- **Integration tests** (files named `*.Integration.Test.cs`, grouped in the
+  `[Collection("Integration Tests")]` xUnit collection) require a **running Kubernetes cluster**
+  reachable through your current kubeconfig context. The CI uses [kind](https://kind.sigs.k8s.io/);
+  locally any cluster works (kind, minikube, Docker Desktop, …).
+
+:::caution
+Integration tests create and delete resources (CRDs, namespaces, custom resources) in the cluster
+of your **current kubeconfig context**. Only run them against a disposable development cluster.
+:::
+
+## Commands
+
+```bash
+# Run all tests (requires a cluster for the integration tests)
+dotnet test
+
+# Run tests for a specific project
+dotnet test test/KubeOps.Operator.Test/KubeOps.Operator.Test.csproj
+
+# Run only unit tests (skip integration tests) — no cluster required
+dotnet test test/KubeOps.Operator.Test/ --filter "FullyQualifiedName!~Integration"
+
+# Run a single test by name
+dotnet test --filter "FullyQualifiedName~MyTestClass.MyTestMethod"
+```
+
+## Test Conventions
+
+- Tests use **xUnit v3** and **FluentAssertions** (`.Should().Be(...)` style).
+- Test files follow the pattern `{Subject}.Test.cs` for unit tests and
+  `{Subject}.Integration.Test.cs` for tests that need a live cluster.
+- Integration tests inherit `IntegrationTestBase`, override
+  `ConfigureHost(HostApplicationBuilder)` to wire up the operator under test, and use
+  `TestNamespaceProvider` for namespace isolation. The shared integration collection disables
+  parallelization and installs the required CRDs once per run.
+
+When you add a feature, cover it with unit tests; if it changes the watch → queue → reconcile
+behavior against a real API server, add an integration test as well.

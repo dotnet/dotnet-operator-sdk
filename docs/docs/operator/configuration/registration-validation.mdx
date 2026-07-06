@@ -1,0 +1,59 @@
+---
+title: Registration Validation
+description: Startup validation of the operator's DI registrations
+sidebar_position: 8
+---
+
+# Registration Validation
+
+The operator can verify, on host startup, that its service registrations are complete and consistent with
+the configured `LeaderElectionType` and `QueueStrategy`. This is **disabled by default**; enable it with:
+
+```csharp
+builder.Services.AddKubernetesOperator(settings => settings
+    .WithRegistrationValidation());
+```
+
+When enabled, every managed entity is checked for the components its configuration requires — an
+`IReconciler<TEntity>`, a resource watcher, an `ITimedEntityQueue<TEntity>`, and a queue consumer. If
+anything is missing, host startup aborts with an `InvalidRegistrationException` that lists the gaps —
+turning a silent misconfiguration (an operator that starts but processes nothing) into an immediate,
+actionable error.
+
+Most registrations are wired up by the SDK automatically, so validation simply passes. It is most useful
+when you register components yourself — for example with `LeaderElectionType.Custom`, where the watcher
+and queue consumer are your responsibility — and a forgotten registration would otherwise go unnoticed.
+It also:
+
+- flags entities that have a finalizer but no controller, since finalizers run as part of reconciliation
+  and need a controller to execute; and
+- with `LeaderElectionType.Single`, requires leadership-loss protection to actually be wired up: the
+  registered queue must implement `ISuspendableEntityQueue` (when its implementation type can be inspected)
+  **and** the consumer must implement `ILeaderAwareEntityQueueConsumer<TEntity>` (i.e. actually drive the
+  gate). The built-in `TimedEntityQueue<TEntity>` and `LeaderAwareEntityQueueBackgroundService<TEntity>`
+  already do.
+
+:::note
+Components are recognized by the SDK types they derive from / implement: the watcher from
+`ResourceWatcher<TEntity>`, the queue consumer from `IEntityQueueConsumer<TEntity>` (or, under `Single`,
+`ILeaderAwareEntityQueueConsumer<TEntity>`), and the queue's leadership gate from `ISuspendableEntityQueue`.
+`EntityQueueBackgroundService<TEntity>` / `LeaderAwareEntityQueueBackgroundService<TEntity>` implement
+these.
+
+Recognition is by **registered implementation type**, so components must be registered with a concrete
+type (`AddHostedService<TConcrete>()`, `AddSingleton<TService, TImpl>()`). Open-generic registrations such
+as `AddSingleton(typeof(ITimedEntityQueue<>), typeof(MyQueue<>))` are understood (the implementation is
+closed to the entity type). A component registered through a DI factory delegate exposes no type: a
+factory-registered watcher or consumer is reported as missing, and under `Single` a factory-registered
+queue is reported as unverifiable (its `ISuspendableEntityQueue` capability cannot be checked). Register
+these concretely, or keep validation disabled. Keyed registrations are ignored — the watcher, reconciler
+and consumer take their dependencies unkeyed, so a keyed registration would not satisfy them at runtime.
+:::
+
+:::info[Scope of the check]
+Validation confirms that the **registrations** required by your configuration are present and SDK-conform —
+that an `ITimedEntityQueue<TEntity>` implements `ISuspendableEntityQueue` and the consumer implements
+`ILeaderAwareEntityQueueConsumer<TEntity>` under `Single`. It does **not** prove those components behave
+correctly — for example that a custom consumer actually calls `SuspendIntake()`/`Clear()`/`ResumeIntake()`
+on leadership transitions. Treat it as a wiring check, not a behavioral guarantee.
+:::
