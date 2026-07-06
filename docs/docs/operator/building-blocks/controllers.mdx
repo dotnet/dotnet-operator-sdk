@@ -80,7 +80,7 @@ flowchart TB
 
 The `requeueAfter` path (dashed) is triggered when your controller returns a `ReconciliationResult` with a non-zero `RequeueAfter` value.
 
-KubeOps creates one such pipeline — watcher, queue, and background service — **per registered controller**. Multiple controllers for the same entity type (for example with different label selectors) therefore run fully independent pipelines that never suppress each other's events — see [Multiple Controllers per Entity](#multiple-controllers-per-entity). With the opt-in `WatchStrategy.SharedPerEntity`, a single shared watcher per entity type replaces the per-controller watchers and dispatches each event to all pipelines whose label selectors match — see [Advanced Configuration](../advanced-configuration) for the trade-offs.
+KubeOps creates one such pipeline — watcher, queue, and background service — **per registered controller**. Multiple controllers for the same entity type (for example with different label selectors) therefore run fully independent pipelines that never suppress each other's events — see [Multiple Controllers per Entity](#multiple-controllers-per-entity). With the opt-in `WatchStrategy.SharedPerEntity`, a single shared watcher per entity type replaces the per-controller watchers and dispatches each event to all pipelines whose label selectors match — see [Watch Strategy](../configuration/watch-strategy) for the trade-offs.
 
 ## Reconciliation Loop
 
@@ -501,7 +501,7 @@ Notes:
   controllers per entity it cannot be resolved from a singleton.
 - N controllers means N watch connections per entity type by default. If that becomes a concern
   (many controllers, many objects, overlapping selectors), switch to the shared watch mode — see
-  [`WatchStrategy` in Advanced Configuration](../advanced-configuration).
+  [Watch Strategy](../configuration/watch-strategy).
 
 ## Common Pitfalls
 
