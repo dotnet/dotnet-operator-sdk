@@ -11,10 +11,10 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.LeaderElection;
 using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using ZiggyCreatures.Caching.Fusion;
@@ -30,7 +30,6 @@ public class LeaderAwareResourceWatcher<TEntity>(
     IEntityLabelSelector<TEntity> labelSelector,
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
-    IHostApplicationLifetime hostApplicationLifetime,
     LeaderElector elector,
     OperatorMetrics? metrics = null)
     : ResourceWatcher<TEntity>(
@@ -45,71 +44,68 @@ public class LeaderAwareResourceWatcher<TEntity>(
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private CancellationTokenSource _cts = new();
-    private bool _disposed;
+    private LeaderElectionSubscription? _subscription;
 
-    public override async Task StartAsync(CancellationToken cancellationToken)
+    public override Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogDebug("Subscribe for leadership updates.");
 
-        elector.OnStartedLeading += StartedLeading;
-        elector.OnStoppedLeading += StoppedLeading;
+        _subscription ??= new(elector, StartedLeading, StoppedLeading);
+        _subscription.Subscribe();
 
-        if (elector.IsLeader())
-        {
-            using CancellationTokenSource linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cts.Token);
-            await base.StartAsync(linkedCancellationTokenSource.Token);
-        }
+        // Only start watching while leadership is actually held. StartedLeading/StoppedLeading restart and stop
+        // the base watch loop on leadership transitions.
+        return _subscription.IsLeader ? base.StartAsync(cancellationToken) : Task.CompletedTask;
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)
     {
         logger.LogDebug("Unsubscribe from leadership updates.");
-        if (_disposed)
-        {
-            return Task.CompletedTask;
-        }
+        _subscription?.Unsubscribe();
 
-        elector.OnStartedLeading -= StartedLeading;
-        elector.OnStoppedLeading -= StoppedLeading;
-
-        return elector.IsLeader() ? base.StopAsync(cancellationToken) : Task.CompletedTask;
+        // Always delegate to the base stop: it drains the watch loop, bounded by the host shutdown token, so the
+        // watcher is reliably awaited and torn down on host shutdown even when leadership was already lost.
+        return base.StopAsync(cancellationToken);
     }
 
-    protected override void Dispose(bool disposing)
-    {
-        if (!disposing)
-        {
-            return;
-        }
-
-        _cts.Dispose();
-        elector.Dispose();
-        _disposed = true;
-
-        base.Dispose(disposing);
-    }
+    /// <inheritdoc/>
+    protected override void OnDisposing() => _subscription?.Unsubscribe();
 
     private void StartedLeading()
     {
         logger.LogInformation("This instance started leading, starting watcher.");
 
-        if (_cts.IsCancellationRequested)
-        {
-            _cts.Dispose();
-            _cts = new();
-        }
-
-        base.StartAsync(_cts.Token);
+        // The base watcher recreates its cancellation source when it was previously cancelled, so this
+        // restarts the watch after a leadership loss. The token passed here is unused by the base watcher.
+        base.StartAsync(CancellationToken.None);
     }
 
     private void StoppedLeading()
     {
-        _cts.Cancel();
-
         logger.LogInformation("This instance stopped leading, stopping watcher.");
 
-        EntityCache.Clear();
-        _ = base.StopAsync(hostApplicationLifetime.ApplicationStopped);
+        // Stop FIRST: this runs inside the elector's OnStoppedLeading callback, so the safety-critical action
+        // (abort the watch so a former leader stops enqueuing) must not be skipped by a failure in the best-effort
+        // cache cleanup below. RequestStopAsync is non-blocking on purpose — we no longer hold leadership, so we
+        // cancel and move on without waiting (the host-shutdown drain is a separate path).
+        _ = RequestStopAsync();
+
+        // EntityCache is a single named cache shared by all entity watchers (keyed by entity UID). Remove only THIS
+        // entity type's entries (tagged with EntityCacheTag) so a leadership loss does not wipe the dedup tokens of
+        // unrelated entity types that share this cache instance. Best-effort and guarded: a cache that has tagging
+        // disabled (custom configuration) would throw, and that exception must not propagate into the elector
+        // callback (it would be misattributed as a leadership-hold failure).
+        try
+        {
+            EntityCache.RemoveByTag(EntityCacheTag);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(
+                e,
+                "Failed to drop deduplication cache entries for {Entity} on leadership loss. The watch has still " +
+                "been stopped; stale dedup tokens may briefly survive into the next leadership term.",
+                typeof(TEntity).Name);
+        }
     }
 }

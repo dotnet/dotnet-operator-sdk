@@ -1,0 +1,35 @@
+---
+title: CRD Installer
+description: Installing CRDs from the operator during development
+sidebar_position: 10
+---
+
+# CRD Installer
+
+:::warning[Destructive Utility]
+The CRD Installer is a powerful utility intended **only for development environments**. Depending on its settings, it can overwrite or delete existing CRDs, which may lead to data loss or cluster instability. **Never use this in production!**
+:::
+
+When developing operators, you may want to quickly install or update CustomResourceDefinitions (CRDs) in your cluster. The `CrdInstaller` service automates this process, making it easier to iterate on CRD changes during development.
+If the Kubernetes API server is temporarily unavailable when the operator starts, the installer logs the error and retries in the background with backoff instead of stopping the host startup.
+
+## How to Add the CRD Installer
+
+To enable the CRD installer, add the following to your operator's `Program.cs`:
+
+```csharp
+builder.Services
+    .AddKubernetesOperator()
+#if DEBUG
+    .AddCrdInstaller(c => c
+        .WithOverwriteExisting()
+        .WithDeleteOnShutdown())
+#endif
+    .RegisterComponents();
+```
+
+- `WithOverwriteExisting()`: Existing CRDs with the same name will be **overwritten**. This is useful for development but can be destructive if used in production, as it may cause data loss.
+- `WithDeleteOnShutdown()`: All CRDs installed by the operator will be **deleted** when the operator shuts down. This is extremely destructive and should only be used in disposable development environments.
+
+The CRDs are produced by the `ICrdResourceFactory`, which can be replaced or extended — see
+[Customizing Resource Generation](./generation-customization#customizing-crd-generation).

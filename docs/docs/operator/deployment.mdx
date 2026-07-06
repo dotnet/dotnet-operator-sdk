@@ -1,7 +1,7 @@
 ---
 title: Deployment
 description: Deploying your KubeOps Operator
-sidebar_position: 9
+sidebar_position: 12
 ---
 
 # Deployment
@@ -159,35 +159,32 @@ kubectl apply -f https://github.com/your-org/your-operator/releases/download/v1.
 
 ## Best Practices
 
-1. **Versioning**:
-
-   - Use semantic versioning for releases
-   - Tag Docker images with specific versions
-   - Include version information in CRDs
+1. **Image and CRD versioning**: Tag operator images with the release version (never deploy
+   `latest`) and version your entities via the `ApiVersion` in the
+   [`[KubernetesEntity]` attribute](./building-blocks/entities#entity-attributes). Introducing a
+   new entity version requires a [conversion webhook](./building-blocks/webhooks#conversion-webhooks)
+   so existing objects stay readable.
 
 2. **Security**:
 
-   - Use non-root users in Docker images
-   - Implement proper RBAC rules
-   - Scan images for vulnerabilities
+   - Use non-root users in Docker images (the generated Dockerfile already does)
+   - Implement proper [RBAC](./rbac) rules following the principle of least privilege
+   - Serve webhooks over TLS with valid certificates (see [Webhooks — Local Development Considerations](./building-blocks/webhooks#local-development-considerations) for certificate options)
 
-3. **Monitoring**:
+3. **Observability**: Configure resource requests/limits in the deployment manifest and wire up
+   [logging, tracing, and metrics](./observability/logging) — the
+   [queue and reconciliation metrics](./observability/metrics) are the fastest way to see whether
+   a deployed operator is actually processing events.
 
-   - Set up proper health checks
-   - Configure resource limits
-   - Implement logging and metrics
+4. **Replicas and leader election**: A single replica is the simplest correct setup. When you run
+   **more than one replica**, you must configure
+   [`LeaderElectionType.Single`](./configuration/leader-election) — without it, every instance
+   reconciles every event, causing duplicate side effects and conflicting writes.
 
-4. **High Availability**:
-
-   - Run multiple replicas for redundancy
-   - Configure leader election for coordinated operation (see [Advanced Configuration - Leader Election](./advanced-configuration#custom-leader-election))
-   - Consider namespace-based distribution for horizontal scaling
-   - Implement durable requeue mechanisms for reliability (see [Advanced Configuration - Custom Requeue Mechanism](./advanced-configuration#custom-requeue-mechanism))
-
-5. **Updates**:
-   - Document upgrade procedures
-   - Test upgrades in staging
-   - Provide rollback instructions
+5. **CRD updates**: Applying a changed CRD affects **existing objects**. Never remove or
+   incompatibly change fields that stored objects still use; add new versions instead and migrate
+   via [conversion webhooks](./building-blocks/webhooks#conversion-webhooks). Test CRD upgrades
+   against a copy of real objects before rolling them out.
 
 ## Common Issues
 
@@ -202,6 +199,7 @@ kubectl apply -f https://github.com/your-org/your-operator/releases/download/v1.
    - Verify service account permissions
    - Check role bindings
    - Review operator logs
+   - See [RBAC](./rbac) for the attributes that declare the required permissions
 
 3. **CRD Installation**:
    - Check CRD compatibility

@@ -21,7 +21,6 @@ using KubeOps.Operator.Queue;
 using KubeOps.Operator.Reconciliation;
 using KubeOps.Operator.Retry;
 
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using ZiggyCreatures.Caching.Fusion;
@@ -38,15 +37,20 @@ public class ResourceWatcher<TEntity>(
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     OperatorMetrics? metrics = null)
-    : IHostedService, IAsyncDisposable, IDisposable
+    : RestartableHostedService
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private CancellationTokenSource _cancellationTokenSource = new();
-    private uint _watcherReconnectRetries;
-    private Task? _eventWatcher;
-    private bool _disposed;
+    private readonly string[] _entityCacheTags = [typeof(TEntity).FullName ?? typeof(TEntity).Name];
 
-    ~ResourceWatcher() => Dispose(false);
+    private uint _watcherReconnectRetries;
+
+    /// <summary>
+    /// Gets the tag applied to every cached deduplication entry of this entity type. The dedup cache is a single
+    /// named FusionCache instance shared by all entity watchers (keyed by entity UID); the tag lets a
+    /// leadership-aware subclass drop only <em>this</em> entity type's entries (see
+    /// <see cref="LeaderAwareResourceWatcher{TEntity}"/>) instead of clearing every entity's entries.
+    /// </summary>
+    protected string EntityCacheTag => _entityCacheTags[0];
 
     /// <summary>
     /// Gets the fusion cache used to store a strategy-dependent deduplication token for each
@@ -60,8 +64,9 @@ public class ResourceWatcher<TEntity>(
     /// <remarks>
     /// <para>
     /// Subclasses may access this cache to read or invalidate cached tokens. For example,
-    /// <see cref="LeaderAwareResourceWatcher{TEntity}"/> calls <see cref="IFusionCache.Clear"/>
-    /// when leadership is lost to ensure stale data is not carried over to the next watch session.
+    /// <see cref="LeaderAwareResourceWatcher{TEntity}"/> removes this entity type's entries by
+    /// <see cref="EntityCacheTag"/> when leadership is lost, so stale data is not carried over to the next watch
+    /// session — without disturbing other entity types that share this cache instance.
     /// </para>
     /// <para>
     /// Note: when an entity has a <c>DeletionTimestamp</c> set (finalizer processing), the
@@ -71,96 +76,36 @@ public class ResourceWatcher<TEntity>(
     /// </para>
     /// </remarks>
     protected IFusionCache EntityCache { get; } = cacheProvider.GetCache(
-        settings.ReconcileStrategy == ReconcileStrategy.ByResourceVersion
-            ? CacheConstants.CacheNames.ResourceWatcherByResourceVersion
-            : CacheConstants.CacheNames.ResourceWatcher);
+        CacheConstants.ResourceWatcherCacheNameFor(settings.ReconcileStrategy));
 
-    public virtual Task StartAsync(CancellationToken cancellationToken)
+    /// <inheritdoc/>
+    public override Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("Starting resource watcher for {ResourceType}.", typeof(TEntity).Name);
-
-        if (_cancellationTokenSource.IsCancellationRequested)
-        {
-            _cancellationTokenSource.Dispose();
-            _cancellationTokenSource = new();
-        }
-
-        _eventWatcher = WatchClientEventsAsync(_cancellationTokenSource.Token);
-
+        var result = base.StartAsync(cancellationToken);
         logger.LogInformation("Started resource watcher for {ResourceType}.", typeof(TEntity).Name);
-        return Task.CompletedTask;
+        return result;
     }
 
-    public virtual async Task StopAsync(CancellationToken cancellationToken)
+    /// <inheritdoc/>
+    public override Task StopAsync(CancellationToken cancellationToken)
     {
         logger.LogInformation("Stopping resource watcher for {ResourceType}.", typeof(TEntity).Name);
-        if (_disposed)
-        {
-            return;
-        }
-
-        await _cancellationTokenSource.CancelAsync();
-        if (_eventWatcher is not null)
-        {
-            await _eventWatcher.WaitAsync(cancellationToken);
-        }
-
-        logger.LogInformation("Stopped resource watcher for {ResourceType}.", typeof(TEntity).Name);
+        return base.StopAsync(cancellationToken);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await StopAsync(CancellationToken.None);
-        await DisposeAsyncCore();
-        GC.SuppressFinalize(this);
-    }
+    /// <inheritdoc/>
+    protected override void OnLoopFaulted(Exception exception) =>
+        logger.LogError(
+            exception,
+            "The watch loop for {ResourceType} exited unexpectedly and stopped watching.",
+            typeof(TEntity).Name);
 
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
+    /// <inheritdoc/>
+    protected override void DisposeManagedResources() => client.Dispose();
 
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!disposing)
-        {
-            return;
-        }
-
-        _cancellationTokenSource.Dispose();
-        _eventWatcher?.Dispose();
-        client.Dispose();
-
-        _disposed = true;
-    }
-
-    protected virtual async ValueTask DisposeAsyncCore()
-    {
-        if (_eventWatcher is not null)
-        {
-            await CastAndDispose(_eventWatcher);
-        }
-
-        await CastAndDispose(_cancellationTokenSource);
-        await CastAndDispose(client);
-
-        _disposed = true;
-
-        return;
-
-        static async ValueTask CastAndDispose(IDisposable resource)
-        {
-            if (resource is IAsyncDisposable resourceAsyncDisposable)
-            {
-                await resourceAsyncDisposable.DisposeAsync();
-            }
-            else
-            {
-                resource.Dispose();
-            }
-        }
-    }
+    /// <inheritdoc/>
+    protected override ValueTask DisposeManagedResourcesAsync() => CastAndDisposeAsync(client);
 
     protected virtual async Task OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
     {
@@ -227,7 +172,7 @@ public class ResourceWatcher<TEntity>(
             }
         }
 
-        await entityQueue
+        var enqueued = await entityQueue
             .Enqueue(
                 entity,
                 eventType.ToReconciliationType(),
@@ -235,6 +180,15 @@ public class ResourceWatcher<TEntity>(
                 queueIn: TimeSpan.Zero,
                 retryCount: 0,
                 cancellationToken);
+
+        if (!enqueued)
+        {
+            logger
+                .LogTrace(
+                    """Enqueue of "{Identifier}" was dropped; leaving deduplication cache unchanged.""",
+                    entity.ToIdentifierString());
+            return;
+        }
 
         if (eventType == WatchEventType.Deleted)
         {
@@ -249,6 +203,7 @@ public class ResourceWatcher<TEntity>(
                     await EntityCache.SetAsync(
                         deletionTrackingEntry.CacheKey,
                         deletionTrackingEntry.Fingerprint,
+                        tags: _entityCacheTags,
                         token: cancellationToken);
 
                     break;
@@ -256,6 +211,7 @@ public class ResourceWatcher<TEntity>(
                     await EntityCache.SetAsync(
                         entity.Uid(),
                         entity.Generation() ?? 1,
+                        tags: _entityCacheTags,
                         token: cancellationToken);
 
                     break;
@@ -263,6 +219,7 @@ public class ResourceWatcher<TEntity>(
                     await EntityCache.SetAsync(
                         entity.Uid(),
                         entity.ResourceVersion(),
+                        tags: _entityCacheTags,
                         token: cancellationToken);
 
                     break;
@@ -270,33 +227,22 @@ public class ResourceWatcher<TEntity>(
         }
     }
 
-    private static string GetDeletionCacheKey(TEntity entity)
-        => $"{entity.Uid()}:deletion";
-
-    private static string GetDeletionFingerprint(TEntity entity)
-        => string.Join(
-            ':',
-            "deleting",
-            entity.Metadata.DeletionTimestamp?.ToUniversalTime().ToString("O"),
-            entity.Metadata.DeletionGracePeriodSeconds,
-            entity.Generation(),
-            string.Join(',', entity.Finalizers() ?? []));
-
-    private async Task WatchClientEventsAsync(CancellationToken stoppingToken)
+    /// <inheritdoc/>
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         string? currentVersion = null;
 
-        while (!stoppingToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
                 await foreach ((WatchEventType type, TEntity entity) in client.WatchAsync<TEntity>(
                                    settings.Namespace,
                                    resourceVersion: currentVersion,
-                                   labelSelector: await labelSelector.GetLabelSelectorAsync(stoppingToken),
-                                   fieldSelector: await fieldSelector.GetFieldSelectorAsync(stoppingToken),
+                                   labelSelector: await labelSelector.GetLabelSelectorAsync(cancellationToken),
+                                   fieldSelector: await fieldSelector.GetFieldSelectorAsync(cancellationToken),
                                    allowWatchBookmarks: true,
-                                   cancellationToken: stoppingToken))
+                                   cancellationToken: cancellationToken))
                 {
                     using var activity = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
                     using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(type, entity));
@@ -318,7 +264,7 @@ public class ResourceWatcher<TEntity>(
 
                     try
                     {
-                        await OnEventAsync(type, entity, stoppingToken);
+                        await OnEventAsync(type, entity, cancellationToken);
                     }
                     catch (Exception e)
                     {
@@ -333,7 +279,7 @@ public class ResourceWatcher<TEntity>(
 
                 _watcherReconnectRetries = 0;
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 break;
             }
@@ -346,10 +292,10 @@ public class ResourceWatcher<TEntity>(
             }
             catch (Exception e)
             {
-                await OnWatchErrorAsync(e);
+                await OnWatchErrorAsync(e, cancellationToken);
             }
 
-            if (stoppingToken.IsCancellationRequested)
+            if (cancellationToken.IsCancellationRequested)
             {
                 break;
             }
@@ -360,7 +306,19 @@ public class ResourceWatcher<TEntity>(
         }
     }
 
-    private async Task OnWatchErrorAsync(Exception e)
+    private static string GetDeletionCacheKey(TEntity entity)
+        => $"{entity.Uid()}:deletion";
+
+    private static string GetDeletionFingerprint(TEntity entity)
+        => string.Join(
+            ':',
+            "deleting",
+            entity.Metadata.DeletionTimestamp?.ToUniversalTime().ToString("O"),
+            entity.Metadata.DeletionGracePeriodSeconds,
+            entity.Generation(),
+            string.Join(',', entity.Finalizers() ?? []));
+
+    private async Task OnWatchErrorAsync(Exception e, CancellationToken cancellationToken)
     {
         switch (e)
         {
@@ -390,7 +348,15 @@ public class ResourceWatcher<TEntity>(
             "There were {Retries} errors / retries in the watcher. Wait {Seconds}s before next attempt to connect.",
             _watcherReconnectRetries,
             delay.TotalSeconds);
-        await Task.Delay(delay);
+
+        try
+        {
+            await Task.Delay(delay, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Stop or leadership loss during the backoff
+        }
     }
 
     private sealed record DeletionTrackingEntry(string CacheKey, string Fingerprint);

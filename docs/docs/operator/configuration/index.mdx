@@ -1,0 +1,37 @@
+---
+title: Advanced Configuration
+description: Advanced Operator Configuration Options
+---
+
+# Advanced Configuration
+
+KubeOps works out of the box with sensible defaults. This section covers everything you can tune
+when the defaults no longer fit: reconciliation behavior, queuing, leader election, validation,
+and customization of generated resources.
+
+## Configuring the Operator
+
+Pass a configuration callback to `AddKubernetesOperator` to customise the operator before it starts.
+Every option has a sensible default, so you only need to configure what you want to change:
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithNamespace("my-namespace")
+        .WithLeaderElection(LeaderElectionType.Single));
+```
+
+Each `With*` method corresponds to one of the options described on the pages of this section:
+
+| Page | What it controls |
+|---|---|
+| [Reconcile Strategy](./reconcile-strategy) | Which watch events trigger a reconciliation (`ByGeneration` vs. `ByResourceVersion`) |
+| [Queue Strategy](./queue-strategy) | How reconciliation work is scheduled and dispatched (`InMemory` vs. `Custom`) |
+| [Parallel Reconciliation](./parallel-reconciliation) | Concurrency limits and conflict handling for simultaneous reconciliations |
+| [Leader Election](./leader-election) | How multiple operator instances coordinate (`None`, `Single`, `Custom`) |
+| [Finalizer Lifecycle](./finalizer-lifecycle) | Automatic attachment and detachment of finalizers |
+| [External Reconciliation Triggers](./external-triggers) | Requesting reconciliation from outside the watch stream (HTTP, message bus) |
+| [Caching](./caching) | The watcher's event deduplication cache (FusionCache) |
+| [Registration Validation](./registration-validation) | Startup validation of the operator's DI registrations |
+| [Customizing Resource Generation](./generation-customization) | Replacing or extending the CRD, webhook, and event factories |
+| [CRD Installer](./crd-installer) | Installing CRDs from the operator during development |

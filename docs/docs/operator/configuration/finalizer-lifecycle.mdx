@@ -1,0 +1,75 @@
+---
+title: Finalizer Lifecycle
+description: Automatic attachment and detachment of finalizers
+sidebar_position: 5
+---
+
+# Finalizer Lifecycle
+
+KubeOps provides automatic finalizer attachment and detachment to ensure proper resource cleanup. These features can be configured through `OperatorSettings`. For implementing finalizers themselves, see [Finalizers](../building-blocks/finalizer).
+
+## Auto-Attach Finalizers
+
+By default, KubeOps automatically attaches finalizers to entities during reconciliation. This ensures that cleanup operations are performed before resources are deleted.
+
+When `AutoAttachFinalizers` is enabled:
+- Finalizers are automatically added to entities during reconciliation
+- You don't need to manually call the `EntityFinalizerAttacher` delegate
+- All registered finalizers for an entity type are automatically attached
+
+When disabled:
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings.WithAutoAttachFinalizers(false));
+```
+
+You must then attach finalizers manually via the `EntityFinalizerAttacher` delegate injected into
+your controller — see [Finalizers — Using Finalizers](../building-blocks/finalizer#using-finalizers)
+for a complete example.
+
+## Auto-Detach Finalizers
+
+KubeOps automatically removes finalizers after successful finalization. This can also be configured.
+
+When `AutoDetachFinalizers` is enabled:
+- Finalizers are automatically removed when `FinalizeAsync` returns success
+
+When disabled:
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings.WithAutoDetachFinalizers(false));
+```
+
+You must manually manage finalizer removal, which is typically not recommended unless you have specific requirements.
+
+## Use Cases
+
+**Keep defaults enabled** when:
+- You want standard finalizer behavior
+- Your finalizers follow the typical pattern
+- You don't need fine-grained control
+
+**Disable auto-attach** when:
+- You need conditional finalizer attachment
+- Different instances should have different finalizers
+- You want to attach finalizers based on specific conditions
+
+**Disable auto-detach** when:
+- You need custom finalizer removal logic
+- You want to coordinate multiple finalizers manually
+- You have external systems that need to confirm cleanup
+
+## Best Practices
+
+1. **Keep defaults enabled** for most use cases
+2. **Monitor finalizer attachment** in your logs
+3. **Test finalizer behavior** in development before production
+4. **Handle finalizer failures** gracefully with proper error messages
+
+## Troubleshooting
+
+**Finalizers not attaching:**
+
+- Check `settings.AutoAttachFinalizers` is `true`
+- Verify finalizer is registered with `AddFinalizer<TFinalizer, TEntity>()`
+- Check logs for finalizer attachment errors

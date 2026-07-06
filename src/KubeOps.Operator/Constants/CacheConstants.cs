@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using KubeOps.Abstractions.Builder;
+
 namespace KubeOps.Operator.Constants;
 
 /// <summary>
@@ -9,6 +11,17 @@ namespace KubeOps.Operator.Constants;
 /// </summary>
 public static class CacheConstants
 {
+    /// <summary>
+    /// Returns the resource-watcher dedup cache name for the given reconcile strategy. Single source of truth
+    /// shared by the cache registration, the watcher, and the registration validator.
+    /// </summary>
+    /// <param name="strategy">The configured reconcile strategy.</param>
+    /// <returns>The named FusionCache instance name to use for that strategy.</returns>
+    public static string ResourceWatcherCacheNameFor(ReconcileStrategy strategy) =>
+        strategy == ReconcileStrategy.ByResourceVersion
+            ? CacheNames.ResourceWatcherByResourceVersion
+            : CacheNames.ResourceWatcher;
+
     /// <summary>
     /// Contains constant values representing names used within the operator's caching mechanisms.
     /// </summary>

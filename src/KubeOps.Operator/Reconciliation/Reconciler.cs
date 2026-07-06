@@ -63,7 +63,7 @@ internal sealed class Reconciler<TEntity>(
 
         if (result.RequeueAfter.HasValue)
         {
-            await entityQueue
+            var scheduled = await entityQueue
                 .Enqueue(
                     result.Entity,
                     reconciliationContext.EventType,
@@ -72,7 +72,12 @@ internal sealed class Reconciler<TEntity>(
                     retryCount: 0,
                     cancellationToken);
 
-            metrics?.RecordRequeue(typeof(TEntity).Name, "operator_requeue");
+            // Only count the requeue when it was actually scheduled. A leadership-aware queue with suspended
+            // intake (leadership just lost) drops the entry and returns false.
+            if (scheduled)
+            {
+                metrics?.RecordRequeue(typeof(TEntity).Name, "operator_requeue");
+            }
         }
 
         return result;

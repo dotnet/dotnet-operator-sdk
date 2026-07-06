@@ -46,4 +46,31 @@ public sealed class CacheExtensionsTest
 
         configuratorInvoked.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task Default_ResourceWatcher_Cache_Supports_Per_Entity_Tag_Removal()
+    {
+        // The leadership-aware watcher relies on FusionCache tagging: each dedup entry is tagged with its entity
+        // type, and on leadership loss only that type's entries are dropped via RemoveByTag. This verifies the
+        // default cache registration actually supports tagging at runtime (the unit tests elsewhere mock the cache),
+        // and that a tag removal affects only the matching entries.
+        var services = new ServiceCollection();
+        services.WithResourceWatcherEntityCaching(
+            new OperatorSettingsBuilder { ReconcileStrategy = ReconcileStrategy.ByGeneration }.Build());
+        var provider = services.BuildServiceProvider();
+        var cache = provider.GetRequiredService<IFusionCacheProvider>()
+            .GetCache(CacheConstants.CacheNames.ResourceWatcher);
+
+        var token = TestContext.Current.CancellationToken;
+        await cache.SetAsync("uid-a", 1L, tags: ["EntityA"], token: token);
+        await cache.SetAsync("uid-b", 2L, tags: ["EntityB"], token: token);
+
+        await cache.RemoveByTagAsync("EntityA", token: token);
+
+        (await cache.TryGetAsync<long>("uid-a", token: token)).HasValue
+            .Should().BeFalse("EntityA's tagged entry must be removed");
+        var remaining = await cache.TryGetAsync<long>("uid-b", token: token);
+        remaining.HasValue.Should().BeTrue("EntityB's entry shares the cache but a different tag");
+        remaining.Value.Should().Be(2L);
+    }
 }

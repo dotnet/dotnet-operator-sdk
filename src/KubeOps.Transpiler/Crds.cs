@@ -5,6 +5,7 @@
 using System.Collections;
 using System.Collections.ObjectModel;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using k8s;
@@ -208,7 +209,7 @@ public static class Crds
             { } attr => attr.GetCustomAttributeCtorArg<string>(context, 0) ?? prop.Name,
         };
 
-        return $"{name[..1].ToLowerInvariant()}{name[1..]}";
+        return JsonNamingPolicy.CamelCase.ConvertName(name);
     }
 
     private static IEnumerable<V1CustomResourceColumnDefinition> MapPrinterColumns(

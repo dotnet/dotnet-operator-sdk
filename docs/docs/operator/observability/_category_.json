@@ -1,0 +1,10 @@
+{
+  "position": 9,
+  "label": "Observability",
+  "collapsible": true,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "description": "Logging, tracing, and metrics for your operator."
+  }
+}

@@ -1,0 +1,55 @@
+---
+title: Development Setup
+description: Setting up a local development environment for the SDK
+sidebar_position: 2
+---
+
+# Development Setup
+
+To set up a local development environment for working on KubeOps itself, you'll need to perform
+the following steps:
+
+- Check out the [repository](https://github.com/dotnet/dotnet-operator-sdk) (or your fork).
+- If you want to run an operator locally, you'll need some Kubernetes instance. This can be any
+  Kubernetes instance you'd like:
+  - Local Kubernetes in Docker for Mac/Windows
+  - minikube, kind, or any other local Kubernetes
+  - A deployed Kubernetes instance (e.g. a cloud-managed cluster)
+
+## Repository Layout
+
+| Folder | Content |
+|---|---|
+| `src/` | The SDK packages (`KubeOps.Abstractions`, `KubeOps.Operator`, `KubeOps.Operator.Web`, `KubeOps.Generator`, `KubeOps.Transpiler`, `KubeOps.KubernetesClient`, `KubeOps.Cli`, `KubeOps.Templates`, …) |
+| `test/` | Unit and integration test projects, one per package |
+| `examples/` | Runnable example operators used for manual testing (see [Examples](../examples)) |
+| `docs/` | This documentation site (Docusaurus) |
+
+## Building and Linting
+
+```bash
+# Build the entire solution
+dotnet build
+
+# Build in Release mode — warnings are treated as errors!
+dotnet build --configuration Release
+
+# Check linting (must pass before merging)
+dotnet format --verify-no-changes
+
+# Auto-fix formatting
+dotnet format
+```
+
+:::warning[Warnings are errors in Release]
+Any compiler or analyzer warning fails the `Release` build. Make sure new code compiles
+warning-free and run `dotnet format` before pushing.
+:::
+
+## Testing Your Changes
+
+Use the implementations in the `examples/` folder to test your changes manually against a cluster.
+Those examples may also be extended, or new ones added, for testing purposes.
+
+Write automated tests for your changes — see [Running the SDK Tests](./running-sdk-tests) for how
+the test suites are organized and executed.

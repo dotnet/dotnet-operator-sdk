@@ -1,5 +1,8 @@
 # KubeOps.Aspire.Hosting
 
+[![NuGet](https://img.shields.io/nuget/v/KubeOps.Aspire.Hosting?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Aspire.Hosting)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.Aspire.Hosting?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Aspire.Hosting)
+
 `KubeOps.Aspire.Hosting` is the [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) **hosting** integration for KubeOps operators. It lets you orchestrate a KubeOps operator project as a resource inside a .NET Aspire AppHost.
 
 It is the AppHost-side counterpart to the [`KubeOps.Aspire`](https://www.nuget.org/packages/KubeOps.Aspire) service-defaults integration.
@@ -40,6 +43,15 @@ var dev = builder.AddKubernetesEnvironment("dev");
 
 builder.AddKubeOps<Projects.AspireOperator>("operator")
     .RunWithKubernetes(dev, run => run.WithPersistentCrds());
+```
+
+`RunWithKubernetes` also has a generic overload that accepts any `IResourceWithConnectionString` whose connection string is a kubeconfig path — for example a `K3sClusterResource` from the CommunityToolkit Aspire k3s integration. It injects the cluster's `KUBECONFIG` into the operator process, waits for the cluster, starts the operator automatically, and manages CRDs identically:
+
+```csharp
+var k3s = builder.AddK3sCluster("k3s");
+
+builder.AddKubeOps<Projects.AspireOperator>("operator")
+    .RunWithKubernetes(k3s);
 ```
 
 When the AppHost uses Aspire's Kubernetes publishing support, `PublishAsKubernetesOperator(k8s)` invokes `kubeops generate operator` and appends the generated CRDs, RBAC resources, and service account to the Aspire-generated Helm chart. The operator deployment itself remains Aspire-owned, but KubeOps' generated deployment settings are merged into that workload so the chart deploys one correctly wired operator deployment.

@@ -1,5 +1,8 @@
 # KubeOps.Aspire
 
+[![NuGet](https://img.shields.io/nuget/v/KubeOps.Aspire?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Aspire)
+[![NuGet Pre-Release](https://img.shields.io/nuget/vpre/KubeOps.Aspire?label=NuGet&logo=nuget)](https://www.nuget.org/packages/KubeOps.Aspire)
+
 `KubeOps.Aspire` is the [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) **service defaults** integration for KubeOps operators. It is the operator-side counterpart to the [`KubeOps.Aspire.Hosting`](https://www.nuget.org/packages/KubeOps.Aspire.Hosting) AppHost integration.
 
 A single call wires up the cross-cutting concerns that Aspire expects from a well-behaved resource:

@@ -4,6 +4,7 @@
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 
 using Aspire.Hosting.ApplicationModel;
@@ -158,6 +159,53 @@ public static class KubeOpsHostingExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Configures a KubeOps operator project to run locally against a cluster resource that exposes its kubeconfig
+    /// path as a connection string.
+    /// </summary>
+    /// <remarks>
+    /// This overload targets cluster resources that are not <see cref="KubernetesEnvironmentResource"/>s but expose a
+    /// kubeconfig path through <see cref="IResourceWithConnectionString"/> — for example a
+    /// <c>K3sClusterResource</c> from the CommunityToolkit Aspire k3s integration, whose connection string is the
+    /// host-accessible kubeconfig path. The operator process receives the cluster's <c>KUBECONFIG</c> (via
+    /// <c>WithReference</c>), waits for the cluster to become ready (via <c>WaitFor</c>), starts automatically, and has
+    /// its CRDs managed according to the configured <see cref="KubeOpsRunCrdMode"/>.
+    /// </remarks>
+    /// <typeparam name="TResource">The cluster resource type exposing a kubeconfig path as its connection string.</typeparam>
+    /// <param name="builder">The operator project resource builder.</param>
+    /// <param name="target">The cluster resource used by the local operator process.</param>
+    /// <param name="configure">Configures local run behavior.</param>
+    /// <returns>The same project builder after local run configuration is attached.</returns>
+    public static IResourceBuilder<ProjectResource> RunWithKubernetes<TResource>(
+        this IResourceBuilder<ProjectResource> builder,
+        IResourceBuilder<TResource> target,
+        Action<KubeOpsRunOptions>? configure = null)
+        where TResource : class, IResource, IResourceWithConnectionString
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(target);
+
+        RemoveExplicitStart(builder.Resource);
+
+        var publishAnnotation = builder.Resource.Annotations.OfType<KubeOpsPublishAnnotation>().SingleOrDefault()
+            ?? throw new InvalidOperationException(
+                $"{nameof(RunWithKubernetes)} can only be used with project resources added via " +
+                $"{nameof(AddKubeOps)}.");
+
+        // Inject the cluster's KUBECONFIG into the operator process and defer start/CRD prep until it is ready.
+        builder.WithReference(target);
+        builder.WaitFor(target);
+
+        var options = new KubeOpsRunOptions(
+            target.Resource,
+            cancellationToken => target.Resource.GetConnectionStringAsync(cancellationToken));
+        configure?.Invoke(options);
+        var runAnnotation = new KubeOpsRunAnnotation(options);
+        builder.Resource.Annotations.Add(runAnnotation);
+        ConfigureKubeOpsRun(builder, publishAnnotation, runAnnotation);
+        return builder;
+    }
+
     private static KubeOpsKubernetesManifestOptions CreateDefaultManifestOptions(string name)
         => new()
         {
@@ -242,6 +290,8 @@ public static class KubeOpsHostingExtensions
             return;
         }
 
+        var kubeConfigPath = await run.Options.ResolveKubeConfigPathAsync(cancellationToken);
+
         foreach (var crd in GenerateKubeOpsJsonResources(publish.ProjectPath, publish.Options)
                      .Where(resource => IsKind(resource, "CustomResourceDefinition")))
         {
@@ -251,7 +301,7 @@ public static class KubeOpsHostingExtensions
                 continue;
             }
 
-            var exists = await KubernetesResourceExistsAsync(run.Options.Target, "crd", name, cancellationToken);
+            var exists = await KubernetesResourceExistsAsync(kubeConfigPath, "crd", name, cancellationToken);
             if (run.Options.CrdMode is KubeOpsRunCrdMode.RequireExisting)
             {
                 if (!exists)
@@ -266,7 +316,7 @@ public static class KubeOpsHostingExtensions
 
             if (!exists || run.Options.CrdMode is KubeOpsRunCrdMode.Persistent)
             {
-                await ApplyKubernetesJsonAsync(run.Options.Target, crd, cancellationToken);
+                await ApplyKubernetesJsonAsync(kubeConfigPath, crd, cancellationToken);
             }
 
             if (!exists && run.Options.CrdMode is KubeOpsRunCrdMode.Ephemeral)
@@ -285,10 +335,12 @@ public static class KubeOpsHostingExtensions
             return;
         }
 
+        var kubeConfigPath = await run.Options.ResolveKubeConfigPathAsync(cancellationToken);
+
         foreach (var crd in run.CreatedCrds)
         {
             await RunKubectlAsync(
-                run.Options.Target,
+                kubeConfigPath,
                 ["delete", "crd", crd, "--ignore-not-found"],
                 cancellationToken,
                 throwOnError: false);
@@ -296,13 +348,13 @@ public static class KubeOpsHostingExtensions
     }
 
     private static async Task<bool> KubernetesResourceExistsAsync(
-        KubernetesEnvironmentResource target,
+        string? kubeConfigPath,
         string kind,
         string name,
         CancellationToken cancellationToken)
     {
         var exitCode = await RunKubectlAsync(
-            target,
+            kubeConfigPath,
             ["get", kind, name, "-o", "name"],
             cancellationToken,
             throwOnError: false);
@@ -311,7 +363,7 @@ public static class KubeOpsHostingExtensions
     }
 
     private static async Task ApplyKubernetesJsonAsync(
-        KubernetesEnvironmentResource target,
+        string? kubeConfigPath,
         JsonObject resource,
         CancellationToken cancellationToken)
     {
@@ -321,7 +373,7 @@ public static class KubeOpsHostingExtensions
 
         try
         {
-            await RunKubectlAsync(target, ["apply", "-f", file], cancellationToken);
+            await RunKubectlAsync(kubeConfigPath, ["apply", "-f", file], cancellationToken);
         }
         finally
         {
@@ -329,8 +381,12 @@ public static class KubeOpsHostingExtensions
         }
     }
 
+    [SuppressMessage(
+        "Major Code Smell",
+        "S4036:Searching OS commands in PATH is security-sensitive",
+        Justification = "kubectl is intentionally resolved from PATH; its location is environment-specific and cannot be hardcoded.")]
     private static async Task<int> RunKubectlAsync(
-        KubernetesEnvironmentResource target,
+        string? kubeConfigPath,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken,
         bool throwOnError = true)
@@ -343,10 +399,10 @@ public static class KubeOpsHostingExtensions
             UseShellExecute = false,
         };
 
-        if (!string.IsNullOrWhiteSpace(target.KubeConfigPath))
+        if (!string.IsNullOrWhiteSpace(kubeConfigPath))
         {
             startInfo.ArgumentList.Add("--kubeconfig");
-            startInfo.ArgumentList.Add(target.KubeConfigPath);
+            startInfo.ArgumentList.Add(kubeConfigPath);
         }
 
         foreach (var argument in arguments)
@@ -717,23 +773,23 @@ public static class KubeOpsHostingExtensions
 
     private static bool TryGetInt32(JsonNode? node, out int value)
     {
-        if (node is JsonValue jsonValue && jsonValue.TryGetValue<int>(out value))
+        if (node is JsonValue jsonValue && jsonValue.TryGetValue(out value))
         {
             return true;
         }
 
-        value = default;
+        value = 0;
         return false;
     }
 
     private static bool TryGetInt64(JsonNode? node, out long value)
     {
-        if (node is JsonValue jsonValue && jsonValue.TryGetValue<long>(out value))
+        if (node is JsonValue jsonValue && jsonValue.TryGetValue(out value))
         {
             return true;
         }
 
-        value = default;
+        value = 0;
         return false;
     }
 

@@ -9,8 +9,52 @@ import Operator from "../../../src/KubeOps.Operator/README.md";
 
 <Operator />
 
+## Serialization Helper
+
+When working with custom entities, you may need to serialize or deserialize them to and from JSON, especially when interacting with the Kubernetes API or for testing purposes. `KubeOps` provides a helper class, `KubernetesJsonSerializer`, to make this process straightforward and consistent with Kubernetes conventions.
+
+### Example Usage
+
+Get the Kubernetes specific `JsonSerializerOptions`:
+
+```csharp
+var options = KubernetesJsonSerializer.SerializerOptions;
+```
+
+Serialize an entity:
+
+```csharp
+var entity = new V1DemoEntity { /* ... initialize ... */ };
+string json = KubernetesJsonSerializer.Serialize(entity);
+```
+
+Deserialize an entity:
+
+```csharp
+string json = /* JSON string from Kubernetes */;
+var entity = KubernetesJsonSerializer.Deserialize<V1DemoEntity>(json);
+```
+
+With custom `JsonSerializerOptions`:
+
+```csharp
+var options = new JsonSerializerOptions { WriteIndented = true };
+string json = KubernetesJsonSerializer.Serialize(entity, options);
+```
+
+### API Overview
+
+- `Serialize(object value, JsonSerializerOptions? options = null)`: Serializes an object to a JSON string.
+- `Deserialize<T>(...)`: Deserializes JSON (from string, stream, `JsonDocument`, `JsonElement`, or `JsonNode`) to a strongly-typed object.
+
+This helper ensures your custom entities are always serialized and deserialized in a way that's compatible with Kubernetes expectations.
+
 ## Related Packages
 
 - [KubeOps.Abstractions](./abstractions) - Core interfaces and attributes
 - [KubeOps.Operator.Web](./operator-web) - Web support for webhooks
 - [KubeOps.KubernetesClient](./kubernetes-client) - Enhanced Kubernetes client
+
+## API Reference
+
+Browse the full public API surface of `KubeOps.Operator` on [FuGet](https://www.fuget.org/packages/KubeOps.Operator) or find the package on [NuGet](https://www.nuget.org/packages/KubeOps.Operator).

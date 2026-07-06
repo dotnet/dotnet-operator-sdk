@@ -4,6 +4,8 @@ description: Caching - Memory and Distributed
 sidebar_position: 7
 ---
 
+# Caching
+
 ## ResourceWatcher
 
 The `ResourceWatcher` uses a [FusionCache](https://github.com/ZiggyCreatures/FusionCache/blob/main/docs/AGentleIntroduction.md)
@@ -11,7 +13,7 @@ instance to deduplicate watch events before forwarding them to the reconciler.
 The cache key is always the resource's `metadata.uid`.
 
 Which value is cached — and therefore which events are skipped — depends on the configured
-[Reconcile Strategy](./advanced-configuration.mdx#reconcile-strategy).
+[Reconcile Strategy](./reconcile-strategy).
 
 ### `ByGeneration` (Default)
 
@@ -81,6 +83,18 @@ Via `OperatorSettings.ConfigureResourceWatcherEntityCache`, an `Action<IFusionCa
 provided that configures the **active** cache (whichever strategy is selected). To configure both
 caches individually, register named FusionCache instances directly on the DI container using the
 FusionCache builder API.
+
+:::warning[Tagging must stay enabled]
+The resource watcher tags every deduplication entry with its entity type so that a leadership-aware
+watcher can, on leadership loss, drop only that type's entries via FusionCache's `RemoveByTag` (without
+wiping the dedup tokens of other entity types that share the same named cache). FusionCache tagging is
+enabled by default — if you supply a custom cache configuration, do **not** disable it
+(`FusionCacheOptions.DisableTagging`), otherwise the tagged writes throw at runtime.
+
+If you enable `OperatorSettings.ValidateRegistrations`, this is checked at startup: a cache with tagging
+disabled aborts host startup with a clear `InvalidRegistrationException` instead of failing later at
+runtime.
+:::
 
 **Example: L2 cache for the default `ByGeneration` strategy**
 

@@ -87,16 +87,16 @@ public sealed class ReplaceEntityRequeueIntegrationTest : IntegrationTestBase
             EntityQueue<V1OperatorIntegrationTestEntity> queue)
         : IEntityController<V1OperatorIntegrationTestEntity>
     {
-        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+        public async Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
         {
             // schedule on first invocation
             if (svc.Invocations.Count == 0)
             {
-                queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromSeconds(5), retryCount: 0, TestContext.Current.CancellationToken);
+                await queue(entity, ReconciliationType.Modified, ReconciliationTriggerSource.Operator, TimeSpan.FromSeconds(5), retryCount: 0, TestContext.Current.CancellationToken);
             }
             svc.Invocation(entity);
 
-            return Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
+            return ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity);
         }
 
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
