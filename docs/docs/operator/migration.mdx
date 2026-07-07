@@ -138,8 +138,10 @@ rely on the SDK's registration.
 ### New in v13 (non-breaking)
 
 - **Multiple controllers per entity**: register several `IEntityController<TEntity>` for the same
-  entity with different selectors — both fire for objects matching both selectors. See
-  [Multiple Controllers per Entity](./building-blocks/controllers#multiple-controllers-per-entity).
+  entity with different selectors — both fire for objects matching both selectors. Supported on the
+  default in-memory queue with non-custom leader election; under `QueueStrategy.Custom` /
+  `LeaderElectionType.Custom` only one controller per entity is allowed (a second registration throws).
+  See [Multiple Controllers per Entity](./building-blocks/controllers#multiple-controllers-per-entity).
 - **Watch strategy**: choose how watch streams are provisioned via
   [`OperatorSettings.WatchStrategy`](./configuration/watch-strategy) /
   `WithWatchStrategy(...)`. `WatchStrategy.PerController` (default) gives every controller its own

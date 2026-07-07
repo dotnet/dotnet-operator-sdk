@@ -68,6 +68,14 @@ instead (or derive from `LeaderAwareEntityQueueBackgroundService<TEntity>`) so v
 consumer drives the leadership gate.
 :::
 
+:::warning[One controller per entity]
+`QueueStrategy.Custom` supports at most **one controller per entity type**. All pipelines share your
+single `ITimedEntityQueue<TEntity>`, whose entries carry no pipeline identity, and a single injected
+`IReconciler<TEntity>`, so a second controller for the same entity cannot be routed and is rejected at
+registration with an `InvalidOperationException`. Multiple controllers per entity require the default
+in-memory queue (see [Multiple Controllers per Entity](../building-blocks/controllers#multiple-controllers-per-entity)).
+:::
+
 Custom queues should follow the same de-duplication contract as the built-in implementation: keep at
 most one pending entry per namespace/name key and preserve the earliest scheduled execution time.
 

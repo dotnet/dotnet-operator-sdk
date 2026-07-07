@@ -138,6 +138,31 @@ public sealed class OperatorBuilderQueueStrategyTest
             .Should().Contain(s => s.GetType() == typeof(EntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
     }
 
+    [Fact]
+    public void Should_Reject_Multiple_Controllers_Per_Entity_For_Custom_Queue_Strategy()
+    {
+        // The custom paths share a single user-owned queue and one unkeyed reconciler with no per-pipeline
+        // identity, so a second controller would silently never fire (issue #909). Registration must reject
+        // it instead of accepting it silently.
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { QueueStrategy = QueueStrategy.Custom }.Build());
+        builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+
+        var act = () => builder.AddController<SecondTestController, V1OperatorIntegrationTestEntity>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*only supported with the default*");
+    }
+
+    [Fact]
+    public void Should_Reject_Multiple_Controllers_Per_Entity_For_Custom_Leader_Election()
+    {
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Custom }.Build());
+        builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+
+        var act = () => builder.AddController<SecondTestController, V1OperatorIntegrationTestEntity>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*only supported with the default*");
+    }
+
     private static List<IHostedService> ResolveHostedServices(OperatorBuilder builder)
     {
         using var provider = BuildResolvableProvider(builder);
@@ -153,6 +178,17 @@ public sealed class OperatorBuilderQueueStrategyTest
     }
 
     private sealed class TestController : IEntityController<V1OperatorIntegrationTestEntity>
+    {
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(
+            V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
+
+        public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> DeletedAsync(
+            V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
+            => Task.FromResult(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entity));
+    }
+
+    private sealed class SecondTestController : IEntityController<V1OperatorIntegrationTestEntity>
     {
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> ReconcileAsync(
             V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)

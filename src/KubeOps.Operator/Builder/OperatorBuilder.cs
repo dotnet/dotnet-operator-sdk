@@ -206,6 +206,23 @@ internal sealed class OperatorBuilder : IOperatorBuilder
                 "combination twice would open a redundant watch stream.");
         }
 
+        // Multiple controllers per entity are only safe on the default path (in-memory queue, non-custom
+        // leader election), where each pipeline owns its queue and reconciler. With QueueStrategy.Custom or
+        // LeaderElectionType.Custom all pipelines share one user-owned queue and a single unkeyed
+        // IReconciler<TEntity> with no per-pipeline identity, so a second controller would silently never
+        // fire (issue #909). Reject it explicitly instead. LeaderElectionType.Single is unaffected.
+        if ((Settings.LeaderElectionType == LeaderElectionType.Custom || Settings.QueueStrategy == QueueStrategy.Custom) &&
+            Services.Any(d => d.ImplementationInstance is ControllerPipeline<TEntity>))
+        {
+            throw new InvalidOperationException(
+                $"Entity '{typeof(TEntity).Name}' already has a controller registered. Multiple controllers " +
+                "per entity are only supported with the default in-memory queue and non-custom leader " +
+                "election, because QueueStrategy.Custom and LeaderElectionType.Custom share a single " +
+                "user-owned queue and reconciler with no per-pipeline identity. Register at most one " +
+                "controller per entity for these modes, or switch to the default queue/leader election to " +
+                "run multiple controllers.");
+        }
+
         // The reconciler resolves the controller by its concrete type, since multiple controllers may be
         // registered for the same entity type. The interface mapping is kept so existing code resolving
         // IEntityController<TEntity> still gets the first registered controller.

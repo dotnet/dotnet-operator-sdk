@@ -504,6 +504,16 @@ Notes:
   (many controllers, many objects, overlapping selectors), switch to the shared watch mode — see
   [Watch Strategy](../configuration/watch-strategy).
 
+:::warning
+Multiple controllers per entity are supported only on the **default in-memory queue** with
+**non-custom leader election** (`LeaderElectionType.None` or `LeaderElectionType.Single`), where each
+pipeline owns its queue and reconciler. Under
+[`QueueStrategy.Custom`](../configuration/queue-strategy#custom) or
+[`LeaderElectionType.Custom`](../configuration/leader-election) all pipelines share a single
+user-owned queue and a single reconciler with no per-pipeline identity, so only **one controller per
+entity** is allowed — registering a second one throws an `InvalidOperationException`.
+:::
+
 ## Common Pitfalls
 
 1. **Infinite Loops**: Avoid creating reconciliation loops that trigger themselves
