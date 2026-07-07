@@ -230,11 +230,15 @@ internal sealed class OperatorBuilder : IOperatorBuilder
 
         RegisterRegistrationValidation(typeof(TEntity));
 
-        if (Settings.LeaderElectionType == LeaderElectionType.Custom)
+        // The user owns the queue consumer with custom leader election or a custom queue strategy; in
+        // both cases they need an IReconciler<TEntity> (and, for the in-memory queue, an
+        // ITimedEntityQueue<TEntity>) from the container to construct it — for example when deriving from
+        // EntityQueueBackgroundService<TEntity>. With the default in-memory pipeline the reconciler is
+        // owned by the pipeline, so this registration is never resolved there (ITimedEntityQueue<TEntity>
+        // is intentionally not registered in that path). This manual wiring supports a single controller
+        // per entity type.
+        if (Settings.LeaderElectionType == LeaderElectionType.Custom || Settings.QueueStrategy == QueueStrategy.Custom)
         {
-            // With custom leader election the user wires the watcher and queue consumer themselves; the
-            // SDK only provides the queue (for the in-memory strategy) and the reconciler through the
-            // container. This manual wiring supports a single controller per entity type.
             if (Settings.QueueStrategy == QueueStrategy.InMemory)
             {
                 Services.TryAddSingleton<ITimedEntityQueue<TEntity>, TimedEntityQueue<TEntity>>();
@@ -245,7 +249,11 @@ internal sealed class OperatorBuilder : IOperatorBuilder
                     services,
                     services.GetRequiredService<ITimedEntityQueue<TEntity>>(),
                     typeof(TImplementation)));
+        }
 
+        if (Settings.LeaderElectionType == LeaderElectionType.Custom)
+        {
+            // With custom leader election the user wires the watcher and queue consumer themselves.
             return this;
         }
 

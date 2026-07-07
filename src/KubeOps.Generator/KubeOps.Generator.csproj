@@ -36,4 +36,10 @@
             Visible="false" />
     </ItemGroup>
 
+    <ItemGroup>
+        <!-- Analyzer release tracking for the diagnostics reported by this generator (RS2008). -->
+        <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+        <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+    </ItemGroup>
+
 </Project>

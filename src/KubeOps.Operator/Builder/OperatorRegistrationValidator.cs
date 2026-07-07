@@ -5,6 +5,7 @@
 using System.Globalization;
 
 using KubeOps.Abstractions.Builder;
+using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.Operator.Constants;
 using KubeOps.Operator.Exceptions;
@@ -267,6 +268,18 @@ internal sealed class OperatorRegistrationValidator(
             problems.Add(string.Format(
                 CultureInfo.InvariantCulture,
                 "Entity '{0}': no ITimedEntityQueue<{0}> is registered.",
+                entityName));
+        }
+
+        // IReconciler<TEntity> is required: the queue consumer (e.g. EntityQueueBackgroundService<TEntity>)
+        // resolves it from the container to reconcile drained entries. The SDK registers it for the custom
+        // leader election and custom queue paths; a missing registration would otherwise only surface as a
+        // DI error while the user's consumer is constructed at host startup.
+        if (!HasService(services, typeof(IReconciler<>).MakeGenericType(entityType)))
+        {
+            problems.Add(string.Format(
+                CultureInfo.InvariantCulture,
+                "Entity '{0}': no IReconciler<{0}> is registered.",
                 entityName));
         }
 

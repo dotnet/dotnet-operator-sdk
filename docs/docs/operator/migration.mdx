@@ -147,7 +147,9 @@ rely on the SDK's registration.
   per entity type and matches events client-side.
 - **Selector attributes**: declare a controller's selector with
   [`[LabelSelector(typeof(...))]` / `[FieldSelector(typeof(...))]`](./building-blocks/controllers#declaring-selectors-with-attributes);
-  the source generator emits the matching registration.
+  the source generator emits the matching registration. Declaring both on one controller is now a
+  compile-time error (`KOG001`) instead of silently registering only the label selector — split it into
+  two controllers.
 - **`IClientSideEntitySelector<TEntity>`**: implement it on a selector to control client-side matching
   under `SharedPerEntity` (otherwise standard Kubernetes selector syntax is used).
 

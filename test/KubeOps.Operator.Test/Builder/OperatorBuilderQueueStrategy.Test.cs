@@ -116,6 +116,28 @@ public sealed class OperatorBuilderQueueStrategyTest
             Times.Once);
     }
 
+    [Fact]
+    public void Should_Register_Reconciler_For_Custom_Strategy_So_A_Custom_Consumer_Resolves()
+    {
+        // Regression: with QueueStrategy.Custom under normal (non-custom) leader election the user supplies
+        // the queue and a consumer deriving from EntityQueueBackgroundService<TEntity>, whose constructor
+        // resolves IReconciler<TEntity> from the container. IReconciler<TEntity> must therefore be
+        // registered — previously it was only registered for LeaderElectionType.Custom, so building the
+        // consumer failed at host startup.
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { QueueStrategy = QueueStrategy.Custom }.Build());
+        builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+
+        builder.Services.AddSingleton(Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>());
+        builder.Services.AddHostedService<EntityQueueBackgroundService<V1OperatorIntegrationTestEntity>>();
+
+        using var provider = BuildResolvableProvider(builder);
+
+        provider.GetService<IReconciler<V1OperatorIntegrationTestEntity>>().Should().NotBeNull();
+
+        provider.GetServices<IHostedService>()
+            .Should().Contain(s => s.GetType() == typeof(EntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
+    }
+
     private static List<IHostedService> ResolveHostedServices(OperatorBuilder builder)
     {
         using var provider = BuildResolvableProvider(builder);

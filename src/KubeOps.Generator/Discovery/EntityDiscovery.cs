@@ -209,7 +209,8 @@ internal static class EntityDiscovery
                 classSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 entity,
                 GetSelectorAttributeType(context, LabelSelectorSyntaxName),
-                GetSelectorAttributeType(context, FieldSelectorSyntaxName));
+                GetSelectorAttributeType(context, FieldSelectorSyntaxName),
+                LocationInfo.CreateFrom(context.Node));
     }
 
     // Match the attribute syntactically by name (consistent with the KubernetesEntity attribute handling

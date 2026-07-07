@@ -476,7 +476,8 @@ public class V1DemoEntityController : IEntityController<V1DemoEntity>
 ```
 
 A controller supports one selector kind at a time (label **or** field selector), matching the
-builder methods.
+builder methods. Declaring both `[LabelSelector]` and `[FieldSelector]` on the same controller is a
+compile-time error (`KOG001`); split the work into two controllers instead.
 
 ## Multiple Controllers per Entity
 

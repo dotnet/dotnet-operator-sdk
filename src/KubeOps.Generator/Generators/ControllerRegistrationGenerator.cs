@@ -18,6 +18,17 @@ namespace KubeOps.Generator.Generators;
 [Generator]
 internal sealed class ControllerRegistrationGenerator : IIncrementalGenerator
 {
+    // A controller supports a single selector kind. Combining [LabelSelector] and [FieldSelector] on one
+    // controller used to silently register only the label selector; it is now a compile-time error.
+    private static readonly DiagnosticDescriptor ConflictingSelectorAttributes = new(
+        id: "KOG001",
+        title: "Controller declares conflicting selector attributes",
+        messageFormat: "Controller '{0}' declares both [LabelSelector] and [FieldSelector]. A controller " +
+            "supports only one selector kind; split it into separate controllers.",
+        category: "KubeOps.Generator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         context.RegisterSourceOutput(
@@ -30,6 +41,24 @@ internal sealed class ControllerRegistrationGenerator : IIncrementalGenerator
         EquatableArray<ControllerRegistration> controllers,
         EquatableArray<AttributedEntity> entities)
     {
+        // Controllers that declare both a label and a field selector are reported as an error and excluded
+        // from registration, so no misleading label-only registration is emitted for them.
+        var validControllers = new List<ControllerRegistration>();
+        foreach (var controller in controllers)
+        {
+            if (controller.FullyQualifiedLabelSelector is not null &&
+                controller.FullyQualifiedFieldSelector is not null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    ConflictingSelectorAttributes,
+                    controller.Location?.ToLocation() ?? Location.None,
+                    controller.FullyQualifiedController));
+                continue;
+            }
+
+            validControllers.Add(controller);
+        }
+
         var declaration = CompilationUnit()
             .WithUsings(
                 List(
@@ -54,7 +83,7 @@ internal sealed class ControllerRegistrationGenerator : IIncrementalGenerator
                                 .WithType(
                                     IdentifierName("IOperatorBuilder")))))
                     .WithBody(Block(
-                        controllers
+                        validControllers
                             .Where(c => entities.Any(e =>
                                 e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName))
                             .OrderBy(c => c.FullyQualifiedEntityName, StringComparer.Ordinal)
