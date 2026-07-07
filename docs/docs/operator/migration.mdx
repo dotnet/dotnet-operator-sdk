@@ -54,10 +54,7 @@ public class MySelector : IEntityLabelSelector<V1DemoEntity>
 - **YamlDotNet 18**: the CLI/transpiler dependency was upgraded across v11 releases. If your
   project serializes YAML itself and pins an older YamlDotNet, align the versions.
 
-## Unreleased changes (next major)
-
-The `main` branch — which this documentation describes — already contains breaking changes that
-will ship with the next major release:
+## Upgrading from v11 to v12
 
 ### Leader-loss-aware queue and reconciliation
 
@@ -78,8 +75,7 @@ Action required if you use custom queue components:
   reconciliations.
 
 :::tip
-This documentation is built from the `main` branch and may describe behavior that is not yet part
-of the release you are using. Check the
-[release notes](https://github.com/dotnet/dotnet-operator-sdk/releases) of your installed version
-when something does not match.
+Every breaking change is also listed in the
+[release notes](https://github.com/dotnet/dotnet-operator-sdk/releases). Check the notes for the
+version you are upgrading to when something does not match this guide.
 :::
