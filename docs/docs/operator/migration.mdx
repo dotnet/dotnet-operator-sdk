@@ -120,7 +120,8 @@ pipeline when running several watchers for the same entity type.
 
 With the default in-memory queue strategy these services are now owned by the pipeline and are **no
 longer registered in the DI container**. Registration is unchanged for `LeaderElectionType.Custom`
-and `QueueStrategy.Custom`, where you still wire up the queue and reconciler yourself.
+and `QueueStrategy.Custom`, where you still wire up the queue and consumer yourself (the SDK keeps
+registering `IReconciler<TEntity>` for these paths, so your consumer can resolve it).
 
 **Migration:** stop resolving `IReconciler<TEntity>` / `ITimedEntityQueue<TEntity>` from DI in the
 default configuration. If you need custom queue behavior, opt into
