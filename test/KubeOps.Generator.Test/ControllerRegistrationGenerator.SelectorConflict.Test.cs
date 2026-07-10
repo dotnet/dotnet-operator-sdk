@@ -69,4 +69,63 @@ public sealed partial class ControllerRegistrationGeneratorTest
         // The conflicting controller must not be registered (neither label- nor field-selector variant).
         result.Should().NotContain("V1TestEntityController");
     }
+
+    [Fact]
+    [Trait("Area", "Partial")]
+    public void Should_Report_Error_When_Partial_Controller_Declares_Selectors_On_Separate_Parts()
+    {
+        const string input =
+            """
+            using k8s;
+            using k8s.Models;
+            using KubeOps.Abstractions.Entities;
+            using KubeOps.Abstractions.Reconciliation.Controller;
+
+            [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+            public sealed class V1TestEntity : IKubernetesObject<V1ObjectMeta>
+            {
+            }
+
+            public sealed class MyLabelSelector : IEntityLabelSelector<V1TestEntity>
+            {
+                public ValueTask<string?> GetLabelSelectorAsync(CancellationToken cancellationToken) =>
+                    ValueTask.FromResult<string?>("managed=true");
+            }
+
+            public sealed class MyFieldSelector : IEntityFieldSelector<V1TestEntity>
+            {
+                public ValueTask<string?> GetFieldSelectorAsync(CancellationToken cancellationToken) =>
+                    ValueTask.FromResult<string?>("metadata.name=my-resource");
+            }
+
+            [LabelSelector(typeof(MyLabelSelector))]
+            public partial class V1TestEntityController : IEntityController<V1TestEntity>
+            {
+            }
+
+            [FieldSelector(typeof(MyFieldSelector))]
+            public partial class V1TestEntityController : IEntityController<V1TestEntity>
+            {
+            }
+            """;
+
+        var inputCompilation = input.CreateCompilation();
+
+        var driver = CSharpGeneratorDriver.Create(new ControllerRegistrationGenerator());
+        driver.RunGeneratorsAndUpdateCompilation(
+            inputCompilation,
+            out var output,
+            out ImmutableArray<Diagnostic> diagnostics,
+            TestContext.Current.CancellationToken);
+
+        diagnostics
+            .Should().ContainSingle(d => d.Id == "KOG001")
+            .Which.Severity.Should().Be(DiagnosticSeverity.Error);
+
+        var result = output.SyntaxTrees
+            .First(s => s.FilePath.Contains("ControllerRegistrations.g.cs"))
+            .ToString();
+
+        result.Should().NotContain("V1TestEntityController");
+    }
 }

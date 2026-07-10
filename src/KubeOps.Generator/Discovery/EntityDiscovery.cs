@@ -52,7 +52,15 @@ internal static class EntityDiscovery
             .Where(static c => c is not null)
             .Select(static (c, _) => c!.Value)
             .Collect()
-            .Select(static (arr, _) => new EquatableArray<ControllerRegistration>(arr.Distinct().ToImmutableArray()));
+            .Select(static (arr, _) => new EquatableArray<ControllerRegistration>(arr
+                .GroupBy(static c => c.FullyQualifiedController, StringComparer.Ordinal)
+                .Select(static g => g.Aggregate(static (merged, next) => merged with
+                {
+                    FullyQualifiedLabelSelector = merged.FullyQualifiedLabelSelector ?? next.FullyQualifiedLabelSelector,
+                    FullyQualifiedFieldSelector = merged.FullyQualifiedFieldSelector ?? next.FullyQualifiedFieldSelector,
+                    Location = merged.Location ?? next.Location,
+                }))
+                .ToImmutableArray()));
 
     public static IncrementalValueProvider<EquatableArray<FinalizerRegistration>> GetFinalizers(
         IncrementalGeneratorInitializationContext context)
