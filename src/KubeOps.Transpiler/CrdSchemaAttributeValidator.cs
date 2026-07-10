@@ -76,9 +76,10 @@ internal static class CrdSchemaAttributeValidator
                 $"but generated type is '{column.Type ?? "<none>"}'.");
         }
 
-        // Rule: additionalPrinterColumns format is optional, but must be one of the Kubernetes column formats. See:
+        // Rule: additionalPrinterColumns format is optional, but must be one of the Kubernetes column formats.
+        // Kubernetes treats an empty string as unset, so only a non-empty unknown format is rejected. See:
         // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
-        if (column.Format is not null && !AllowedPrinterColumnFormats.Contains(column.Format))
+        if (!string.IsNullOrEmpty(column.Format) && !AllowedPrinterColumnFormats.Contains(column.Format))
         {
             throw InvalidSchemaAttribute(
                 source,
@@ -188,18 +189,34 @@ internal static class CrdSchemaAttributeValidator
 
     private static void ValidateSetListItemSchema(PropertyInfo prop, V1JSONSchemaProps itemSchema)
     {
-        if (itemSchema.Type is not (ObjectSchemaType or ArraySchemaType))
+        switch (itemSchema.Type)
         {
-            return;
-        }
+            // Rule: nested-array set items are valid as long as their list topology is atomic; an array
+            // without an explicit x-kubernetes-list-type is implicitly atomic and accepted by Kubernetes. See:
+            // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
+            case ArraySchemaType when itemSchema.XKubernetesListType is null or "atomic":
+            case ObjectSchemaType when itemSchema.XKubernetesMapType == "atomic":
+                return;
 
-        // Rule: complex set-list items must be atomic. See:
-        // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
-        throw InvalidSchemaAttribute(
-            prop,
-            nameof(XListTypeAttribute),
-            "Set lists with object or array items require atomic item topology, which KubeOps cannot " +
-            "currently express at item level. Use scalar items or XListType.Atomic.");
+            case ArraySchemaType:
+                throw InvalidSchemaAttribute(
+                    prop,
+                    nameof(XListTypeAttribute),
+                    "Items of Kubernetes set lists must have atomic list topology, but the nested list item " +
+                    $"declares x-kubernetes-list-type '{itemSchema.XKubernetesListType}'.");
+
+            case ObjectSchemaType:
+                // Rule: complex object set-list items must be atomic. KubeOps cannot currently express
+                // x-kubernetes-map-type: atomic at item level, so such items always produce an invalid schema.
+                throw InvalidSchemaAttribute(
+                    prop,
+                    nameof(XListTypeAttribute),
+                    "Set lists with object items require atomic item topology, which KubeOps cannot " +
+                    "currently express at item level. Use scalar items or XListType.Atomic.");
+
+            default:
+                return;
+        }
     }
 
     private static void ValidateMapListSchema(
@@ -305,7 +322,6 @@ internal static class CrdSchemaAttributeValidator
         var rule = validation.GetCustomAttributeCtorArg<string>(context, 0);
         var fieldPath = validation.GetCustomAttributeCtorArg<string?>(context, 1);
         var message = validation.GetCustomAttributeCtorArg<string?>(context, 2);
-        var messageExpression = validation.GetCustomAttributeCtorArg<string?>(context, 3);
         var reason = validation.GetCustomAttributeCtorArg<string?>(context, 4);
 
         // Rule: validation rule must not be empty. See:
@@ -318,15 +334,8 @@ internal static class CrdSchemaAttributeValidator
                 "Validation rule must not be empty.");
         }
 
-        // Rule: validation rule message must be non-empty if specified. See:
-        // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
-        if (message is not null && string.IsNullOrWhiteSpace(message))
-        {
-            throw InvalidSchemaAttribute(
-                source,
-                nameof(ValidationRuleAttribute),
-                "Validation rule message must not be empty when specified.");
-        }
+        // Note: Kubernetes treats an empty message, messageExpression or fieldPath as unset, so those empty
+        // values are not rejected here; only malformed non-empty values are.
 
         // Rule: validation rule message must not contain line breaks. See:
         // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
@@ -348,16 +357,6 @@ internal static class CrdSchemaAttributeValidator
                 "Validation rule message must be specified if the rule contains line breaks.");
         }
 
-        // Rule: validation rule messageExpression must be non-empty if specified. See:
-        // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
-        if (messageExpression is not null && string.IsNullOrWhiteSpace(messageExpression))
-        {
-            throw InvalidSchemaAttribute(
-                source,
-                nameof(ValidationRuleAttribute),
-                "Validation rule messageExpression must not be empty when specified.");
-        }
-
         // Rule: validation rule reason must be one of the Kubernetes field-value reasons. See:
         // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
         if (reason is not null && !AllowedValidationReasons.Contains(reason))
@@ -366,16 +365,6 @@ internal static class CrdSchemaAttributeValidator
                 source,
                 nameof(ValidationRuleAttribute),
                 $"Validation rule reason '{reason}' is not supported.");
-        }
-
-        // Rule: validation rule fieldPath must be non-empty if specified. See:
-        // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
-        if (fieldPath is not null && string.IsNullOrWhiteSpace(fieldPath))
-        {
-            throw InvalidSchemaAttribute(
-                source,
-                nameof(ValidationRuleAttribute),
-                "Validation rule fieldPath must not be empty when specified.");
         }
 
         // Rule: validation rule fieldPath must not contain line breaks. See:

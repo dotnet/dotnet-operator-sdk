@@ -37,11 +37,8 @@ public sealed partial class CrdsMlcTest
     [InlineData(typeof(GenericAdditionalPrinterColumnWithEmptyJsonPathEntity), "JSONPath is required")]
     [InlineData(typeof(ValidationRuleWithEmptyRuleEntity), "Validation rule")]
     [InlineData(typeof(ClassValidationRuleWithEmptyRuleEntity), "Validation rule")]
-    [InlineData(typeof(ValidationRuleWithEmptyFieldPathEntity), "fieldPath")]
     [InlineData(typeof(ValidationRuleWithMultilineFieldPathEntity), "fieldPath")]
-    [InlineData(typeof(ValidationRuleWithEmptyMessageEntity), "message")]
     [InlineData(typeof(ValidationRuleWithMultilineMessageEntity), "message")]
-    [InlineData(typeof(ValidationRuleWithEmptyMessageExpressionEntity), "messageExpression")]
     [InlineData(typeof(ValidationRuleWithUnsupportedReasonEntity), "reason")]
     [InlineData(typeof(ValidationRuleWithMultilineRuleWithoutMessageEntity), "line breaks")]
     public void Should_Reject_Invalid_Schema_Attribute_Combinations(Type type, string expectedMessage)
@@ -70,6 +67,11 @@ public sealed partial class CrdsMlcTest
     [InlineData(typeof(MultipleOfOnStringEntity))]
     [InlineData(typeof(MultipleOfZeroEntity))]
     [InlineData(typeof(RangeWithInvertedLimitsEntity))]
+    [InlineData(typeof(SetListWithNestedArrayItemsEntity))]
+    [InlineData(typeof(ValidationRuleWithEmptyFieldPathEntity))]
+    [InlineData(typeof(ValidationRuleWithEmptyMessageEntity))]
+    [InlineData(typeof(ValidationRuleWithEmptyMessageExpressionEntity))]
+    [InlineData(typeof(GenericAdditionalPrinterColumnWithEmptyFormatEntity))]
     public void Should_Not_Reject_OpenApi_Validation_Keywords_That_Kubernetes_Accepts(Type type)
     {
         var act = () => _mlc.Transpile(type);
@@ -294,6 +296,21 @@ public sealed partial class CrdsMlcTest
     {
         [XListType(XListType.Set)]
         public MapListItem[] Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class SetListWithNestedArrayItemsEntity : CustomKubernetesEntity
+    {
+        // Nested arrays have implicitly atomic list topology, which Kubernetes accepts as set-list items.
+        [XListType(XListType.Set)]
+        public List<List<string>> Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    [GenericAdditionalPrinterColumn(".spec.property", "Property", "string", Format = "")]
+    private sealed class GenericAdditionalPrinterColumnWithEmptyFormatEntity : CustomKubernetesEntity
+    {
+        public string Property { get; set; } = null!;
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
