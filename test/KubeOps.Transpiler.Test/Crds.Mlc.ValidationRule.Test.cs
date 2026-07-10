@@ -16,7 +16,7 @@ public sealed partial class CrdsMlcTest
     private const string Rule1 = "has(self.https) || self.kind != 'https'";
     private const string Message1 = "https object must be specified if kind is https";
     private const string FieldPath1 = ".property";
-    private const string Reason1 = "reason";
+    private const string Reason1 = "FieldValueInvalid";
     private const string MessageExpression1 = "\"https object must be specified if kind is \" + string(self.kind)";
 
     private const string Rule2 = "has(self.workflow) || self.kind != 'my-workflow";

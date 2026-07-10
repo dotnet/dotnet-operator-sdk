@@ -16,6 +16,7 @@ public sealed class EntitiesTest
     [Theory]
     [InlineData(typeof(NamespaceEntity), "Namespaced", "namespaceentity", "namespaceentities", "testing.dev/v1")]
     [InlineData(typeof(ClusterEntity), "Cluster", "clusterentity", "clusterentities", "testing.dev/v1")]
+    [Trait("Area", "KubernetesEntity")]
     public void Should_Correctly_Parse_Metadata(
         Type entityType,
         string expectedScope,

@@ -97,6 +97,28 @@ foreach (var crd in crds)
 - **Custom Build Tasks:** Integrate CRD generation directly into your MSBuild process.
 - **Schema Validation Tools:** Use the generated CRD schema for validating custom resource YAML files.
 
+### CRD Schema Validation
+
+The transpiler performs a narrow validation pass for schema attributes that are
+known to produce CRDs rejected by the Kubernetes API server. This includes
+`uniqueItems: true`, invalid `x-kubernetes-list-*` topology combinations,
+invalid `x-kubernetes-map-type` placement, and malformed validation-rule
+metadata. Additional printer columns are also checked so their type is one of
+the Kubernetes-supported column types.
+
+The transpiler does not try to be a full OpenAPI linter. Some OpenAPI keywords
+are semantically useful only on specific schema types, but Kubernetes currently
+accepts those CRD schemas at admission time. Those combinations remain
+transpilable for compatibility.
+
+For a server-side check against a local cluster, generate manifests and use
+Kubernetes server dry-run for the generated CRD YAML files:
+
+```bash
+kubeops generate operator MyOperator ./MyOperator.csproj --out ./k8s --format yaml
+kubectl apply --dry-run=server -f ./k8s/<generated-crd-file>.yaml
+```
+
 The assembly inspection and attribute processing logic within this package is also leveraged by the KubeOps CLI (`kubeops generate operator`) command. The CLI uses this package's capabilities to find types decorated with `[EntityRbac]` attributes when generating the RBAC manifests (`Role`/`ClusterRole`) for your operator.
 
 For more details on defining the C# classes themselves, see the main KubeOps documentation.
