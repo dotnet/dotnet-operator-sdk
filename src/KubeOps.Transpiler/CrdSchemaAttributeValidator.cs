@@ -322,6 +322,7 @@ internal static class CrdSchemaAttributeValidator
         var rule = validation.GetCustomAttributeCtorArg<string>(context, 0);
         var fieldPath = validation.GetCustomAttributeCtorArg<string?>(context, 1);
         var message = validation.GetCustomAttributeCtorArg<string?>(context, 2);
+        var messageExpression = validation.GetCustomAttributeCtorArg<string?>(context, 3);
         var reason = validation.GetCustomAttributeCtorArg<string?>(context, 4);
 
         // Rule: validation rule must not be empty. See:
@@ -334,12 +335,15 @@ internal static class CrdSchemaAttributeValidator
                 "Validation rule must not be empty.");
         }
 
-        // Note: Kubernetes treats an empty message, messageExpression or fieldPath as unset, so those empty
-        // values are not rejected here; only malformed non-empty values are.
-
-        // Rule: validation rule message must not contain line breaks. See:
+        // Rules: message, messageExpression and fieldPath are optional (an empty string is treated as unset),
+        // but a non-empty value that is only whitespace is rejected. See:
         // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
-        if (message?.Contains('\n', StringComparison.Ordinal) == true)
+        RejectBlankRuleText(source, message, "message");
+        RejectBlankRuleText(source, messageExpression, "messageExpression");
+        RejectBlankRuleText(source, fieldPath, "fieldPath");
+
+        // Rule: message must not contain line breaks. Kubernetes checks the trimmed message. See link above.
+        if (!string.IsNullOrEmpty(message) && ContainsLineBreak(message.Trim()))
         {
             throw InvalidSchemaAttribute(
                 source,
@@ -347,9 +351,18 @@ internal static class CrdSchemaAttributeValidator
                 "Validation rule message must not contain line breaks.");
         }
 
-        // Rule: multiline validation rule needs an explicit message. See:
+        // Rule: fieldPath must not contain line breaks. Kubernetes checks the original (untrimmed) value here.
+        if (fieldPath is not null && ContainsLineBreak(fieldPath))
+        {
+            throw InvalidSchemaAttribute(
+                source,
+                nameof(ValidationRuleAttribute),
+                "Validation rule fieldPath must not contain line breaks.");
+        }
+
+        // Rule: multiline validation rule needs an explicit message. Kubernetes checks the trimmed rule. See:
         // https://k8s.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#validation-rules
-        if (rule.Contains('\n', StringComparison.Ordinal) && string.IsNullOrWhiteSpace(message))
+        if (ContainsLineBreak(rule.Trim()) && string.IsNullOrWhiteSpace(message))
         {
             throw InvalidSchemaAttribute(
                 source,
@@ -366,17 +379,23 @@ internal static class CrdSchemaAttributeValidator
                 nameof(ValidationRuleAttribute),
                 $"Validation rule reason '{reason}' is not supported.");
         }
+    }
 
-        // Rule: validation rule fieldPath must not contain line breaks. See:
-        // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
-        if (fieldPath?.Contains('\n', StringComparison.Ordinal) == true)
+    private static void RejectBlankRuleText(MemberInfo source, string? value, string fieldName)
+    {
+        // Kubernetes treats an empty string as unset, but rejects a non-empty value that trims to nothing.
+        if (!string.IsNullOrEmpty(value) && string.IsNullOrWhiteSpace(value))
         {
             throw InvalidSchemaAttribute(
                 source,
                 nameof(ValidationRuleAttribute),
-                "Validation rule fieldPath must not contain line breaks.");
+                $"Validation rule {fieldName} must not be empty when specified.");
         }
     }
+
+    // Kubernetes recognises both LF and CR as line breaks (validation regex `[\n\r]+`).
+    private static bool ContainsLineBreak(string value) =>
+        value.Contains('\n', StringComparison.Ordinal) || value.Contains('\r', StringComparison.Ordinal);
 
     private static void EnsureSchemaType(
         PropertyInfo prop,

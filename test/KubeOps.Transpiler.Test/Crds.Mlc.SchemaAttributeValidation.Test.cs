@@ -38,8 +38,15 @@ public sealed partial class CrdsMlcTest
     [InlineData(typeof(ValidationRuleWithEmptyRuleEntity), "Validation rule")]
     [InlineData(typeof(ClassValidationRuleWithEmptyRuleEntity), "Validation rule")]
     [InlineData(typeof(ValidationRuleWithMultilineFieldPathEntity), "fieldPath")]
+    [InlineData(typeof(ValidationRuleWithCarriageReturnFieldPathEntity), "fieldPath")]
+    [InlineData(typeof(ValidationRuleWithLeadingNewlineFieldPathEntity), "fieldPath")]
+    [InlineData(typeof(ValidationRuleWithWhitespaceFieldPathEntity), "fieldPath")]
     [InlineData(typeof(ValidationRuleWithMultilineMessageEntity), "message")]
+    [InlineData(typeof(ValidationRuleWithCarriageReturnMessageEntity), "message")]
+    [InlineData(typeof(ValidationRuleWithWhitespaceMessageEntity), "message")]
+    [InlineData(typeof(ValidationRuleWithWhitespaceMessageExpressionEntity), "messageExpression")]
     [InlineData(typeof(ValidationRuleWithUnsupportedReasonEntity), "reason")]
+    [InlineData(typeof(ValidationRuleWithCarriageReturnRuleWithoutMessageEntity), "line breaks")]
     [InlineData(typeof(ValidationRuleWithMultilineRuleWithoutMessageEntity), "line breaks")]
     public void Should_Reject_Invalid_Schema_Attribute_Combinations(Type type, string expectedMessage)
     {
@@ -72,6 +79,7 @@ public sealed partial class CrdsMlcTest
     [InlineData(typeof(ValidationRuleWithEmptyMessageEntity))]
     [InlineData(typeof(ValidationRuleWithEmptyMessageExpressionEntity))]
     [InlineData(typeof(GenericAdditionalPrinterColumnWithEmptyFormatEntity))]
+    [InlineData(typeof(ValidationRuleWithTrailingNewlineRuleEntity))]
     public void Should_Not_Reject_OpenApi_Validation_Keywords_That_Kubernetes_Accepts(Type type)
     {
         var act = () => _mlc.Transpile(type);
@@ -381,6 +389,64 @@ public sealed partial class CrdsMlcTest
     private sealed class ValidationRuleWithMultilineMessageEntity : CustomKubernetesEntity
     {
         [ValidationRule("self != ''", message: "line 1\nline 2")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class ValidationRuleWithCarriageReturnMessageEntity : CustomKubernetesEntity
+    {
+        [ValidationRule("self != ''", message: "line 1\rline 2")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class ValidationRuleWithWhitespaceMessageEntity : CustomKubernetesEntity
+    {
+        [ValidationRule("self != ''", message: "   ")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class ValidationRuleWithWhitespaceFieldPathEntity : CustomKubernetesEntity
+    {
+        [ValidationRule("self != ''", fieldPath: "   ")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class ValidationRuleWithCarriageReturnFieldPathEntity : CustomKubernetesEntity
+    {
+        [ValidationRule("self != ''", fieldPath: "spec\rproperty")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class ValidationRuleWithLeadingNewlineFieldPathEntity : CustomKubernetesEntity
+    {
+        // Kubernetes checks the original fieldPath, so a leading line break is rejected even though it trims away.
+        [ValidationRule("self != ''", fieldPath: "\nspec")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class ValidationRuleWithWhitespaceMessageExpressionEntity : CustomKubernetesEntity
+    {
+        [ValidationRule("self != ''", messageExpression: "   ")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class ValidationRuleWithCarriageReturnRuleWithoutMessageEntity : CustomKubernetesEntity
+    {
+        [ValidationRule("self != ''\r&& self.size() > 1")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class ValidationRuleWithTrailingNewlineRuleEntity : CustomKubernetesEntity
+    {
+        // Kubernetes checks the trimmed rule, so a trailing line break alone does not require a message.
+        [ValidationRule("self != ''\n")]
         public string Property { get; set; } = null!;
     }
 
