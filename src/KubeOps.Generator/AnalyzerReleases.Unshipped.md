@@ -3,6 +3,6 @@
 
 ### New Rules
 
-| Rule ID | Category          | Severity | Notes                                                        |
-|---------|-------------------|----------|--------------------------------------------------------------|
-| KOG001  | KubeOps.Generator | Error    | Controller declares both [LabelSelector] and [FieldSelector] |
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------------------------------------------------------------------------
+KOG001  | KubeOps.Generator | Error | Controller declares both [LabelSelector] and [FieldSelector]
