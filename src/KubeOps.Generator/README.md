@@ -119,9 +119,11 @@ and skips the conflicting registration instead of emitting ambiguous code. Set
 
 ### Entity Metadata / Entity Definitions
 
-The generator creates a file named `EntityDefinitions.g.cs` (only when the compilation
-contains entities). This file contains all entities that are annotated with the
-`KubernetesEntityAttribute`. The static class contains the `EntityMetadata` for the entities.
+The generator creates a file named `EntityDefinitions.g.cs` (only when the compilation declares
+entities). This file contains all entities that are annotated with the
+`KubernetesEntityAttribute` and declared in the compilation itself - entities from referenced
+assemblies are listed by their declaring assembly. The static class contains the
+`EntityMetadata` for the entities.
 
 #### Example
 

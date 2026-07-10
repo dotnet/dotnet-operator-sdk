@@ -86,6 +86,8 @@ entities may live in referenced class libraries that also reference `KubeOps.Gen
   registered automatically.
 - `ControllerRegistrations`, `FinalizerRegistrations`, `EntityDefinitions` and
   `EntityInitializer` are only generated when the compilation contains matching components.
+  `EntityDefinitions` only lists entities declared in the compilation itself; entities from
+  referenced assemblies are listed by their declaring assembly.
   `RegisterComponents` is generated whenever the compilation references `KubeOps.Operator` or
   contains/references components, and only invokes the parts that exist.
 - The shared generated classes remain in the **global namespace** by default. When multiple

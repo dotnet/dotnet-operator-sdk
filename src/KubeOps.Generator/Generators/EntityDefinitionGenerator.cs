@@ -30,7 +30,13 @@ internal sealed class EntityDefinitionGenerator : IIncrementalGenerator
         EquatableArray<AttributedEntity> entities,
         string? generatorNamespace)
     {
-        if (entities.Count == 0)
+        // Only entities declared in this compilation: entities discovered through usage of
+        // referenced assemblies belong to (and are listed by) the assembly that declares them.
+        var localEntities = entities
+            .Where(e => !e.ClassDeclaration.IsFromReferencedAssembly)
+            .ToList();
+
+        if (localEntities.Count == 0)
         {
             return;
         }
@@ -49,7 +55,7 @@ internal sealed class EntityDefinitionGenerator : IIncrementalGenerator
                 .WithModifiers(TokenList(
                     Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.StaticKeyword)))
                 .WithMembers(
-                    List<MemberDeclarationSyntax>(entities
+                    List<MemberDeclarationSyntax>(localEntities
                         .OrderBy(e => e.ClassDeclaration.FullyQualifiedName, StringComparer.Ordinal)
                         .Select(e => FieldDeclaration(
                             VariableDeclaration(
