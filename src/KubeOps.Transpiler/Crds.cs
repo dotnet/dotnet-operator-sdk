@@ -102,6 +102,9 @@ public static class Crds
                 };
             }
 
+            var validationRules = type.GetInheritedCustomAttributesData<ValidationRuleAttribute>().ToList();
+            CrdSchemaAttributeValidator.ValidateValidationRuleAttributes(type, validationRules, context);
+
             version.Schema = new()
             {
                 OpenAPIV3Schema = new()
@@ -127,8 +130,7 @@ public static class Crds
                         { Count: > 0 } list => list,
                         _ => null,
                     },
-                    XKubernetesValidations = context.MapValidationRules(
-                        type.GetInheritedCustomAttributesData<ValidationRuleAttribute>()),
+                    XKubernetesValidations = context.MapValidationRules(validationRules),
                 },
             };
 
@@ -240,7 +242,7 @@ public static class Crds
             }
 
             var mapped = context.Map(prop, EmptyAncestors);
-            yield return new()
+            var column = new V1CustomResourceColumnDefinition
             {
                 Name = attr.GetCustomAttributeCtorArg<string>(context, 1) ?? prop.GetPropertyName(context),
                 JsonPath = $"{path}.{prop.GetPropertyName(context)}",
@@ -253,6 +255,11 @@ public static class Crds
                     _ => 1,
                 },
             };
+            CrdSchemaAttributeValidator.ValidatePrinterColumn(
+                prop,
+                column,
+                nameof(AdditionalPrinterColumnAttribute));
+            yield return column;
         }
 
         foreach (var attr in type.GetInheritedCustomAttributesData<GenericAdditionalPrinterColumnAttribute>())
@@ -288,7 +295,7 @@ public static class Crds
                 continue;
             }
 
-            yield return new()
+            var column = new V1CustomResourceColumnDefinition
             {
                 Name = colName,
                 JsonPath = jsonPath,
@@ -301,6 +308,11 @@ public static class Crds
                     _ => 1,
                 },
             };
+            CrdSchemaAttributeValidator.ValidatePrinterColumn(
+                type,
+                column,
+                nameof(GenericAdditionalPrinterColumnAttribute));
+            yield return column;
         }
     }
 
@@ -451,6 +463,8 @@ public static class Crds
                 ? [.. existing, .. propValidations]
                 : propValidations;
         }
+
+        CrdSchemaAttributeValidator.Validate(prop, props, context);
 
         return props;
     }
@@ -617,6 +631,8 @@ public static class Crds
 
                 var nextAncestors = new HashSet<Type>(ancestors) { type };
                 var preservesUnknownFields = type.GetCustomAttributeData<PreserveUnknownFieldsAttribute>() != null;
+                var validationRules = type.GetInheritedCustomAttributesData<ValidationRuleAttribute>().ToList();
+                CrdSchemaAttributeValidator.ValidateValidationRuleAttributes(type, validationRules, context);
 
                 try
                 {
@@ -646,8 +662,7 @@ public static class Crds
                             _ => null,
                         },
                         XKubernetesPreserveUnknownFields = preservesUnknownFields ? true : null,
-                        XKubernetesValidations = context.MapValidationRules(
-                            type.GetInheritedCustomAttributesData<ValidationRuleAttribute>()),
+                        XKubernetesValidations = context.MapValidationRules(validationRules),
                     };
                 }
                 catch (Exception ex) when (preservesUnknownFields
