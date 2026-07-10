@@ -16,6 +16,7 @@ namespace KubeOps.Generator.Test;
 public sealed partial class ControllerRegistrationGeneratorTest
 {
     [Fact]
+    [Trait("Area", "SelectorConflict")]
     public void Should_Report_Error_And_Skip_Registration_When_Controller_Declares_Both_Selectors()
     {
         const string input =

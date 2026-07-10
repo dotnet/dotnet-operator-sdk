@@ -38,7 +38,7 @@ public class ResourceWatcher<TEntity>(
     IKubernetesClient client,
     string cachePartition = "",
     OperatorMetrics? metrics = null)
-    : RestartableHostedService
+    : RestartableHostedService, ISharedWatchDedup<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private readonly string[] _entityCacheTags = [typeof(TEntity).FullName ?? typeof(TEntity).Name];
@@ -95,6 +95,18 @@ public class ResourceWatcher<TEntity>(
         return base.StopAsync(cancellationToken);
     }
 
+    // The shared dispatcher consults the watcher's deduplication (see ISharedWatchDedup) to make the shared
+    // dedup decision once per event while evaluating membership transitions before it. Implemented
+    // explicitly so the dedup surface stays off the public API of this watcher.
+    Task<bool> ISharedWatchDedup<TEntity>.IsDuplicateAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken) =>
+        IsDuplicateAsync(eventType, entity, cancellationToken);
+
+    Task ISharedWatchDedup<TEntity>.RecordDedupTokenAsync(TEntity entity, CancellationToken cancellationToken) =>
+        RecordDedupTokenAsync(entity, cancellationToken);
+
+    Task ISharedWatchDedup<TEntity>.RemoveDedupTokenAsync(TEntity entity, CancellationToken cancellationToken) =>
+        RemoveDedupTokenAsync(entity, cancellationToken);
+
     /// <inheritdoc/>
     protected override void OnLoopFaulted(Exception exception) =>
         logger.LogError(
@@ -110,67 +122,9 @@ public class ResourceWatcher<TEntity>(
 
     protected virtual async Task OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
     {
-        var deletionTrackingEntry = entity.Metadata.DeletionTimestamp is not null
-            ? new DeletionTrackingEntry(GetDeletionCacheKey(entity), GetDeletionFingerprint(entity))
-            : null;
-
-        if (eventType != WatchEventType.Deleted)
+        if (await IsDuplicateAsync(eventType, entity, cancellationToken))
         {
-            switch (settings.ReconcileStrategy)
-            {
-                case ReconcileStrategy.ByGeneration when deletionTrackingEntry is not null:
-                    var cachedDeletionFingerprint = await EntityCache.TryGetAsync<string>(
-                        deletionTrackingEntry.CacheKey,
-                        token: cancellationToken);
-
-                    if (cachedDeletionFingerprint.HasValue && cachedDeletionFingerprint.Value == deletionTrackingEntry.Fingerprint)
-                    {
-                        logger
-                            .LogDebug(
-                                """Entity "{Identifier}" deletion state did not change. Skip event.""",
-                                entity.ToIdentifierString());
-
-                        return;
-                    }
-
-                    break;
-                case ReconcileStrategy.ByGeneration when deletionTrackingEntry is null:
-                    var cachedGeneration = await EntityCache.TryGetAsync<long>(
-                        GetCacheKey(entity),
-                        token: cancellationToken);
-
-                    // skip reconcile if generation did not increase.
-                    if (cachedGeneration.HasValue && cachedGeneration.Value >= entity.Generation())
-                    {
-                        logger
-                            .LogDebug(
-                                """Entity "{Identifier}" modification did not modify generation. Skip event.""",
-                                entity.ToIdentifierString());
-
-                        return;
-                    }
-
-                    break;
-                case ReconcileStrategy.ByResourceVersion:
-                    // reconcile on every change; resourceVersion changes for all mutations, including finalizer removals
-                    var cachedResourceVersion = await EntityCache.TryGetAsync<string>(
-                        GetCacheKey(entity),
-                        token: cancellationToken);
-
-                    if (cachedResourceVersion.HasValue && cachedResourceVersion.Value == entity.ResourceVersion())
-                    {
-                        logger
-                            .LogDebug(
-                                """Entity "{Identifier}" resourceVersion unchanged. Skip event.""",
-                                entity.ToIdentifierString());
-
-                        return;
-                    }
-
-                    break;
-                default:
-                    throw new InvalidOperationException($"Unsupported reconcile strategy: {settings.ReconcileStrategy}.");
-            }
+            return;
         }
 
         var enqueued = await EnqueueEventAsync(eventType, entity, cancellationToken);
@@ -186,39 +140,23 @@ public class ResourceWatcher<TEntity>(
 
         if (eventType == WatchEventType.Deleted)
         {
-            await EntityCache.RemoveAsync(GetCacheKey(entity), token: cancellationToken);
-            await EntityCache.RemoveAsync(GetDeletionCacheKey(entity), token: cancellationToken);
+            await RemoveDedupTokenAsync(entity, cancellationToken);
         }
         else
         {
-            switch (settings.ReconcileStrategy)
-            {
-                case ReconcileStrategy.ByGeneration when deletionTrackingEntry is not null:
-                    await EntityCache.SetAsync(
-                        deletionTrackingEntry.CacheKey,
-                        deletionTrackingEntry.Fingerprint,
-                        tags: _entityCacheTags,
-                        token: cancellationToken);
-
-                    break;
-                case ReconcileStrategy.ByGeneration when deletionTrackingEntry is null:
-                    await EntityCache.SetAsync(
-                        GetCacheKey(entity),
-                        entity.Generation() ?? 1,
-                        tags: _entityCacheTags,
-                        token: cancellationToken);
-
-                    break;
-                case ReconcileStrategy.ByResourceVersion:
-                    await EntityCache.SetAsync(
-                        GetCacheKey(entity),
-                        entity.ResourceVersion(),
-                        tags: _entityCacheTags,
-                        token: cancellationToken);
-
-                    break;
-            }
+            await RecordDedupTokenAsync(entity, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Invoked immediately before a watch session (re)connects. <paramref name="isFullRelist"/> is
+    /// <see langword="true"/> when the session starts from a null/reset resource version (initial connect,
+    /// HTTP 410 Gone, or leader re-acquisition), i.e. the server will replay the full current state.
+    /// Overridden by the shared watcher to reset per-pipeline membership on a full relist.
+    /// </summary>
+    /// <param name="isFullRelist">Whether the upcoming session performs a full relist.</param>
+    protected virtual void OnWatchSessionStarting(bool isFullRelist)
+    {
     }
 
     /// <inheritdoc/>
@@ -230,6 +168,10 @@ public class ResourceWatcher<TEntity>(
         {
             try
             {
+                // A null resource version means the server replays the full current state (initial connect,
+                // 410 Gone reset below, or a fresh ExecuteAsync after leader re-acquisition).
+                OnWatchSessionStarting(isFullRelist: currentVersion is null);
+
                 await foreach ((WatchEventType type, TEntity entity) in client.WatchAsync<TEntity>(
                                    settings.Namespace,
                                    resourceVersion: currentVersion,
@@ -337,6 +279,115 @@ public class ResourceWatcher<TEntity>(
         cachePartition.Length == 0 ? entity.Uid() : $"{cachePartition}:{entity.Uid()}";
 
     private string GetDeletionCacheKey(TEntity entity) => $"{GetCacheKey(entity)}:deletion";
+
+    private async Task<bool> IsDuplicateAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
+    {
+        if (eventType == WatchEventType.Deleted)
+        {
+            return false;
+        }
+
+        var deletionTrackingEntry = entity.Metadata.DeletionTimestamp is not null
+            ? new DeletionTrackingEntry(GetDeletionCacheKey(entity), GetDeletionFingerprint(entity))
+            : null;
+
+        switch (settings.ReconcileStrategy)
+        {
+            case ReconcileStrategy.ByGeneration when deletionTrackingEntry is not null:
+                var cachedDeletionFingerprint = await EntityCache.TryGetAsync<string>(
+                    deletionTrackingEntry.CacheKey,
+                    token: cancellationToken);
+
+                if (cachedDeletionFingerprint.HasValue && cachedDeletionFingerprint.Value == deletionTrackingEntry.Fingerprint)
+                {
+                    logger
+                        .LogDebug(
+                            """Entity "{Identifier}" deletion state did not change. Skip event.""",
+                            entity.ToIdentifierString());
+                    return true;
+                }
+
+                return false;
+
+            case ReconcileStrategy.ByGeneration when deletionTrackingEntry is null:
+                var cachedGeneration = await EntityCache.TryGetAsync<long>(
+                    GetCacheKey(entity),
+                    token: cancellationToken);
+
+                // skip reconcile if generation did not increase.
+                if (cachedGeneration.HasValue && cachedGeneration.Value >= entity.Generation())
+                {
+                    logger
+                        .LogDebug(
+                            """Entity "{Identifier}" modification did not modify generation. Skip event.""",
+                            entity.ToIdentifierString());
+                    return true;
+                }
+
+                return false;
+
+            case ReconcileStrategy.ByResourceVersion:
+                // reconcile on every change; resourceVersion changes for all mutations, including finalizer removals
+                var cachedResourceVersion = await EntityCache.TryGetAsync<string>(
+                    GetCacheKey(entity),
+                    token: cancellationToken);
+
+                if (cachedResourceVersion.HasValue && cachedResourceVersion.Value == entity.ResourceVersion())
+                {
+                    logger
+                        .LogDebug(
+                            """Entity "{Identifier}" resourceVersion unchanged. Skip event.""",
+                            entity.ToIdentifierString());
+                    return true;
+                }
+
+                return false;
+
+            default:
+                throw new InvalidOperationException($"Unsupported reconcile strategy: {settings.ReconcileStrategy}.");
+        }
+    }
+
+    private async Task RecordDedupTokenAsync(TEntity entity, CancellationToken cancellationToken)
+    {
+        var deletionTrackingEntry = entity.Metadata.DeletionTimestamp is not null
+            ? new DeletionTrackingEntry(GetDeletionCacheKey(entity), GetDeletionFingerprint(entity))
+            : null;
+
+        switch (settings.ReconcileStrategy)
+        {
+            case ReconcileStrategy.ByGeneration when deletionTrackingEntry is not null:
+                await EntityCache.SetAsync(
+                    deletionTrackingEntry.CacheKey,
+                    deletionTrackingEntry.Fingerprint,
+                    tags: _entityCacheTags,
+                    token: cancellationToken);
+
+                break;
+            case ReconcileStrategy.ByGeneration when deletionTrackingEntry is null:
+                await EntityCache.SetAsync(
+                    GetCacheKey(entity),
+                    entity.Generation() ?? 1,
+                    tags: _entityCacheTags,
+                    token: cancellationToken);
+
+                break;
+            case ReconcileStrategy.ByResourceVersion:
+                await EntityCache.SetAsync(
+                    GetCacheKey(entity),
+                    entity.ResourceVersion(),
+                    tags: _entityCacheTags,
+                    token: cancellationToken);
+
+                break;
+        }
+    }
+
+    private async Task RemoveDedupTokenAsync(TEntity entity, CancellationToken cancellationToken)
+    {
+        await EntityCache.RemoveAsync(GetCacheKey(entity), token: cancellationToken);
+        await EntityCache.RemoveAsync(GetDeletionCacheKey(entity), token: cancellationToken);
+    }
 
     private async Task OnWatchErrorAsync(Exception e, CancellationToken cancellationToken)
     {

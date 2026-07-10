@@ -245,6 +245,10 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         Services.TryAddScoped<ActivePipelineQueue<TEntity>>();
         Services.TryAddTransient<EntityQueue<TEntity>>(CreateEntityQueueDelegate<TEntity>);
 
+        // One coordinator per entity type, shared by every pipeline's queue consumer, so the parallelism
+        // budget and the per-UID exclusive lock are enforced globally per entity (not per controller).
+        Services.TryAddSingleton<IEntityReconcileCoordinator<TEntity>, EntityReconcileCoordinator<TEntity>>();
+
         RegisterRegistrationValidation(typeof(TEntity));
 
         // The user owns the queue consumer with custom leader election or a custom queue strategy; in

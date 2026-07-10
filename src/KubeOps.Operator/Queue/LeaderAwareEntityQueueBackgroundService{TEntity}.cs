@@ -52,6 +52,7 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
     OperatorSettings operatorSettings,
     ITimedEntityQueue<TEntity> queue,
     IReconciler<TEntity> reconciler,
+    IEntityReconcileCoordinator<TEntity> coordinator,
     ILogger<LeaderAwareEntityQueueBackgroundService<TEntity>> logger,
     LeaderElector elector,
     OperatorMetrics? metrics = null)
@@ -61,6 +62,7 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
         operatorSettings,
         queue,
         reconciler,
+        coordinator,
         logger,
         metrics), ILeaderAwareEntityQueueConsumer<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>

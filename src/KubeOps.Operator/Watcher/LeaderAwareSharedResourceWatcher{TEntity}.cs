@@ -52,6 +52,15 @@ internal sealed class LeaderAwareSharedResourceWatcher<TEntity>(
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     /// <inheritdoc/>
-    protected override Task<bool> EnqueueEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken) =>
-        dispatcher.DispatchAsync(eventType, entity, cancellationToken);
+    protected override Task OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken) =>
+        dispatcher.ProcessEventAsync(eventType, entity, this, cancellationToken);
+
+    /// <inheritdoc/>
+    protected override void OnWatchSessionStarting(bool isFullRelist)
+    {
+        if (isFullRelist)
+        {
+            dispatcher.ResetMembership();
+        }
+    }
 }

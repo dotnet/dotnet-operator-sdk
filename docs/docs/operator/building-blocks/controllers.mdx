@@ -495,6 +495,13 @@ Notes:
 
 - Each pipeline maintains its own watch connection, queue, and deduplication cache, so the
   controllers never suppress each other's events — even for the same object.
+- The same object is never reconciled by two of its controllers **concurrently**: a per-entity-type
+  coordinator serializes reconciliation per object UID (and enforces one shared
+  [parallelism budget](../configuration/parallel-reconciliation)). Finalizers are **entity-global** —
+  they are attached once and, under that same lock, are **not executed concurrently or duplicated
+  solely because multiple controllers match** the object. This is not general exactly-once execution
+  (e.g. a process crash between an external side effect and the finalizer removal can still re-run it),
+  so finalizers must remain idempotent.
 - Registering the exact same controller/selector combination twice throws at registration time
   (it would only open a redundant watch stream).
 - The `EntityQueue<TEntity>` requeue delegate routes to the pipeline the current reconciliation

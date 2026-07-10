@@ -71,19 +71,26 @@ different label-selected slice of the same resource — and the overlap or conne
   calls `MatchesAsync(entity, cancellationToken)` directly.
 :::
 
-## Interaction with `ReconcileStrategy`
+## Label transitions
 
-The watch strategy and the [reconcile strategy](./reconcile-strategy) interact when an object's
-labels change and thereby change which controllers it matches.
+When an object's labels change so that it starts or stops matching a controller's selector, both watch
+strategies deliver the transition — with parity across `ReconcileStrategy.ByGeneration` and
+`ReconcileStrategy.ByResourceVersion`:
 
-With `ReconcileStrategy.ByGeneration`, a label-only change never re-triggers reconciliation.
-Under `PerController`, a label change that makes an object newly match a controller's server-side
-selector still delivers an `Added` event to that controller. Under `SharedPerEntity` the event is
-deduplicated by generation **before** matching, so a newly matching controller only fires on the
-next generation change.
+- **Entry** (an object starts matching a controller): the controller receives an `Added` — under
+  `PerController` from its server-side filtered watch, under `SharedPerEntity` synthesized by the shared
+  dispatcher, which evaluates membership **before** deduplication so a label-only change is never
+  dropped.
+- **Exit** (an object stops matching a controller): the controller receives a `Deleted`, invoking
+  `DeletedAsync` — again from the server-side watch under `PerController`, and synthesized under
+  `SharedPerEntity`.
 
-:::warning[Label transitions in shared mode]
-Use [`ReconcileStrategy.ByResourceVersion`](./reconcile-strategy) when controllers must react to
-label transitions under `SharedPerEntity` — otherwise a controller that newly matches an object
-solely because of a label change will not be triggered until the object's `generation` changes.
+Steady-state events for objects that keep matching still go through the normal
+[reconcile-strategy](./reconcile-strategy) deduplication, so `ByGeneration` continues to skip label- and
+annotation-only writes for controllers whose membership did not change.
+
+:::note
+Neither strategy delivers a transition that happened while the watch was disconnected: on reconnect the
+current state is re-listed (rebuilding `SharedPerEntity` membership), but an object that left a selector
+during the gap produces no synthetic `Deleted` — identical to a server-side filtered watch.
 :::

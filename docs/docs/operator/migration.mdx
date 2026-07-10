@@ -116,6 +116,18 @@ selectors no longer let one pipeline's cache write suppress another pipeline's e
 (it defaults to a shared partition, preserving single-pipeline behavior). Pass a distinct token per
 pipeline when running several watchers for the same entity type.
 
+### `EntityQueueBackgroundService<TEntity>` constructor gained a coordinator parameter
+
+The queue consumer's constructor takes an additional `IEntityReconcileCoordinator<TEntity>`. The
+coordinator is a per-entity-type singleton that owns the global parallelism budget and the per-UID
+exclusive lock, so multiple controllers for the same entity no longer multiply the parallelism limit
+and never reconcile (or finalize) the same object concurrently.
+
+**Migration:** if you derive a custom consumer from `EntityQueueBackgroundService<TEntity>` (or
+`LeaderAwareEntityQueueBackgroundService<TEntity>`), forward the new `IEntityReconcileCoordinator<TEntity>`
+to the base constructor — exactly as you already forward `IReconciler<TEntity>`. It is registered
+automatically per entity type, so constructor injection resolves it.
+
 ### `IReconciler<TEntity>` / `ITimedEntityQueue<TEntity>` not registered for the in-memory strategy
 
 With the default in-memory queue strategy these services are now owned by the pipeline and are **no

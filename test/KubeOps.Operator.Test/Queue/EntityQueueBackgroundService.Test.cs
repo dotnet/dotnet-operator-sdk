@@ -161,6 +161,7 @@ public sealed class EntityQueueBackgroundServiceTest
             effectiveSettings,
             queue,
             reconcilerMock.Object,
+            new EntityReconcileCoordinator<V1ConfigMap>(effectiveSettings),
             Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>(),
             metrics);
 
@@ -308,12 +309,14 @@ public sealed class EntityQueueBackgroundServiceTest
         var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
         var clientMock = new Mock<IKubernetesClient>();
 
+        var settings = new OperatorSettingsBuilder().Build();
         var service = new EntityQueueBackgroundService<V1ConfigMap>(
             new("test"),
             clientMock.Object,
-            new OperatorSettingsBuilder().Build(),
+            settings,
             queue,
             reconcilerMock.Object,
+            new EntityReconcileCoordinator<V1ConfigMap>(settings),
             Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>())
         {
             // The BarrierQueue ignores cancellation, so bound the stop/dispose drain short.

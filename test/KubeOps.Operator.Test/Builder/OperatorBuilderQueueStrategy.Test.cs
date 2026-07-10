@@ -117,6 +117,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     }
 
     [Fact]
+    [Trait("Area", "MultipleControllers")]
     public void Should_Register_Reconciler_For_Custom_Strategy_So_A_Custom_Consumer_Resolves()
     {
         // Regression: with QueueStrategy.Custom under normal (non-custom) leader election the user supplies
@@ -139,6 +140,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     }
 
     [Fact]
+    [Trait("Area", "MultipleControllers")]
     public void Should_Reject_Multiple_Controllers_Per_Entity_For_Custom_Queue_Strategy()
     {
         // The custom paths share a single user-owned queue and one unkeyed reconciler with no per-pipeline
@@ -153,6 +155,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     }
 
     [Fact]
+    [Trait("Area", "MultipleControllers")]
     public void Should_Reject_Multiple_Controllers_Per_Entity_For_Custom_Leader_Election()
     {
         var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Custom }.Build());
