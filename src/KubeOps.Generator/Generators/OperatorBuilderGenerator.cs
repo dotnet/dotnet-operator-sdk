@@ -37,6 +37,8 @@ internal sealed class OperatorBuilderGenerator : IIncrementalGenerator
     private const string RegistrationsAttributeFullName =
         "KubeOps.Abstractions.Builder.KubeOpsGeneratedRegistrations";
 
+    private const string OperatorAssemblyName = "KubeOps.Operator";
+
     // Referenced registration classes must have unique fully qualified names to be invoked from the
     // generated RegisterComponents. A clash (typically two assemblies using the global namespace
     // default) would emit ambiguous code, so the conflicting registration is skipped and reported.
@@ -54,15 +56,21 @@ internal sealed class OperatorBuilderGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        var referencesOperator = context.CompilationProvider.Select(static (compilation, _) =>
+            compilation.ReferencedAssemblyNames.Any(id =>
+                string.Equals(id.Name, OperatorAssemblyName, StringComparison.OrdinalIgnoreCase)));
+
         context.RegisterSourceOutput(
             EntityDiscovery.GetControllers(context)
                 .Combine(EntityDiscovery.GetFinalizers(context))
                 .Combine(EntityDiscovery.GetEntities(context))
                 .Combine(RegistrationDiscovery.GetReferencedRegistrations(context))
-                .Combine(GeneratorOptions.GetGeneratorNamespace(context)),
+                .Combine(GeneratorOptions.GetGeneratorNamespace(context))
+                .Combine(referencesOperator),
             (spc, source) => Execute(
                 spc,
-                source.Left.Left.Left.Left,
+                source.Left.Left.Left.Left.Left,
+                source.Left.Left.Left.Left.Right,
                 source.Left.Left.Left.Right,
                 source.Left.Left.Right,
                 source.Left.Right,
@@ -75,7 +83,8 @@ internal sealed class OperatorBuilderGenerator : IIncrementalGenerator
         EquatableArray<FinalizerRegistration> finalizers,
         EquatableArray<AttributedEntity> entities,
         EquatableArray<ReferencedRegistrations> referencedRegistrations,
-        string? generatorNamespace)
+        string? generatorNamespace,
+        bool referencesOperator)
     {
         var ownControllers = controllers.Where(c => entities.Any(e =>
             e.ClassDeclaration.FullyQualifiedName == c.FullyQualifiedEntityName)).ToList();
@@ -83,6 +92,13 @@ internal sealed class OperatorBuilderGenerator : IIncrementalGenerator
             e.ClassDeclaration.FullyQualifiedName == f.FullyQualifiedEntityName)).ToList();
         var hasOwnControllers = ownControllers.Count > 0;
         var hasOwnFinalizers = ownFinalizers.Count > 0;
+
+        // The aggregate is only useful where an operator host exists (KubeOps.Operator is
+        // referenced) or components are present; pure entity libraries get no empty class.
+        if (!hasOwnControllers && !hasOwnFinalizers && referencedRegistrations.Count == 0 && !referencesOperator)
+        {
+            return;
+        }
 
         // Class names that are already taken in this compilation, each with the source location a
         // conflict is anchored to (the declaration of the first own component; referenced
