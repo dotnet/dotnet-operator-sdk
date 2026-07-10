@@ -30,4 +30,12 @@ public enum LeaderElectionType
     /// provided defaults.
     /// </summary>
     Custom = 2,
+
+    /// <summary>
+    /// Represents a scoped leader election mechanism where responsibility is partitioned by
+    /// Kubernetes namespace across multiple operator instances. Requires a registered
+    /// <c>KubeOps.Abstractions.LeaderElection.ILeadershipScope</c> that decides which
+    /// namespaces this instance is responsible for.
+    /// </summary>
+    Scoped = 3,
 }

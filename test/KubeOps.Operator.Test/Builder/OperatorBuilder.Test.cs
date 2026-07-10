@@ -274,6 +274,35 @@ public sealed class OperatorBuilderTest
     }
 
     [Fact]
+    public void Should_Add_ScopeAware_Services_For_Scoped_Leader_Election()
+    {
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Scoped }.Build());
+        builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+
+        builder.Services.Should().Contain(s =>
+            s.ServiceType == typeof(IHostedService) &&
+            s.ImplementationType == typeof(ScopeAwareResourceWatcher<V1OperatorIntegrationTestEntity>) &&
+            s.Lifetime == ServiceLifetime.Singleton);
+        builder.Services.Should().Contain(s =>
+            s.ServiceType == typeof(IHostedService) &&
+            s.ImplementationType == typeof(ScopeAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>) &&
+            s.Lifetime == ServiceLifetime.Singleton);
+        builder.Services.Should().NotContain(s =>
+            s.ServiceType == typeof(IHostedService) &&
+            (s.ImplementationType == typeof(ResourceWatcher<V1OperatorIntegrationTestEntity>) ||
+             s.ImplementationType == typeof(LeaderAwareResourceWatcher<V1OperatorIntegrationTestEntity>)));
+    }
+
+    [Fact]
+    public void Should_Not_Add_Leader_Elector_For_Scoped_Leader_Election()
+    {
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Scoped }.Build());
+
+        builder.Services.Should().NotContain(s =>
+            s.ServiceType == typeof(k8s.LeaderElection.LeaderElector));
+    }
+
+    [Fact]
     public void Should_Add_CrdInstaller_Settings()
     {
         _builder.AddCrdInstaller(c => c

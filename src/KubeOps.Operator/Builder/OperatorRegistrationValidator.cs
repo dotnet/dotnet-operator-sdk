@@ -5,6 +5,7 @@
 using System.Globalization;
 
 using KubeOps.Abstractions.Builder;
+using KubeOps.Abstractions.LeaderElection;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.Operator.Constants;
@@ -61,6 +62,7 @@ internal sealed class OperatorRegistrationValidator(
         }
 
         ValidateCacheTagging(problems);
+        ValidateLeadershipScope(problems);
 
         if (problems.Count > 0)
         {
@@ -211,6 +213,23 @@ internal sealed class OperatorRegistrationValidator(
                 "ConfigureResourceWatcherEntityCache configuration, or use the default cache.",
                 cacheName));
         }
+    }
+
+    // Scoped leader election resolves the responsibility decision through ILeadershipScope; without a
+    // registration, every scope-aware watcher and queue consumer would fail at construction with a generic
+    // DI error instead of a message that names the missing piece.
+    private void ValidateLeadershipScope(List<string> problems)
+    {
+        if (settings.LeaderElectionType != LeaderElectionType.Scoped ||
+            HasService(registry.Services, typeof(ILeadershipScope)))
+        {
+            return;
+        }
+
+        problems.Add(
+            "No ILeadershipScope is registered. LeaderElectionType.Scoped requires a scope implementation " +
+            "that decides which namespaces this instance is responsible for; register it via " +
+            "services.AddSingleton<ILeadershipScope, MyScope>().");
     }
 
     private void ValidateEntity(Type entityType, List<string> problems)
