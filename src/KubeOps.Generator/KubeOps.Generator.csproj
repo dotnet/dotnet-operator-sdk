@@ -3,6 +3,8 @@
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
         <IsRoslynComponent>true</IsRoslynComponent>
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
         <DevelopmentDependency>true</DevelopmentDependency>
@@ -34,6 +36,14 @@
             Pack="true"
             PackagePath="analyzers/dotnet/cs"
             Visible="false" />
+        <None Include="KubeOps.Generator.props"
+            Pack="true"
+            PackagePath="build;buildTransitive" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+        <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
     </ItemGroup>
 
 </Project>

@@ -74,6 +74,35 @@ Action required if you use custom queue components:
 - Reconcilers must honor their `CancellationToken`, since leadership loss now cancels in-flight
   reconciliations.
 
+### New in v12.x (generator, non-breaking)
+
+The source generator now supports **multi-assembly composition**: controllers, finalizers and
+entities may live in referenced class libraries that also reference `KubeOps.Generator`.
+
+- Assemblies containing controllers or finalizers are marked with an assembly-level
+  `KubeOpsGeneratedRegistrationsAttribute`. The generated `RegisterComponents` of the consuming
+  compilation discovers these markers on all transitively referenced assemblies and registers
+  every assembly's components exactly once — components in referenced class libraries are now
+  registered automatically.
+- `ControllerRegistrations`, `FinalizerRegistrations`, `EntityDefinitions` and
+  `EntityInitializer` are only generated when the compilation contains matching components.
+  `RegisterComponents` is still always generated and only invokes the parts that exist.
+- The shared generated classes remain in the **global namespace** by default. When multiple
+  projects of one solution use the generator, set the new `KubeOpsGeneratorNamespace` MSBuild
+  property (e.g. to `$(RootNamespace)`) in the participating projects so the generated class
+  names do not conflict. The generator reports the warning **KOG002** and skips the conflicting
+  registration when it detects such a clash. Note that with the property set, top-level
+  `Program.cs` files need a using directive for the configured namespace so that
+  `RegisterComponents()` resolves.
+- `OperatorBuilderExtensions.RegisterComponents` and the `EntityInitializer.Initialize()`
+  extensions are now generated as `internal`. They are only meaningful for the compilation they
+  are generated into; keeping them invisible across assembly boundaries rules out ambiguous
+  extension method calls when multiple assemblies use the generator. This only affects the exotic
+  case of calling these generated extensions **from a different assembly** — such setups were
+  already broken by ambiguous calls as soon as two projects referenced the generator. If another
+  assembly relied on calling them, reference the generator in that assembly instead — it
+  generates its own.
+
 :::tip
 Every breaking change is also listed in the
 [release notes](https://github.com/dotnet/dotnet-operator-sdk/releases). Check the notes for the

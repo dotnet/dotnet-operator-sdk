@@ -121,6 +121,27 @@ Install the CRDs before or with the operator: generate them with the [CLI](./cli
 (`kubeops generate operator`), apply them as part of the [deployment](./deployment), or — for
 development only — use the [CRD Installer](./configuration/crd-installer).
 
+## `RegisterComponents()` is not found (CS1061)
+
+**Symptom:** The build fails with `'IOperatorBuilder' does not contain a definition for
+'RegisterComponents'`.
+
+Make sure the `KubeOps.Generator` package is referenced and the project compiles otherwise —
+source generators do not run on broken compilations. If the `KubeOpsGeneratorNamespace` MSBuild
+property is set, the generated classes live in that namespace instead of the global namespace;
+top-level `Program.cs` files then need a matching using directive (e.g. `using MyOperator;`).
+
+## Components of a referenced library are not registered / warning KOG002
+
+**Symptom:** Controllers or finalizers that live in a referenced class library never reconcile,
+and the build reports `KOG002`.
+
+Two assemblies in the reference chain generate registration classes with the same fully qualified
+name (by default, the global namespace is used). The generator skips the conflicting registration
+instead of emitting ambiguous code. Set the `KubeOpsGeneratorNamespace` MSBuild property (e.g. to
+`$(RootNamespace)`) in the conflicting projects so each assembly generates into its own
+namespace — see [KubeOps.Generator](../packages/generator).
+
 ## Leader election issues
 
 See [Leader Election — Troubleshooting](./configuration/leader-election#troubleshooting) for lease

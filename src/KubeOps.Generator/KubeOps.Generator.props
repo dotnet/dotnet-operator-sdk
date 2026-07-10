@@ -1,0 +1,15 @@
+<Project>
+
+    <!--
+        Makes the KubeOpsGeneratorNamespace MSBuild property visible to the source generator.
+        When set (e.g. to $(RootNamespace)), the generated shared classes (EntityDefinitions,
+        EntityInitializer, ControllerRegistrations, FinalizerRegistrations,
+        OperatorBuilderExtensions) are emitted into that namespace instead of the global
+        namespace. Configure it in projects that participate in multi-assembly composition so the
+        generated class names do not conflict across assemblies.
+    -->
+    <ItemGroup>
+        <CompilerVisibleProperty Include="KubeOpsGeneratorNamespace" />
+    </ItemGroup>
+
+</Project>

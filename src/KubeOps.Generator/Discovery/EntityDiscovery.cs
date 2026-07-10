@@ -50,7 +50,10 @@ internal static class EntityDiscovery
             .Where(static c => c is not null)
             .Select(static (c, _) => c!.Value)
             .Collect()
-            .Select(static (arr, _) => new EquatableArray<ControllerRegistration>(arr.Distinct().ToImmutableArray()));
+            .Select(static (arr, _) => new EquatableArray<ControllerRegistration>(arr
+                .GroupBy(static c => c with { Location = null })
+                .Select(static g => g.First())
+                .ToImmutableArray()));
 
     public static IncrementalValueProvider<EquatableArray<FinalizerRegistration>> GetFinalizers(
         IncrementalGeneratorInitializationContext context)
@@ -60,7 +63,10 @@ internal static class EntityDiscovery
             .Where(static f => f is not null)
             .Select(static (f, _) => f!.Value)
             .Collect()
-            .Select(static (arr, _) => new EquatableArray<FinalizerRegistration>(arr.Distinct().ToImmutableArray()));
+            .Select(static (arr, _) => new EquatableArray<FinalizerRegistration>(arr
+                .GroupBy(static f => f with { Location = null })
+                .Select(static g => g.First())
+                .ToImmutableArray()));
 
     private static EquatableArray<AttributedEntity> Merge(
         ImmutableArray<AttributedEntity> local,
@@ -205,7 +211,8 @@ internal static class EntityDiscovery
             ? null
             : new ControllerRegistration(
                 classSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                entity);
+                entity,
+                LocationInfo.CreateFrom(context.Node));
     }
 
     private static FinalizerRegistration? GetFinalizer(GeneratorSyntaxContext context)
@@ -216,7 +223,8 @@ internal static class EntityDiscovery
             : new FinalizerRegistration(
                 classSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 classSymbol.Name,
-                entity);
+                entity,
+                LocationInfo.CreateFrom(context.Node));
     }
 
     private static string? GetImplementedEntity(
