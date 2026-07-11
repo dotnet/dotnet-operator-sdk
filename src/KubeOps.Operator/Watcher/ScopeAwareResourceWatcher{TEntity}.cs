@@ -53,6 +53,7 @@ public class ScopeAwareResourceWatcher<TEntity>(
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     private readonly OperatorSettings _settings = settings;
+    private readonly IEntityFieldSelector<TEntity> _fieldSelector = fieldSelector;
     private readonly IEntityLabelSelector<TEntity> _labelSelector = labelSelector;
     private readonly IKubernetesClient _client = client;
 
@@ -240,6 +241,7 @@ public class ScopeAwareResourceWatcher<TEntity>(
             var entities = await _client.ListAsync<TEntity>(
                 _settings.Namespace,
                 await _labelSelector.GetLabelSelectorAsync(cancellationToken),
+                await _fieldSelector.GetFieldSelectorAsync(cancellationToken),
                 cancellationToken);
 
             foreach (var entity in entities)

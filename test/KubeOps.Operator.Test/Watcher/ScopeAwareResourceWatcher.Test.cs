@@ -108,7 +108,8 @@ public sealed class ScopeAwareResourceWatcherTest
         _client
             .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
                 null,
-                It.IsAny<string?>(),
+                "app=test",
+                "metadata.name=test-entity",
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync([entity]);
         _queue
@@ -148,6 +149,7 @@ public sealed class ScopeAwareResourceWatcherTest
             .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
                 "watched-namespace",
                 It.IsAny<string?>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync([])
             .Callback(() => listed.TrySetResult());
@@ -160,6 +162,7 @@ public sealed class ScopeAwareResourceWatcherTest
         _client.Verify(
             c => c.ListAsync<V1OperatorIntegrationTestEntity>(
                 "watched-namespace",
+                It.IsAny<string?>(),
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
@@ -176,6 +179,7 @@ public sealed class ScopeAwareResourceWatcherTest
         _client
             .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
                 null,
+                It.IsAny<string?>(),
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
             .Returns(async () =>
@@ -222,6 +226,7 @@ public sealed class ScopeAwareResourceWatcherTest
         _client
             .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
                 null,
+                It.IsAny<string?>(),
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync([resyncEntity]);
@@ -270,6 +275,7 @@ public sealed class ScopeAwareResourceWatcherTest
             .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
                 null,
                 It.IsAny<string?>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
             .Returns(async () =>
             {
@@ -317,6 +323,7 @@ public sealed class ScopeAwareResourceWatcherTest
             c => c.ListAsync<V1OperatorIntegrationTestEntity>(
                 It.IsAny<string?>(),
                 It.IsAny<string?>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
     }
@@ -351,11 +358,11 @@ public sealed class ScopeAwareResourceWatcherTest
         var labelSelector = new Mock<IEntityLabelSelector<V1OperatorIntegrationTestEntity>>();
         labelSelector
             .Setup(s => s.GetLabelSelectorAsync(It.IsAny<CancellationToken>()))
-            .Returns(ValueTask.FromResult<string?>(null));
+            .Returns(ValueTask.FromResult<string?>("app=test"));
         var fieldSelector = new Mock<IEntityFieldSelector<V1OperatorIntegrationTestEntity>>();
         fieldSelector
             .Setup(s => s.GetFieldSelectorAsync(It.IsAny<CancellationToken>()))
-            .Returns(ValueTask.FromResult<string?>(null));
+            .Returns(ValueTask.FromResult<string?>("metadata.name=test-entity"));
 
         return new TestableWatcher(
             cacheProvider,

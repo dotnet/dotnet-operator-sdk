@@ -118,17 +118,14 @@ entity; no elector, custom watcher, or custom queue consumer is required.
 - Every dequeued entry is re-checked, so entries that were pending when responsibility moved to
   another instance are skipped instead of reconciled twice.
 - When `ScopeChanged` is raised, the watched entities are re-listed (applying the configured
-  namespace and label selector) and run through the regular event path, so changes that happened
+  namespace, label selector, and field selector) and run through the regular event path, so changes that happened
   while another instance was (or nobody was) responsible are picked up; the deduplication cache
-  skips entities that are already reconciled in their current state. Field selectors cannot be
-  applied to this re-list; entities excluded by a field selector may be enqueued once after a
-  scope change.
+  skips entities that are already reconciled in their current state.
 - Losing responsibility needs no action: pending entries are skipped by the per-entry check. A
   reconciliation already in flight is *not* cancelled - reconcilers must be idempotent, and stale
   writes are rejected by the API server via `metadata.resourceVersion` (HTTP 409).
 - Unlike `Custom`, `Scoped` keeps the full default pipeline: multiple controllers per entity,
-  selectors, and shared watchers keep working - with the field-selector caveat on the scope-change
-  re-list described above.
+  selectors, and shared watchers keep working.
 
 ## Custom Leader Election
 

@@ -93,11 +93,13 @@ public interface IKubernetesClient : IDisposable
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="namespace">If the entities are namespaced, provide the name of the namespace.</param>
     /// <param name="labelSelector">A string, representing an optional label selector for filtering fetched objects.</param>
+    /// <param name="fieldSelector">A string, representing an optional field selector for filtering fetched objects.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>A list of Kubernetes entities.</returns>
     Task<IList<TEntity>> ListAsync<TEntity>(
         string? @namespace = null,
         string? labelSelector = null,
+        string? fieldSelector = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>;
 
@@ -112,29 +114,37 @@ public interface IKubernetesClient : IDisposable
     /// <param name="namespace">
     /// If only entities in a given namespace should be listed, provide the namespace here.
     /// </param>
-    /// <param name="labelSelectors">A list of label-selectors to apply to the search.</param>
+    /// <param name="selectors">The label and field selectors to apply to the search.</param>
     /// <returns>A list of Kubernetes entities.</returns>
     Task<IList<TEntity>> ListAsync<TEntity>(
         string? @namespace = null,
-        params LabelSelector[] labelSelectors)
+        params KubernetesSelector[] selectors)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
         using var cts = new CancellationTokenSource();
-        return ListAsync<TEntity>(@namespace, labelSelectors.ToExpression(), cts.Token);
+        return ListAsync<TEntity>(
+            @namespace,
+            selectors.OfType<LabelSelector>().ToExpression(),
+            selectors.OfType<FieldSelector>().ToExpression(),
+            cancellationToken: cts.Token);
     }
 
-    /// <inheritdoc cref="ListAsync{TEntity}(string?,string?,CancellationToken)"/>
+    /// <inheritdoc cref="ListAsync{TEntity}(string?,string?,string?,CancellationToken)"/>
     IList<TEntity> List<TEntity>(
         string? @namespace = null,
-        string? labelSelector = null)
+        string? labelSelector = null,
+        string? fieldSelector = null)
         where TEntity : IKubernetesObject<V1ObjectMeta>;
 
-    /// <inheritdoc cref="ListAsync{TEntity}(string?,LabelSelector[])"/>
+    /// <inheritdoc cref="ListAsync{TEntity}(string?,KubernetesSelector[])"/>
     IList<TEntity> List<TEntity>(
         string? @namespace = null,
-        params LabelSelector[] labelSelectors)
+        params KubernetesSelector[] selectors)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => List<TEntity>(@namespace, labelSelectors.ToExpression());
+        => List<TEntity>(
+            @namespace,
+            selectors.OfType<LabelSelector>().ToExpression(),
+            selectors.OfType<FieldSelector>().ToExpression());
 
     /// <summary>
     /// Create or Update an entity. This first fetches the entity from the Kubernetes API
@@ -667,7 +677,7 @@ public interface IKubernetesClient : IDisposable
     /// Defaults to changes from the beginning of history.
     /// </param>
     /// <param name="cancellationToken">Cancellation-Token.</param>
-    /// <param name="labelSelectors">A list of label-selectors to apply to the search.</param>
+    /// <param name="selectors">The label and field selectors to apply to the watch.</param>
     /// <returns>An entity watcher for the given entity.</returns>
     Watcher<TEntity> Watch<TEntity>(
         Action<WatchEventType, TEntity> onEvent,
@@ -678,7 +688,7 @@ public interface IKubernetesClient : IDisposable
         bool? allowWatchBookmarks = null,
         string? resourceVersion = null,
         CancellationToken cancellationToken = default,
-        params LabelSelector[] labelSelectors)
+        params KubernetesSelector[] selectors)
         where TEntity : IKubernetesObject<V1ObjectMeta>
         => Watch(
             onEvent,
@@ -688,7 +698,8 @@ public interface IKubernetesClient : IDisposable
             timeout,
             allowWatchBookmarks,
             resourceVersion,
-            labelSelectors.ToExpression(),
+            selectors.OfType<LabelSelector>().ToExpression(),
+            selectors.OfType<FieldSelector>().ToExpression(),
             cancellationToken);
 
     /// <summary>
@@ -714,6 +725,7 @@ public interface IKubernetesClient : IDisposable
     /// Defaults to changes from the beginning of history.
     /// </param>
     /// <param name="labelSelector">A string, representing an optional label selector for filtering watched objects.</param>
+    /// <param name="fieldSelector">A string, representing an optional field selector for filtering watched objects.</param>
     /// <param name="cancellationToken">Cancellation-Token.</param>
     /// <returns>An entity watcher for the given entity.</returns>
     Watcher<TEntity> Watch<TEntity>(
@@ -725,6 +737,7 @@ public interface IKubernetesClient : IDisposable
         bool? allowWatchBookmarks = null,
         string? resourceVersion = null,
         string? labelSelector = null,
+        string? fieldSelector = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>;
 
