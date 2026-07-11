@@ -101,14 +101,26 @@ client.ListAsync<TEntity>(@namespace, labelSelector, cancellationToken: cancella
 ```
 
 The typed `params LabelSelector[]` overloads of `List`, `ListAsync`, and `Watch` now accept
-`params KubernetesSelector[]`. Existing label-selector calls remain source-compatible, while label
-and field selectors can now be combined in one call:
+`params KubernetesSelector[]`, and the parameter was renamed from `labelSelectors` to `selectors`.
+Positional label-selector calls remain source-compatible, while label and field selectors can now
+be combined in one call:
 
 ```csharp
 client.List<TEntity>(
     @namespace,
     new EqualsLabelSelector("app", "demo"),
     new EqualsFieldSelector("metadata.name", "demo"));
+```
+
+Callers that passed the selectors by **name** must rename the argument, because the parameter is no
+longer called `labelSelectors`:
+
+```csharp
+// before (v12)
+client.List<TEntity>(@namespace, labelSelectors: new EqualsLabelSelector("app", "demo"));
+
+// after (v13)
+client.List<TEntity>(@namespace, selectors: new EqualsLabelSelector("app", "demo"));
 ```
 
 The synchronous string-based `Watch` overload likewise accepts `fieldSelector` immediately after

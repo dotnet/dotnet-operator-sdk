@@ -119,12 +119,21 @@ entity; no elector, custom watcher, or custom queue consumer is required.
   another instance are skipped instead of reconciled twice.
 - When `ScopeChanged` is raised, this entity type's deduplication cache is dropped and the watched
   entities are re-listed (applying the configured namespace, label selector, and field selector)
-  and run through the regular event path, so changes that happened while another instance was (or
-  nobody was) responsible are picked up. Clearing the cache first guarantees that an entity handed
-  back to this instance is reconciled even when its `generation`/`resourceVersion` is unchanged
-  since the previous ownership term — the takeover reconcile would otherwise be suppressed as a
-  duplicate. Reconcilers must therefore be idempotent, since every in-scope entity is reconciled
-  once per scope change.
+  and run through the regular event path, so **creations and modifications** that happened while
+  another instance was (or nobody was) responsible are picked up. Clearing the cache first
+  guarantees that an entity handed back to this instance is reconciled even when its
+  `generation`/`resourceVersion` is unchanged since the previous ownership term — the takeover
+  reconcile would otherwise be suppressed as a duplicate. Reconcilers must therefore be idempotent,
+  since every in-scope entity is reconciled once per scope change.
+- **Deletions are not recovered by the resync.** The resync is a `List` of objects that still
+  exist; it cannot reconstruct a tombstone. If an object **without a blocking finalizer** is deleted
+  during a window in which no instance was responsible (or before the acquiring instance's watch
+  observed the `Deleted` event), the `Deleted` event is dropped at the responsibility gate and
+  `DeletedAsync` runs on no instance. This mirrors standard Kubernetes semantics, where `Deleted`
+  callbacks are inherently best-effort (an operator that is down during a deletion misses them too).
+  For cleanup that must not be lost across scope handovers, use a **finalizer**: a blocking
+  finalizer keeps the object alive (with `DeletionTimestamp` set) until it is processed, so the
+  acquiring instance sees it in the resync `List` as a modification and runs finalization.
 - Losing responsibility needs no action: pending entries are skipped by the per-entry check. A
   reconciliation already in flight is *not* cancelled - reconcilers must be idempotent, and stale
   writes are rejected by the API server via `metadata.resourceVersion` (HTTP 409).
