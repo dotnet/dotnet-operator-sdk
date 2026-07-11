@@ -35,7 +35,7 @@ internal static class Options
         CustomParser = result =>
         {
             var value = result.Tokens.Single().Value;
-            return new Regex(value);
+            return new(value, RegexOptions.None, TimeSpan.FromSeconds(1));
         },
     };
 
