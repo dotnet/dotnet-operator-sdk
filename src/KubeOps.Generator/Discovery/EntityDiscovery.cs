@@ -16,6 +16,8 @@ internal static class EntityDiscovery
     private const string KubernetesEntityAttributeName = "KubernetesEntityAttribute";
     private const string IEntityControllerMetadataName = "KubeOps.Abstractions.Reconciliation.Controller.IEntityController`1";
     private const string IEntityFinalizerMetadataName = "KubeOps.Abstractions.Reconciliation.Finalizer.IEntityFinalizer`1";
+    private const string LabelSelectorSyntaxName = "LabelSelector";
+    private const string FieldSelectorSyntaxName = "FieldSelector";
 
     private const string KindName = "Kind";
     private const string GroupName = "Group";
@@ -51,8 +53,13 @@ internal static class EntityDiscovery
             .Select(static (c, _) => c!.Value)
             .Collect()
             .Select(static (arr, _) => new EquatableArray<ControllerRegistration>(arr
-                .GroupBy(static c => c with { Location = null })
-                .Select(static g => g.First())
+                .GroupBy(static c => c.FullyQualifiedController, StringComparer.Ordinal)
+                .Select(static g => g.Aggregate(static (merged, next) => merged with
+                {
+                    FullyQualifiedLabelSelector = merged.FullyQualifiedLabelSelector ?? next.FullyQualifiedLabelSelector,
+                    FullyQualifiedFieldSelector = merged.FullyQualifiedFieldSelector ?? next.FullyQualifiedFieldSelector,
+                    Location = merged.Location ?? next.Location,
+                }))
                 .ToImmutableArray()));
 
     public static IncrementalValueProvider<EquatableArray<FinalizerRegistration>> GetFinalizers(
@@ -212,7 +219,35 @@ internal static class EntityDiscovery
             : new ControllerRegistration(
                 classSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 entity,
+                GetSelectorAttributeType(context, LabelSelectorSyntaxName),
+                GetSelectorAttributeType(context, FieldSelectorSyntaxName),
                 LocationInfo.CreateFrom(context.Node));
+    }
+
+    // Match the attribute syntactically by name (consistent with the KubernetesEntity attribute handling
+    // above) so selectors are discovered even when the attribute does not fully bind in the input
+    // compilation; the typeof() argument is then resolved through the semantic model.
+    private static string? GetSelectorAttributeType(GeneratorSyntaxContext context, string attributeSyntaxName)
+    {
+        if (context.Node is not ClassDeclarationSyntax cls)
+        {
+            return null;
+        }
+
+        var attribute = cls.AttributeLists
+            .SelectMany(a => a.Attributes)
+            .FirstOrDefault(a => a.Name.ToString().Split('.') is var parts &&
+                                 parts[parts.Length - 1] is var name &&
+                                 (name == attributeSyntaxName || name == attributeSyntaxName + "Attribute"));
+
+        if (attribute?.ArgumentList?.Arguments.FirstOrDefault()?.Expression is not TypeOfExpressionSyntax typeOfExpression)
+        {
+            return null;
+        }
+
+        return ModelExtensions.GetTypeInfo(context.SemanticModel, typeOfExpression.Type).Type is INamedTypeSymbol selectorType
+            ? selectorType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+            : null;
     }
 
     private static FinalizerRegistration? GetFinalizer(GeneratorSyntaxContext context)

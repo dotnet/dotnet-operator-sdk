@@ -80,6 +80,8 @@ flowchart TB
 
 The `requeueAfter` path (dashed) is triggered when your controller returns a `ReconciliationResult` with a non-zero `RequeueAfter` value.
 
+KubeOps creates one such pipeline — watcher, queue, and background service — **per registered controller**. Multiple controllers for the same entity type (for example with different label selectors) therefore run fully independent pipelines that never suppress each other's events — see [Multiple Controllers per Entity](#multiple-controllers-per-entity). With the opt-in `WatchStrategy.SharedPerEntity`, a single shared watcher per entity type replaces the per-controller watchers and dispatches each event to all pipelines whose label selectors match — see [Watch Strategy](../configuration/watch-strategy) for the trade-offs.
+
 ## Reconciliation Loop
 
 The reconciliation loop is the core of your operator's functionality. It consists of two main methods:
@@ -451,6 +453,73 @@ When no field selector is needed, the built-in `DefaultEntityFieldSelector<TEnti
 | `AddController<TImpl, TEntity>()` | Default (none) | Default (none) |
 | `AddControllerWithLabelSelector<TImpl, TEntity, TLabel>()` | Custom | Default (none) |
 | `AddControllerWithFieldSelector<TImpl, TEntity, TField>()` | Default (none) | Custom |
+
+### Declaring Selectors with Attributes
+
+Instead of calling the `AddControllerWith…Selector` methods manually, you can annotate the
+controller class. The source generator picks the attribute up and emits the matching registration
+into `RegisterControllers()` / `RegisterComponents()`:
+
+```csharp
+[LabelSelector(typeof(MyDemoEntityLabelSelector))]
+public class V1DemoEntityController : IEntityController<V1DemoEntity>
+{
+    // ...
+}
+
+// or
+[FieldSelector(typeof(MyDemoEntityFieldSelector))]
+public class V1DemoEntityController : IEntityController<V1DemoEntity>
+{
+    // ...
+}
+```
+
+A controller supports one selector kind at a time (label **or** field selector), matching the
+builder methods. Declaring both `[LabelSelector]` and `[FieldSelector]` on the same controller is a
+compile-time error (`KOG001`); split the work into two controllers instead.
+
+## Multiple Controllers per Entity
+
+The same entity type can be served by **multiple independent controllers**, each with its own label
+or field selector. Every registration creates a fully separate watch → queue → reconcile pipeline,
+so controllers with overlapping selectors both reconcile an entity that matches both:
+
+```csharp
+builder.Services.AddKubernetesOperator()
+    .AddControllerWithLabelSelector<ManagedController, V1DemoEntity, ManagedLabelSelector>()
+    .AddControllerWithLabelSelector<ConfigController, V1DemoEntity, ConfigLabelSelector>();
+```
+
+Notes:
+
+- Each pipeline maintains its own watch connection, queue, and deduplication cache, so the
+  controllers never suppress each other's events — even for the same object.
+- The same object is never reconciled by two of its controllers **concurrently**: a per-entity-type
+  coordinator serializes reconciliation per object UID (and enforces one shared
+  [parallelism budget](../configuration/parallel-reconciliation)). Finalizers are **entity-global** —
+  they are attached once and, under that same lock, are **not executed concurrently or duplicated
+  solely because multiple controllers match** the object. This is not general exactly-once execution
+  (e.g. a process crash between an external side effect and the finalizer removal can still re-run it),
+  so finalizers must remain idempotent.
+- Registering the exact same controller/selector combination twice throws at registration time
+  (it would only open a redundant watch stream).
+- The `EntityQueue<TEntity>` requeue delegate routes to the pipeline the current reconciliation
+  originated from. Inject it into the controller (or another scoped service); with multiple
+  controllers per entity it cannot be resolved from a singleton.
+- N controllers means N watch connections per entity type by default. If that becomes a concern
+  (many controllers, many objects, overlapping selectors), switch to the shared watch mode — see
+  [Watch Strategy](../configuration/watch-strategy).
+
+:::warning
+Multiple controllers per entity are supported only on the **default in-memory queue** with
+**non-custom leader election** (`LeaderElectionType.None` or `LeaderElectionType.Single`), where each
+pipeline owns its queue and reconciler. Under
+[`QueueStrategy.Custom`](../configuration/queue-strategy#custom) or
+[`LeaderElectionType.Custom`](../configuration/leader-election) all pipelines share a single
+user-owned queue and a single reconciler with no per-pipeline identity, so only **one controller per
+entity** is allowed — registering a second one throws an `InvalidOperationException`.
+:::
 
 ## Common Pitfalls
 

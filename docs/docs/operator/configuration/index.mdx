@@ -26,6 +26,7 @@ Each `With*` method corresponds to one of the options described on the pages of 
 | Page | What it controls |
 |---|---|
 | [Reconcile Strategy](./reconcile-strategy) | Which watch events trigger a reconciliation (`ByGeneration` vs. `ByResourceVersion`) |
+| [Watch Strategy](./watch-strategy) | How watch connections to the API server are created (`PerController` vs. `SharedPerEntity`) |
 | [Queue Strategy](./queue-strategy) | How reconciliation work is scheduled and dispatched (`InMemory` vs. `Custom`) |
 | [Parallel Reconciliation](./parallel-reconciliation) | Concurrency limits and conflict handling for simultaneous reconciliations |
 | [Leader Election](./leader-election) | How multiple operator instances coordinate (`None`, `Single`, `Custom`) |

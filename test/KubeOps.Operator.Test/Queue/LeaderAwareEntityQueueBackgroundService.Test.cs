@@ -414,6 +414,8 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
                 new OperatorSettingsBuilder { Namespace = "unit-test" }.Build(),
                 queue,
                 reconciler ?? Mock.Of<IReconciler<V1OperatorIntegrationTestEntity>>(),
+                new EntityReconcileCoordinator<V1OperatorIntegrationTestEntity>(
+                    new OperatorSettingsBuilder { Namespace = "unit-test" }.Build()),
                 logger,
                 elector,
                 metrics)

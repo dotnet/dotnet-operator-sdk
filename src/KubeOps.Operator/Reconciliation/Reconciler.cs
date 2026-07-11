@@ -38,6 +38,7 @@ internal sealed class Reconciler<TEntity>(
     IServiceProvider serviceProvider,
     OperatorSettings operatorSettings,
     ITimedEntityQueue<TEntity> entityQueue,
+    Type controllerType,
     IKubernetesClient client,
     OperatorMetrics? metrics = null)
     : IReconciler<TEntity>
@@ -85,14 +86,14 @@ internal sealed class Reconciler<TEntity>(
 
     private async Task<ReconciliationResult<TEntity>> ReconcileDeletion(ReconciliationContext<TEntity> reconciliationContext, CancellationToken cancellationToken)
     {
-        await using var scope = serviceProvider.CreateAsyncScope();
-        var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
+        await using var scope = CreateReconciliationScope();
+        var controller = ResolveController(scope);
         return await controller.DeletedAsync(reconciliationContext.Entity, cancellationToken);
     }
 
     private async Task<ReconciliationResult<TEntity>> ReconcileEntity(TEntity entity, CancellationToken cancellationToken)
     {
-        await using var scope = serviceProvider.CreateAsyncScope();
+        await using var scope = CreateReconciliationScope();
 
         if (operatorSettings.AutoAttachFinalizers)
         {
@@ -109,13 +110,13 @@ internal sealed class Reconciler<TEntity>(
             }
         }
 
-        var controller = scope.ServiceProvider.GetRequiredService<IEntityController<TEntity>>();
+        var controller = ResolveController(scope);
         return await controller.ReconcileAsync(entity, cancellationToken);
     }
 
     private async Task<ReconciliationResult<TEntity>> ReconcileFinalizersSequential(TEntity entity, CancellationToken cancellationToken)
     {
-        await using var scope = serviceProvider.CreateAsyncScope();
+        await using var scope = CreateReconciliationScope();
 
         // the condition to call ReconcileFinalizersSequentialAsync is:
         // { Metadata: { DeletionTimestamp: not null, Finalizers.Count: > 0 } }
@@ -160,4 +161,19 @@ internal sealed class Reconciler<TEntity>(
 
         return ReconciliationResult<TEntity>.Success(entity, result.RequeueAfter);
     }
+
+    // Creates the DI scope for a reconciliation and publishes this pipeline's queue to the scoped
+    // ActivePipelineQueue holder, so an EntityQueue<TEntity> delegate resolved inside the scope routes
+    // requeues back into the pipeline the reconciliation originated from.
+    private AsyncServiceScope CreateReconciliationScope()
+    {
+        var scope = serviceProvider.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<ActivePipelineQueue<TEntity>>().Current = entityQueue;
+        return scope;
+    }
+
+    // The controller is resolved by its concrete type: multiple controllers may be registered for the same
+    // entity type (each in its own pipeline), so resolving IEntityController<TEntity> would be ambiguous.
+    private IEntityController<TEntity> ResolveController(AsyncServiceScope scope) =>
+        (IEntityController<TEntity>)scope.ServiceProvider.GetRequiredService(controllerType);
 }

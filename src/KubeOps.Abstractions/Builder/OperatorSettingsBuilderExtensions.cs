@@ -53,6 +53,21 @@ public static class OperatorSettingsBuilderExtensions
     }
 
     /// <summary>
+    /// Sets the watch strategy. <see cref="WatchStrategy.PerController"/> (default) opens one watch
+    /// connection per registered controller with server-side selectors;
+    /// <see cref="WatchStrategy.SharedPerEntity"/> shares one watch connection per entity type and
+    /// dispatches events to all matching controllers client-side.
+    /// </summary>
+    /// <param name="builder">The builder to configure.</param>
+    /// <param name="strategy">The watch strategy.</param>
+    /// <returns>The same <paramref name="builder"/> instance for chaining.</returns>
+    public static OperatorSettingsBuilder WithWatchStrategy(this OperatorSettingsBuilder builder, WatchStrategy strategy)
+    {
+        builder.WatchStrategy = strategy;
+        return builder;
+    }
+
+    /// <summary>
     /// Sets all three leader-election timing parameters in a single call.
     /// </summary>
     /// <param name="builder">The builder to configure.</param>

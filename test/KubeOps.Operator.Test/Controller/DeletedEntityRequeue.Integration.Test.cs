@@ -8,6 +8,7 @@ using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Builder;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 
@@ -51,7 +52,10 @@ public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
         _observer.Invocations[0].Method.Should().Be(nameof(TestController.ReconcileAsync));
         _observer.Invocations[1].Method.Should().Be(nameof(TestController.DeletedAsync));
 
-        var timedEntityQueue = Services.GetRequiredService<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        // The queue is owned by the controller pipeline and no longer part of the DI container.
+        var timedEntityQueue = Services
+            .GetRequiredService<ControllerPipeline<V1OperatorIntegrationTestEntity>>()
+            .Queue(Services);
         timedEntityQueue.Should().NotBeNull();
         timedEntityQueue.Should().BeOfType<TimedEntityQueue<V1OperatorIntegrationTestEntity>>();
         timedEntityQueue.As<TimedEntityQueue<V1OperatorIntegrationTestEntity>>().Count.Should().Be(0);

@@ -8,6 +8,7 @@ using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Queue;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Builder;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 
@@ -37,7 +38,10 @@ public sealed class ReplaceEntityRequeueIntegrationTest : IntegrationTestBase
         await _mock.WaitForInvocations;
 
         _mock.Invocations.Count.Should().Be(2);
-        var timedEntityQueue = Services.GetRequiredService<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        // The queue is owned by the controller pipeline and no longer part of the DI container.
+        var timedEntityQueue = Services
+            .GetRequiredService<ControllerPipeline<V1OperatorIntegrationTestEntity>>()
+            .Queue(Services);
         timedEntityQueue.Should().NotBeNull();
         timedEntityQueue.Should().BeOfType<TimedEntityQueue<V1OperatorIntegrationTestEntity>>();
         timedEntityQueue.As<TimedEntityQueue<V1OperatorIntegrationTestEntity>>().Count.Should().Be(0);
@@ -56,7 +60,10 @@ public sealed class ReplaceEntityRequeueIntegrationTest : IntegrationTestBase
 
         _mock.Invocations.Count.Should().Be(1);
 
-        var timedEntityQueue = Services.GetRequiredService<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>();
+        // The queue is owned by the controller pipeline and no longer part of the DI container.
+        var timedEntityQueue = Services
+            .GetRequiredService<ControllerPipeline<V1OperatorIntegrationTestEntity>>()
+            .Queue(Services);
         timedEntityQueue.Should().NotBeNull();
         timedEntityQueue.Should().BeOfType<TimedEntityQueue<V1OperatorIntegrationTestEntity>>();
         timedEntityQueue.As<TimedEntityQueue<V1OperatorIntegrationTestEntity>>().Count.Should().Be(1);

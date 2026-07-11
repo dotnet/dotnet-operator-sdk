@@ -39,6 +39,14 @@ public sealed record OperatorSettings
     public required QueueStrategy QueueStrategy { get; init; }
 
     /// <summary>
+    /// Defines how the operator creates watch connections to the Kubernetes API server.
+    /// <see cref="WatchStrategy.PerController"/> (default) opens one watch per registered controller
+    /// with server-side selectors; <see cref="WatchStrategy.SharedPerEntity"/> shares one watch per
+    /// entity type and dispatches events to all matching controllers client-side.
+    /// </summary>
+    public required WatchStrategy WatchStrategy { get; init; }
+
+    /// <summary>
     /// Defines how long one lease is valid for any leader.
     /// </summary>
     public required TimeSpan LeaderElectionLeaseDuration { get; init; }
@@ -138,7 +146,7 @@ public sealed record OperatorSettings
     /// When enabled, the operator verifies — for every managed entity — that the components implied by
     /// the configuration are registered. If anything is missing, host startup aborts with an
     /// <c>InvalidRegistrationException</c> listing the gaps. This catches registration mistakes
-    /// (for example a forgotten watcher or queue consumer in a manually wired setup) that would
+    /// (for example a forgotten queue or queue consumer in a manually wired custom-queue setup) that would
     /// otherwise let the operator start without processing any resources.
     /// </remarks>
     public bool ValidateRegistrations { get; init; }
