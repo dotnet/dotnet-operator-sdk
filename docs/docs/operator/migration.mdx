@@ -74,6 +74,100 @@ Action required if you use custom queue components:
 - Reconcilers must honor their `CancellationToken`, since leadership loss now cancels in-flight
   reconciliations.
 
+## Upgrading from v12 to v13
+
+v13 makes it possible to register **multiple controllers for the same entity type**, each with its
+own label or field selector (see
+[Multiple Controllers per Entity](./building-blocks/controllers#multiple-controllers-per-entity)).
+Delivering this required reworking the internal dispatch pipeline: every controller registration now
+owns a dedicated `ControllerPipeline<TEntity>` (watcher + queue + consumer). Most operators need **no
+code changes** — the breaking changes below only affect projects that implement custom queue,
+watcher, or reconciler components, or that resolve those internals from DI.
+
+### `IEntityQueueFactory` / `EntityQueueFactory` removed
+
+The queue-factory abstraction is gone. Requeues are now routed through the active pipeline by the
+`EntityQueue<TEntity>` delegate, which resolves the queue of the pipeline currently reconciling the
+entity.
+
+**Migration:** remove references to `IEntityQueueFactory` / `EntityQueueFactory`. To schedule a
+requeue from a controller, return
+[`ReconciliationResult<TEntity>.Success(entity, requeueAfter)`](./building-blocks/controllers#requeuing-entities)
+instead of touching the queue directly. If you injected `EntityQueue<TEntity>` to enqueue manually,
+keep using the delegate — but note the resolution change below.
+
+### `EntityQueue<TEntity>` no longer resolvable from a singleton with multiple pipelines
+
+Because each pipeline owns its own queue, there is no single "the queue" for an entity type when more
+than one controller is registered for it. Resolving `EntityQueue<TEntity>` from a **singleton** now
+throws an `InvalidOperationException` instead of silently handing out a shared queue.
+
+**Migration:** resolve and invoke `EntityQueue<TEntity>` from within a reconciliation scope (where
+the active pipeline is known), or from a scoped/transient service. Operators with a single controller
+per entity are unaffected.
+
+### Custom watcher constructors gained a `cachePartition` parameter
+
+`ResourceWatcher<TEntity>` and `LeaderAwareResourceWatcher<TEntity>` take an additional optional
+`cachePartition` argument. It partitions the generation-dedup cache per pipeline so that overlapping
+selectors no longer let one pipeline's cache write suppress another pipeline's event.
+
+**Migration:** if you subclass or construct these watchers directly, thread the new parameter through
+(it defaults to a shared partition, preserving single-pipeline behavior). Pass a distinct token per
+pipeline when running several watchers for the same entity type.
+
+### `EntityQueueBackgroundService<TEntity>` constructor gained a coordinator parameter
+
+The queue consumer's constructor takes an additional `IEntityReconcileCoordinator<TEntity>`. The
+coordinator is a per-entity-type singleton that owns the global parallelism budget and the per-UID
+exclusive lock, so multiple controllers for the same entity no longer multiply the parallelism limit
+and never reconcile (or finalize) the same object concurrently.
+
+**Migration:** if you derive a custom consumer from `EntityQueueBackgroundService<TEntity>` (or
+`LeaderAwareEntityQueueBackgroundService<TEntity>`), forward the new `IEntityReconcileCoordinator<TEntity>`
+to the base constructor — exactly as you already forward `IReconciler<TEntity>`. It is registered
+automatically per entity type, so constructor injection resolves it.
+
+### `IReconciler<TEntity>` / `ITimedEntityQueue<TEntity>` not registered for the in-memory strategy
+
+With the default in-memory queue strategy these services are now owned by the pipeline and are **no
+longer registered in the DI container**. Registration is unchanged for `LeaderElectionType.Custom`
+and `QueueStrategy.Custom`, where you still wire up the queue and consumer yourself (the SDK keeps
+registering `IReconciler<TEntity>` for these paths, so your consumer can resolve it).
+
+**Migration:** stop resolving `IReconciler<TEntity>` / `ITimedEntityQueue<TEntity>` from DI in the
+default configuration. If you need custom queue behavior, opt into
+[`QueueStrategy.Custom`](./configuration/queue-strategy) and register your implementation there.
+
+### `Reconciler<TEntity>` now carries a `controllerType`
+
+The internal `Reconciler<TEntity>` receives a `Type controllerType` so it can resolve the correct
+controller for its pipeline by concrete type. This is an internal type; only projects that
+constructed it directly are affected.
+
+**Migration:** pass the concrete controller type when constructing `Reconciler<TEntity>` yourself, or
+rely on the SDK's registration.
+
+### New in v13 (non-breaking)
+
+- **Multiple controllers per entity**: register several `IEntityController<TEntity>` for the same
+  entity with different selectors — both fire for objects matching both selectors. Supported on the
+  default in-memory queue with non-custom leader election; under `QueueStrategy.Custom` /
+  `LeaderElectionType.Custom` only one controller per entity is allowed (a second registration throws).
+  See [Multiple Controllers per Entity](./building-blocks/controllers#multiple-controllers-per-entity).
+- **Watch strategy**: choose how watch streams are provisioned via
+  [`OperatorSettings.WatchStrategy`](./configuration/watch-strategy) /
+  `WithWatchStrategy(...)`. `WatchStrategy.PerController` (default) gives every controller its own
+  server-side–filtered watch; `WatchStrategy.SharedPerEntity` (opt-in) shares a single watch stream
+  per entity type and matches events client-side.
+- **Selector attributes**: declare a controller's selector with
+  [`[LabelSelector(typeof(...))]` / `[FieldSelector(typeof(...))]`](./building-blocks/controllers#declaring-selectors-with-attributes);
+  the source generator emits the matching registration. Declaring both on one controller is now a
+  compile-time error (`KOG001`) instead of silently registering only the label selector — split it into
+  two controllers.
+- **`IClientSideEntitySelector<TEntity>`**: implement it on a selector to control client-side matching
+  under `SharedPerEntity` (otherwise standard Kubernetes selector syntax is used).
+
 :::tip
 Every breaking change is also listed in the
 [release notes](https://github.com/dotnet/dotnet-operator-sdk/releases). Check the notes for the

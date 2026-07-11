@@ -45,8 +45,10 @@ namespace KubeOps.Abstractions.Reconciliation.Queue;
 /// <remarks>
 /// <para>
 /// This delegate is injected into controllers and other components via dependency injection to enable
-/// scheduling entities for delayed or immediate reconciliation. The delegate is typically created by
-/// <see cref="IEntityQueueFactory"/> and wraps the internal queue implementation.
+/// scheduling entities for delayed or immediate reconciliation. It wraps the queue of the controller
+/// pipeline the current reconciliation originated from; when multiple controllers are registered for
+/// the same entity type, inject it into the controller (or another scoped service) so the requeue is
+/// routed to the correct pipeline.
 /// </para>
 /// <para>
 /// The <paramref name="type"/> parameter determines which controller methods are invoked
@@ -67,7 +69,6 @@ namespace KubeOps.Abstractions.Reconciliation.Queue;
 /// </remarks>
 /// <seealso cref="ReconciliationType"/>
 /// <seealso cref="ReconciliationTriggerSource"/>
-/// <seealso cref="IEntityQueueFactory"/>
 public delegate Task<bool> EntityQueue<in TEntity>(
     TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken)
     where TEntity : IKubernetesObject<V1ObjectMeta>;

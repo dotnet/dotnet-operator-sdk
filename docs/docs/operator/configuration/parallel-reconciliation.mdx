@@ -1,7 +1,7 @@
 ---
 title: Parallel Reconciliation
 description: Concurrency limits and conflict handling
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Parallel Reconciliation
@@ -14,8 +14,10 @@ the `WithParallelReconciliation` fluent method.
 
 ## Maximum Concurrency
 
-`MaxParallelReconciliations` sets the upper bound on concurrently running reconciliations across all
-entity types. The default is `Environment.ProcessorCount * 2`.
+`MaxParallelReconciliations` sets the upper bound on concurrently running reconciliations **per entity
+type**. The default is `Environment.ProcessorCount * 2`. When several controllers are registered for the
+same entity type, they **share** this single budget, so the limit is not multiplied by the controller
+count.
 
 ```csharp
 builder.Services
@@ -23,9 +25,9 @@ builder.Services
         .WithParallelReconciliation(p => p.WithMaxParallelReconciliations(16)));
 ```
 
-A global `SemaphoreSlim` is acquired **before** an entry is dequeued, which means the queue acts as
-a natural buffer and back-pressure mechanism: producers (the watcher) can continue enqueuing while
-all reconciler slots are occupied.
+A `SemaphoreSlim` — one per entity type, shared by all of that entity's controllers — is acquired
+**before** an entry is dequeued, which means the queue acts as a natural buffer and back-pressure
+mechanism: producers (the watcher) can continue enqueuing while all reconciler slots are occupied.
 
 ## Conflict Strategy
 
@@ -48,9 +50,11 @@ builder.Services
 ```
 
 :::note
-The per-UID lock is independent of the global semaphore. Even with `MaxParallelReconciliations = 1`,
+The per-UID lock is independent of the parallelism semaphore. Even with `MaxParallelReconciliations = 1`,
 two events for *different* entities are never serialised by the UID lock; only events for the *same*
-UID are affected by `ConflictStrategy`.
+UID are affected by `ConflictStrategy`. Both the semaphore and the per-UID lock live in a coordinator
+shared by all controllers of an entity type, so the same object is never reconciled — or finalized —
+concurrently, even when two controllers match it.
 :::
 
 ## Best Practices

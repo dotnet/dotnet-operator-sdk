@@ -448,7 +448,13 @@ public sealed class ReconcilerTest
             .Returns(mockScopeFactory.Object);
 
         _mockServiceProvider
-            .Setup(p => p.GetService(typeof(IEntityController<V1ConfigMap>)))
+            .Setup(p => p.GetService(typeof(ActivePipelineQueue<V1ConfigMap>)))
+            .Returns(new ActivePipelineQueue<V1ConfigMap>());
+
+        // The reconciler resolves the controller by its concrete type (multiple controllers per entity
+        // type may coexist), so the mock is registered under the proxy's runtime type.
+        _mockServiceProvider
+            .Setup(p => p.GetService(controller.GetType()))
             .Returns(controller);
 
         return new(
@@ -456,6 +462,7 @@ public sealed class ReconcilerTest
             _mockServiceProvider.Object,
             _settings,
             _mockQueue.Object,
+            controller.GetType(),
             _mockClient.Object,
             metrics);
     }
@@ -478,6 +485,10 @@ public sealed class ReconcilerTest
             .Returns(mockScopeFactory.Object);
 
         _mockServiceProvider
+            .Setup(p => p.GetService(typeof(ActivePipelineQueue<V1ConfigMap>)))
+            .Returns(new ActivePipelineQueue<V1ConfigMap>());
+
+        _mockServiceProvider
             .Setup(p => p.GetKeyedService(
                 It.Is<Type>(t => t == typeof(IEntityFinalizer<V1ConfigMap>)),
                 It.Is<string>(s => s == finalizerName)))
@@ -488,6 +499,7 @@ public sealed class ReconcilerTest
             _mockServiceProvider.Object,
             _settings,
             _mockQueue.Object,
+            typeof(IEntityController<V1ConfigMap>),
             _mockClient.Object);
     }
 

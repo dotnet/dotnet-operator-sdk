@@ -1,7 +1,7 @@
 ---
 title: Registration Validation
 description: Startup validation of the operator's DI registrations
-sidebar_position: 8
+sidebar_position: 9
 ---
 
 # Registration Validation
@@ -14,11 +14,15 @@ builder.Services.AddKubernetesOperator(settings => settings
     .WithRegistrationValidation());
 ```
 
-When enabled, every managed entity is checked for the components its configuration requires — an
-`IReconciler<TEntity>`, a resource watcher, an `ITimedEntityQueue<TEntity>`, and a queue consumer. If
-anything is missing, host startup aborts with an `InvalidRegistrationException` that lists the gaps —
-turning a silent misconfiguration (an operator that starts but processes nothing) into an immediate,
-actionable error.
+When enabled, every managed entity is checked for the components its configuration requires. First, a
+controller pipeline must exist for the entity — without one there is no reconciliation at all. With the
+default `QueueStrategy.InMemory` (and non-custom leader election) each pipeline owns its queue,
+reconciler, watcher, and consumer and is complete by construction, so the check ends there. The
+manual-wiring paths (`LeaderElectionType.Custom` and `QueueStrategy.Custom`) are checked further for the
+components you supply — a resource watcher, an `ITimedEntityQueue<TEntity>`, an `IReconciler<TEntity>`,
+and a queue consumer. If anything is missing, host startup aborts with an `InvalidRegistrationException`
+that lists the gaps — turning a silent misconfiguration (an operator that starts but processes nothing)
+into an immediate, actionable error.
 
 Most registrations are wired up by the SDK automatically, so validation simply passes. It is most useful
 when you register components yourself — for example with `LeaderElectionType.Custom`, where the watcher

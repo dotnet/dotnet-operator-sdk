@@ -31,6 +31,7 @@ public class LeaderAwareResourceWatcher<TEntity>(
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     LeaderElector elector,
+    string cachePartition = "",
     OperatorMetrics? metrics = null)
     : ResourceWatcher<TEntity>(
         activitySource,
@@ -41,6 +42,7 @@ public class LeaderAwareResourceWatcher<TEntity>(
         labelSelector,
         fieldSelector,
         client,
+        cachePartition,
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {

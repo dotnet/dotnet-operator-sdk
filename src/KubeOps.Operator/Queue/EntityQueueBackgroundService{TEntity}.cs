@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Collections.Concurrent;
 using System.Diagnostics;
 
 using k8s;
@@ -65,15 +64,11 @@ public class EntityQueueBackgroundService<TEntity>(
     OperatorSettings operatorSettings,
     ITimedEntityQueue<TEntity> queue,
     IReconciler<TEntity> reconciler,
+    IEntityReconcileCoordinator<TEntity> coordinator,
     ILogger<EntityQueueBackgroundService<TEntity>> logger,
     OperatorMetrics? metrics = null) : RestartableHostedService, IEntityQueueConsumer<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private readonly ConcurrentDictionary<string, UidEntry> _uidEntries = new();
-    private readonly SemaphoreSlim _parallelismSemaphore = new(
-        operatorSettings.ParallelReconciliation.MaxParallelReconciliations,
-        operatorSettings.ParallelReconciliation.MaxParallelReconciliations);
-
     /// <summary>
     /// Gets the timed entity queue this service consumes. Exposed for leadership-aware subclasses that need
     /// to suspend intake or clear the queue on a leadership transition.
@@ -83,18 +78,8 @@ public class EntityQueueBackgroundService<TEntity>(
     /// <inheritdoc/>
     protected override void DisposeManagedResources()
     {
-        _parallelismSemaphore.Dispose();
-
-        lock (_uidEntries)
-        {
-            foreach (var entry in _uidEntries.Values)
-            {
-                entry.Semaphore.Dispose();
-            }
-
-            _uidEntries.Clear();
-        }
-
+        // The parallelism budget and per-UID locks live in the shared per-entity coordinator (a singleton
+        // that outlives this consumer's leadership-loss restarts), so they are not disposed here.
         client.Dispose();
         queue.Dispose();
     }
@@ -102,14 +87,6 @@ public class EntityQueueBackgroundService<TEntity>(
     /// <inheritdoc/>
     protected override async ValueTask DisposeManagedResourcesAsync()
     {
-        await CastAndDisposeAsync(_parallelismSemaphore);
-
-        foreach (var entry in _uidEntries.Values)
-        {
-            await CastAndDisposeAsync(entry.Semaphore);
-        }
-
-        _uidEntries.Clear();
         await CastAndDisposeAsync(client);
         await CastAndDisposeAsync(queue);
     }
@@ -158,7 +135,7 @@ public class EntityQueueBackgroundService<TEntity>(
         {
             await foreach (var queueEntry in queue.WithCancellation(cancellationToken))
             {
-                await _parallelismSemaphore.WaitAsync(cancellationToken);
+                await coordinator.AcquireParallelSlotAsync(cancellationToken);
 
                 var task = ProcessEntryWithSemaphoreReleaseAsync(queueEntry, cancellationToken);
                 tasks.Add(task);
@@ -207,85 +184,75 @@ public class EntityQueueBackgroundService<TEntity>(
         }
         finally
         {
-            _parallelismSemaphore.Release();
+            coordinator.ReleaseParallelSlot();
         }
     }
 
     private async Task ProcessEntryAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
-        var uid = entry.Entity.Uid();
-        UidEntry uidEntry;
-        lock (_uidEntries)
-        {
-            uidEntry = _uidEntries.GetOrAdd(uid, _ => new(new(1, 1)));
-            uidEntry.AccessCount++;
-        }
-
         using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event for "{entry.Entity.ToIdentifierString()}".""", ActivityKind.Consumer);
         using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.ReconciliationType, entry.ReconciliationTriggerSource, entry.Entity));
 
         try
         {
-            var canAcquireLock = operatorSettings.ParallelReconciliation.ConflictStrategy switch
-            {
-                ParallelReconciliationConflictStrategy.Discard or ParallelReconciliationConflictStrategy.RequeueAfterDelay => await uidEntry.Semaphore.WaitAsync(0, cancellationToken),
-                ParallelReconciliationConflictStrategy.WaitForCompletion => true,
-                _ => throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliation.ConflictStrategy} is not supported."),
-            };
-
-            if (!canAcquireLock)
-            {
-                await HandleLockingConflictAsync(entry, cancellationToken);
-                return;
-            }
-
             if (operatorSettings.ParallelReconciliation.ConflictStrategy is ParallelReconciliationConflictStrategy.WaitForCompletion)
             {
                 logger
                     .LogDebug(
                         """Trying to acquire lock for "{Identifier}". Waiting for completion.""",
                         entry.Entity.ToIdentifierString());
-                await uidEntry.Semaphore.WaitAsync(cancellationToken);
             }
 
-            var stopwatch = Stopwatch.StartNew();
-            try
+            // The per-UID lock is owned by the shared per-entity coordinator, so the same object is never
+            // reconciled concurrently — even by a different controller pipeline of this entity type.
+            var entityLock = await coordinator.AcquireEntityLockAsync(
+                entry.Entity,
+                operatorSettings.ParallelReconciliation.ConflictStrategy,
+                cancellationToken);
+
+            if (entityLock is null)
             {
-                logger
-                    .LogInformation(
-                        """Starting reconciliation for "{Identifier}".""",
-                        entry.Entity.ToIdentifierString());
-
-                var result = await ReconcileSingleAsync(entry, cancellationToken);
-
-                metrics?.RecordReconciliation(
-                    typeof(TEntity).Name,
-                    entry.ReconciliationType.ToMetricString(),
-                    result.IsSuccess ? "success" : "failure",
-                    stopwatch.Elapsed.TotalSeconds,
-                    result.IsSuccess ? null : result.Error?.GetType().FullName ?? "_OTHER");
-
-                logger
-                    .LogInformation(
-                        """Completed reconciliation for "{Identifier}" {State}.""",
-                        entry.Entity.ToIdentifierString(),
-                        result.IsSuccess
-                            ? "successfully"
-                            : "with failures");
+                await HandleLockingConflictAsync(entry, cancellationToken);
+                return;
             }
-            catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+
+            await using (entityLock)
             {
-                metrics?.RecordReconciliation(
-                    typeof(TEntity).Name,
-                    entry.ReconciliationType.ToMetricString(),
-                    "failure",
-                    stopwatch.Elapsed.TotalSeconds,
-                    e.GetType().FullName);
-                throw;
-            }
-            finally
-            {
-                uidEntry.Semaphore.Release();
+                var stopwatch = Stopwatch.StartNew();
+                try
+                {
+                    logger
+                        .LogInformation(
+                            """Starting reconciliation for "{Identifier}".""",
+                            entry.Entity.ToIdentifierString());
+
+                    var result = await ReconcileSingleAsync(entry, cancellationToken);
+
+                    metrics?.RecordReconciliation(
+                        typeof(TEntity).Name,
+                        entry.ReconciliationType.ToMetricString(),
+                        result.IsSuccess ? "success" : "failure",
+                        stopwatch.Elapsed.TotalSeconds,
+                        result.IsSuccess ? null : result.Error?.GetType().FullName ?? "_OTHER");
+
+                    logger
+                        .LogInformation(
+                            """Completed reconciliation for "{Identifier}" {State}.""",
+                            entry.Entity.ToIdentifierString(),
+                            result.IsSuccess
+                                ? "successfully"
+                                : "with failures");
+                }
+                catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                {
+                    metrics?.RecordReconciliation(
+                        typeof(TEntity).Name,
+                        entry.ReconciliationType.ToMetricString(),
+                        "failure",
+                        stopwatch.Elapsed.TotalSeconds,
+                        e.GetType().FullName);
+                    throw;
+                }
             }
         }
         catch (Exception e) when (e is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
@@ -345,16 +312,6 @@ public class EntityQueueBackgroundService<TEntity>(
                     maxRetries);
             }
         }
-        finally
-        {
-            lock (_uidEntries)
-            {
-                if (--uidEntry.AccessCount == 0)
-                {
-                    _uidEntries.TryRemove(uid, out _);
-                }
-            }
-        }
     }
 
     private async Task HandleLockingConflictAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
@@ -396,10 +353,5 @@ public class EntityQueueBackgroundService<TEntity>(
             default:
                 throw new NotSupportedException($"Conflict strategy {operatorSettings.ParallelReconciliation.ConflictStrategy} is not supported in HandleLockingConflictAsync.");
         }
-    }
-
-    private sealed record UidEntry(SemaphoreSlim Semaphore)
-    {
-        public int AccessCount { get; set; }
     }
 }

@@ -45,6 +45,14 @@ public sealed partial class OperatorSettingsBuilder
     public QueueStrategy QueueStrategy { get; set; } = QueueStrategy.InMemory;
 
     /// <summary>
+    /// Defines how the operator creates watch connections to the Kubernetes API server.
+    /// <see cref="WatchStrategy.PerController"/> (default) opens one watch per registered controller
+    /// with server-side selectors; <see cref="WatchStrategy.SharedPerEntity"/> shares one watch per
+    /// entity type and dispatches events to all matching controllers client-side.
+    /// </summary>
+    public WatchStrategy WatchStrategy { get; set; } = WatchStrategy.PerController;
+
+    /// <summary>
     /// Defines how long one lease is valid for any leader.
     /// </summary>
     public TimeSpan LeaderElectionLeaseDuration { get; set; } = TimeSpan.FromSeconds(15);
@@ -130,6 +138,7 @@ public sealed partial class OperatorSettingsBuilder
         Namespace = Namespace,
         LeaderElectionType = LeaderElectionType,
         QueueStrategy = QueueStrategy,
+        WatchStrategy = WatchStrategy,
         LeaderElectionLeaseDuration = LeaderElectionLeaseDuration,
         LeaderElectionRenewDeadline = LeaderElectionRenewDeadline,
         LeaderElectionRetryPeriod = LeaderElectionRetryPeriod,

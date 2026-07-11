@@ -6,4 +6,7 @@ namespace KubeOps.Generator.Discovery;
 
 internal record struct ControllerRegistration(
     string FullyQualifiedController,
-    string FullyQualifiedEntityName);
+    string FullyQualifiedEntityName,
+    string? FullyQualifiedLabelSelector = null,
+    string? FullyQualifiedFieldSelector = null,
+    LocationInfo? Location = null);
