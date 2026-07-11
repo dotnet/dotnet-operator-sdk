@@ -220,16 +220,37 @@ internal sealed class OperatorRegistrationValidator(
     // DI error instead of a message that names the missing piece.
     private void ValidateLeadershipScope(List<string> problems)
     {
-        if (settings.LeaderElectionType != LeaderElectionType.Scoped ||
-            HasService(registry.Services, typeof(ILeadershipScope)))
+        if (settings.LeaderElectionType != LeaderElectionType.Scoped)
         {
             return;
         }
 
-        problems.Add(
-            "No ILeadershipScope is registered. LeaderElectionType.Scoped requires a scope implementation " +
-            "that decides which namespaces this instance is responsible for; register it via " +
-            "services.AddSingleton<ILeadershipScope, MyScope>().");
+        // The last unkeyed registration wins: a single constructor dependency resolves to the most
+        // recently added descriptor, so that is the instance the runtime will actually use.
+        var registration = registry.Services.LastOrDefault(d =>
+            !d.IsKeyedService && d.ServiceType == typeof(ILeadershipScope));
+
+        if (registration is null)
+        {
+            problems.Add(
+                "No ILeadershipScope is registered. LeaderElectionType.Scoped requires a scope implementation " +
+                "that decides which entities this instance is responsible for; register it via " +
+                "services.AddSingleton<ILeadershipScope, MyScope>().");
+            return;
+        }
+
+        // Every watcher and queue consumer resolves the scope separately; responsibility decisions are
+        // only consistent when they all share one instance holding one assignment state.
+        if (registration.Lifetime != ServiceLifetime.Singleton)
+        {
+            problems.Add(string.Format(
+                CultureInfo.InvariantCulture,
+                "ILeadershipScope is registered as {0}, but LeaderElectionType.Scoped requires a singleton: " +
+                "every watcher and queue consumer must share the same scope instance (and its assignment " +
+                "state) for consistent responsibility decisions. Register it via " +
+                "services.AddSingleton<ILeadershipScope, MyScope>().",
+                registration.Lifetime));
+        }
     }
 
     private void ValidateEntity(Type entityType, List<string> problems)

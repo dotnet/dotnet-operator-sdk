@@ -20,7 +20,7 @@ namespace KubeOps.Operator.Queue;
 
 /// <summary>
 /// A scope-aware variant of <see cref="EntityQueueBackgroundService{TEntity}"/> used with
-/// <see cref="LeaderElectionType.Scoped"/>: queued entries are only reconciled for namespaces
+/// <see cref="LeaderElectionType.Scoped"/>: queued entries are only reconciled for entities
 /// the <see cref="ILeadershipScope"/> declares this instance responsible for.
 /// </summary>
 /// <typeparam name="TEntity">The type of the Kubernetes entity being managed.</typeparam>
@@ -30,6 +30,7 @@ public class ScopeAwareEntityQueueBackgroundService<TEntity>(
     OperatorSettings operatorSettings,
     ITimedEntityQueue<TEntity> queue,
     IReconciler<TEntity> reconciler,
+    IEntityReconcileCoordinator<TEntity> coordinator,
     ILogger<ScopeAwareEntityQueueBackgroundService<TEntity>> logger,
     ILeadershipScope leadershipScope,
     OperatorMetrics? metrics = null)
@@ -39,6 +40,7 @@ public class ScopeAwareEntityQueueBackgroundService<TEntity>(
         operatorSettings,
         queue,
         reconciler,
+        coordinator,
         logger,
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>
@@ -48,11 +50,11 @@ public class ScopeAwareEntityQueueBackgroundService<TEntity>(
         QueueEntry<TEntity> entry,
         CancellationToken cancellationToken)
     {
-        if (!await leadershipScope.IsResponsibleForAsync(entry.Entity.Namespace(), cancellationToken))
+        if (!await leadershipScope.IsResponsibleForAsync(entry.Entity, cancellationToken))
         {
             logger
                 .LogDebug(
-                    """This instance is not responsible for the namespace of "{Identifier}". Skip queued reconciliation.""",
+                    """This instance is not responsible for "{Identifier}". Skip queued reconciliation.""",
                     entry.Entity.ToIdentifierString());
             return ReconciliationResult<TEntity>.Success(entry.Entity);
         }

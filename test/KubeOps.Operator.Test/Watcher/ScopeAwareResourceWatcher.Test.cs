@@ -47,10 +47,12 @@ public sealed class ScopeAwareResourceWatcherTest
     }
 
     [Fact]
-    public async Task Should_Skip_Event_When_Not_Responsible_For_Namespace()
+    public async Task Should_Skip_Event_When_Not_Responsible()
     {
         _scope
-            .Setup(s => s.IsResponsibleForAsync("foreign-namespace", It.IsAny<CancellationToken>()))
+            .Setup(s => s.IsResponsibleForAsync(
+                It.IsAny<IKubernetesObject<V1ObjectMeta>>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
         using var watcher = CreateWatcher();
 
@@ -71,21 +73,22 @@ public sealed class ScopeAwareResourceWatcherTest
     }
 
     [Fact]
-    public async Task Should_Enqueue_Event_When_Responsible_For_Namespace()
+    public async Task Should_Enqueue_Event_When_Responsible()
     {
+        var entity = CreateEntity("owned-namespace");
         _scope
-            .Setup(s => s.IsResponsibleForAsync("owned-namespace", It.IsAny<CancellationToken>()))
+            .Setup(s => s.IsResponsibleForAsync(entity, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         using var watcher = CreateWatcher();
 
         await watcher.InvokeOnEventAsync(
             WatchEventType.Modified,
-            CreateEntity("owned-namespace"),
+            entity,
             TestContext.Current.CancellationToken);
 
         _queue.Verify(
             q => q.Enqueue(
-                It.Is<V1OperatorIntegrationTestEntity>(e => e.Namespace() == "owned-namespace"),
+                entity,
                 ReconciliationType.Modified,
                 ReconciliationTriggerSource.ApiServer,
                 It.IsAny<TimeSpan>(),
@@ -95,16 +98,16 @@ public sealed class ScopeAwareResourceWatcherTest
     }
 
     [Fact]
-    public async Task Should_Resync_Acquired_Namespace_Through_Regular_Event_Path()
+    public async Task Should_Resync_Through_Regular_Event_Path_On_Scope_Change()
     {
         var entity = CreateEntity("acquired-namespace");
         var enqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _scope
-            .Setup(s => s.IsResponsibleForAsync("acquired-namespace", It.IsAny<CancellationToken>()))
+            .Setup(s => s.IsResponsibleForAsync(entity, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         _client
             .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
-                "acquired-namespace",
+                null,
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync([entity]);
@@ -121,14 +124,12 @@ public sealed class ScopeAwareResourceWatcherTest
         using var watcher = CreateWatcher();
         await watcher.StartAsync(TestContext.Current.CancellationToken);
 
-        _scope.Raise(
-            s => s.ScopeChanged += null,
-            new LeadershipScopeChange(["acquired-namespace"], []));
+        _scope.Raise(s => s.ScopeChanged += null);
 
         await enqueued.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         _queue.Verify(
             q => q.Enqueue(
-                It.Is<V1OperatorIntegrationTestEntity>(e => e.Namespace() == "acquired-namespace"),
+                entity,
                 ReconciliationType.Modified,
                 It.IsAny<ReconciliationTriggerSource>(),
                 It.IsAny<TimeSpan>(),
@@ -140,16 +141,177 @@ public sealed class ScopeAwareResourceWatcherTest
     }
 
     [Fact]
-    public async Task Should_Not_Resync_Namespace_Outside_Of_Watched_Namespace()
+    public async Task Should_Resync_Within_The_Configured_Watch_Namespace()
     {
+        var listed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _client
+            .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
+                "watched-namespace",
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([])
+            .Callback(() => listed.TrySetResult());
         using var watcher = CreateWatcher(new OperatorSettingsBuilder { Namespace = "watched-namespace" }.Build());
         await watcher.StartAsync(TestContext.Current.CancellationToken);
 
-        _scope.Raise(
-            s => s.ScopeChanged += null,
-            new LeadershipScopeChange(["other-namespace"], []));
+        _scope.Raise(s => s.ScopeChanged += null);
 
-        // The resync runs fire-and-forget; give it a moment before verifying nothing was listed.
+        await listed.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        _client.Verify(
+            c => c.ListAsync<V1OperatorIntegrationTestEntity>(
+                "watched-namespace",
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Coalesce_Rapid_Scope_Changes_Into_At_Most_One_Followup_Resync()
+    {
+        var firstListStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var listGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var listCalls = 0;
+        _client
+            .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
+                null,
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                if (Interlocked.Increment(ref listCalls) == 1)
+                {
+                    firstListStarted.TrySetResult();
+                    await listGate.Task;
+                }
+
+                return (IList<V1OperatorIntegrationTestEntity>)[];
+            });
+        using var watcher = CreateWatcher();
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+
+        // First signal starts the resync; the following signals arrive while it is blocked in the
+        // list call and must fold into a single follow-up pass.
+        _scope.Raise(s => s.ScopeChanged += null);
+        await firstListStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        _scope.Raise(s => s.ScopeChanged += null);
+        _scope.Raise(s => s.ScopeChanged += null);
+        _scope.Raise(s => s.ScopeChanged += null);
+        listGate.TrySetResult();
+
+        // Wait until the coalesced follow-up pass completed (2 calls total), then ensure no more follow.
+        await WaitUntilAsync(() => Volatile.Read(ref listCalls) == 2, TimeSpan.FromSeconds(5));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Volatile.Read(ref listCalls).Should().Be(2);
+
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Serialize_Watch_Events_With_A_Running_Resync()
+    {
+        var resyncEntity = CreateEntity("resync-namespace");
+        var enqueueStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var enqueueGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _scope
+            .Setup(s => s.IsResponsibleForAsync(
+                It.IsAny<IKubernetesObject<V1ObjectMeta>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _client
+            .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
+                null,
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([resyncEntity]);
+        _queue
+            .Setup(q => q.Enqueue(
+                resyncEntity,
+                It.IsAny<ReconciliationType>(),
+                It.IsAny<ReconciliationTriggerSource>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                enqueueStarted.TrySetResult();
+                await enqueueGate.Task;
+                return true;
+            });
+        using var watcher = CreateWatcher();
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+
+        // Block the resync inside the event pipeline, then let a watch event arrive concurrently:
+        // it must not enter the pipeline before the resync's event left it.
+        _scope.Raise(s => s.ScopeChanged += null);
+        await enqueueStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        var watchEvent = watcher.InvokeOnEventAsync(
+            WatchEventType.Modified,
+            CreateEntity("event-namespace"),
+            TestContext.Current.CancellationToken);
+
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        watchEvent.IsCompleted.Should().BeFalse();
+
+        enqueueGate.TrySetResult();
+        await watchEvent.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Drain_Running_Resync_Before_Disposing()
+    {
+        var listStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var listGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _client
+            .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
+                null,
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                listStarted.TrySetResult();
+
+                // Ignores cancellation on purpose: dispose must wait even for a dependency that
+                // does not honor the token.
+                await listGate.Task;
+                return (IList<V1OperatorIntegrationTestEntity>)[];
+            });
+        var watcher = CreateWatcher();
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+
+        _scope.Raise(s => s.ScopeChanged += null);
+        await listStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        var disposeTask = watcher.DisposeAsync().AsTask();
+
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        disposeTask.IsCompleted.Should().BeFalse("dispose must wait for the running resync to drain");
+
+        listGate.TrySetResult();
+        await disposeTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Ignore_Scope_Callback_That_Arrives_After_Dispose()
+    {
+        // Models a publisher that copied the invocation list before the watcher unsubscribed:
+        // the captured delegate is invoked directly, bypassing the unsubscription.
+        Action? capturedHandler = null;
+        _scope
+            .SetupAdd(s => s.ScopeChanged += It.IsAny<Action>())
+            .Callback<Action>(handler => capturedHandler = handler);
+        var watcher = CreateWatcher();
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+        capturedHandler.Should().NotBeNull();
+
+        await watcher.DisposeAsync();
+        capturedHandler!.Invoke();
+
+        // No resync may start on the disposed resources.
         await Task.Delay(100, TestContext.Current.CancellationToken);
         _client.Verify(
             c => c.ListAsync<V1OperatorIntegrationTestEntity>(
@@ -157,8 +319,20 @@ public sealed class ScopeAwareResourceWatcherTest
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
+    }
 
-        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException("Condition was not met in time.");
+            }
+
+            await Task.Delay(10);
+        }
     }
 
     private static V1OperatorIntegrationTestEntity CreateEntity(string @namespace)

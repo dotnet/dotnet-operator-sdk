@@ -182,6 +182,9 @@ rely on the SDK's registration.
 
 ### New in v13 (non-breaking)
 
+- **Scoped leader election**: `LeaderElectionType.Scoped` partitions responsibility across
+  instances (e.g. by namespace) via a user-registered `ILeadershipScope`, while keeping the full
+  default pipeline — see [Scoped Leader Election](./configuration/leader-election#scoped-leader-election).
 - **Multiple controllers per entity**: register several `IEntityController<TEntity>` for the same
   entity with different selectors — both fire for objects matching both selectors. Supported on the
   default in-memory queue with non-custom leader election; under `QueueStrategy.Custom` /

@@ -6,6 +6,7 @@ using System.Diagnostics;
 
 using FluentAssertions;
 
+using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Builder;
@@ -29,10 +30,12 @@ public sealed class ScopeAwareEntityQueueBackgroundServiceTest
     private readonly Mock<IKubernetesClient> _client = new();
 
     [Fact]
-    public async Task Should_Skip_Entry_When_Not_Responsible_For_Namespace()
+    public async Task Should_Skip_Entry_When_Not_Responsible()
     {
         _scope
-            .Setup(s => s.IsResponsibleForAsync("foreign-namespace", It.IsAny<CancellationToken>()))
+            .Setup(s => s.IsResponsibleForAsync(
+                It.IsAny<IKubernetesObject<V1ObjectMeta>>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
         await using var service = CreateService();
 
@@ -55,11 +58,11 @@ public sealed class ScopeAwareEntityQueueBackgroundServiceTest
     }
 
     [Fact]
-    public async Task Should_Reconcile_Entry_When_Responsible_For_Namespace()
+    public async Task Should_Reconcile_Entry_When_Responsible()
     {
         var entry = CreateEntry("owned-namespace");
         _scope
-            .Setup(s => s.IsResponsibleForAsync("owned-namespace", It.IsAny<CancellationToken>()))
+            .Setup(s => s.IsResponsibleForAsync(entry.Entity, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         _client
             .Setup(c => c.GetAsync<V1OperatorIntegrationTestEntity>(
@@ -112,6 +115,7 @@ public sealed class ScopeAwareEntityQueueBackgroundServiceTest
             settings,
             Mock.Of<ITimedEntityQueue<V1OperatorIntegrationTestEntity>>(),
             reconciler,
+            Mock.Of<IEntityReconcileCoordinator<V1OperatorIntegrationTestEntity>>(),
             Mock.Of<ILogger<ScopeAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>>>(),
             leadershipScope)
     {

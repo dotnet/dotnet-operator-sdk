@@ -15,8 +15,8 @@ public enum LeaderElectionType
 {
     None = 0,    // No leader election - all instances process events
     Single = 1,  // Single leader election - only one instance processes events
-    Custom = 2,  // Custom implementation - user-defined coordination
-    Scoped = 3   // Scoped leadership - responsibility partitioned by namespace
+    Custom = 2,  // Escape hatch - user replaces watcher and queue consumer entirely
+    Scoped = 3   // Scoped leadership - responsibility partitioned across instances
 }
 ```
 
@@ -51,24 +51,26 @@ See the [Kubernetes leases documentation](https://kubernetes.io/docs/concepts/ar
 
 ## Scoped Leader Election
 
-`LeaderElectionType.Scoped` partitions responsibility **by namespace** across multiple operator
-instances instead of electing a single global leader. The default watcher and queue pipeline runs
-on every instance; before an event is enqueued and before a queued entry is reconciled, the SDK
-asks a user-provided `ILeadershipScope` whether this instance is responsible for the entity's
-namespace. How responsibility is coordinated (per-namespace `Lease` objects, a wildcard lease,
-consistent hashing, an external assignment service, ...) is entirely up to the scope
+`LeaderElectionType.Scoped` partitions responsibility across multiple operator instances instead
+of electing a single global leader. The default watcher and queue pipeline (including multiple
+controllers per entity and shared watchers) runs on every instance; before an event is enqueued
+and before a queued entry is reconciled, the SDK asks a user-provided `ILeadershipScope` whether
+this instance is responsible for the **entity**. The partitioning dimension (namespace, labels,
+name hashing, region annotations, ...) and the coordination mechanism (per-namespace `Lease`
+objects, a wildcard lease, an external assignment service, ...) are entirely up to the scope
 implementation.
 
 **Step 1: Implement the leadership scope**
 
+For the common namespace partitioning, derive from `NamespacedLeadershipScope`:
+
 ```csharp
 using KubeOps.Abstractions.LeaderElection;
 
-public sealed class NamespaceLeadershipScope : ILeadershipScope
+public sealed class LeaseBasedNamespaceScope : NamespacedLeadershipScope
 {
-    public event Action<LeadershipScopeChange>? ScopeChanged;
-
-    public ValueTask<bool> IsResponsibleForAsync(string? @namespace, CancellationToken cancellationToken)
+    protected override ValueTask<bool> IsResponsibleForNamespaceAsync(
+        string? @namespace, CancellationToken cancellationToken)
     {
         // Answer from cached state - this is called for every watch event and every
         // dequeued entry. Coordinate however fits your deployment, e.g. per-namespace
@@ -76,8 +78,22 @@ public sealed class NamespaceLeadershipScope : ILeadershipScope
         return ValueTask.FromResult(/* ... */ true);
     }
 
-    // Raise ScopeChanged(new(acquired, lost)) whenever the assignment changes, e.g. from
-    // a background service that renews and observes the leases.
+    // Call OnScopeChanged() whenever the assignment changes, e.g. from a background
+    // service that renews and observes the leases.
+}
+```
+
+For any other partitioning dimension, implement `ILeadershipScope` directly - the decision is
+made per entity:
+
+```csharp
+public sealed class RegionLeadershipScope : ILeadershipScope
+{
+    public event Action? ScopeChanged;
+
+    public ValueTask<bool> IsResponsibleForAsync(
+        IKubernetesObject<V1ObjectMeta> entity, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(entity.GetAnnotation("example.com/region") == myRegion);
 }
 ```
 
@@ -89,7 +105,7 @@ builder.Services
         .WithLeaderElection(LeaderElectionType.Scoped))
     .RegisterComponents();
 
-builder.Services.AddSingleton<ILeadershipScope, NamespaceLeadershipScope>();
+builder.Services.AddSingleton<ILeadershipScope, LeaseBasedNamespaceScope>();
 ```
 
 The SDK wires a `ScopeAwareResourceWatcher` and a `ScopeAwareEntityQueueBackgroundService` per
@@ -97,29 +113,48 @@ entity; no elector, custom watcher, or custom queue consumer is required.
 
 **Semantics**
 
-- The watch stream runs permanently on every instance; events for namespaces the instance is not
+- The watch stream runs permanently on every instance; events for entities the instance is not
   responsible for are skipped before deduplication and enqueueing.
 - Every dequeued entry is re-checked, so entries that were pending when responsibility moved to
   another instance are skipped instead of reconciled twice.
-- When `ScopeChanged` reports **acquired** namespaces, their entities are re-listed (applying the
-  configured label selector) and run through the regular event path, so changes that happened
-  while another instance was (or nobody was) responsible are picked up. Field selectors cannot be
-  applied to this re-list; entities excluded by a field selector may be enqueued once after an
-  acquisition.
-- **Lost** namespaces need no action: pending entries are skipped by the per-entry check. A
+- When `ScopeChanged` is raised, the watched entities are re-listed (applying the configured
+  namespace and label selector) and run through the regular event path, so changes that happened
+  while another instance was (or nobody was) responsible are picked up; the deduplication cache
+  skips entities that are already reconciled in their current state. Field selectors cannot be
+  applied to this re-list; entities excluded by a field selector may be enqueued once after a
+  scope change.
+- Losing responsibility needs no action: pending entries are skipped by the per-entry check. A
   reconciliation already in flight is *not* cancelled - reconcilers must be idempotent, and stale
   writes are rejected by the API server via `metadata.resourceVersion` (HTTP 409).
-- Cluster-scoped entities are queried with a `null` namespace; the scope implementation decides
-  which instance handles them.
+- Unlike `Custom`, `Scoped` keeps the full default pipeline: multiple controllers per entity,
+  selectors, and shared watchers keep working - with the field-selector caveat on the scope-change
+  re-list described above.
 
 ## Custom Leader Election
 
-The `Custom` leader election type is the escape hatch when even `Scoped` does not fit: the SDK
-registers **no** watcher and **no** queue consumer - with custom coordination it cannot know how
-leadership should drive either. `AddController` registers the reconciler and the entity queue,
-and you add your own watcher (e.g. derived from `ResourceWatcher<TEntity>`) plus a queue consumer
-(e.g. derived from `EntityQueueBackgroundService<TEntity>`) as hosted services. A watcher without
-a consumer would enqueue events that nothing ever drains, so the consumer is required.
+The `Custom` leader election type is the escape hatch for owning the pipeline yourself. It is the
+right choice only when the decision hook of `Scoped` is not enough because you must **replace**
+watcher or consumer:
+
+- **Own watcher mechanics**: events from another source, custom re-list/backoff behavior, or
+  custom deduplication instead of the built-in `ResourceWatcher<TEntity>` mechanics.
+- **Leadership-driven watch lifecycle**: `Scoped` keeps a full watch stream open on every instance
+  and filters client-side; if watch streams must start and stop with responsibility (e.g.
+  per-namespace watches bound to leases, to cut API-server event volume across many shards), the
+  watcher itself has to implement it.
+- **Own queue consumption**: prioritization, custom parallelism or gating semantics, durable
+  consumption.
+
+For partitioning responsibility across instances, use `Scoped` instead - it keeps the entire
+default pipeline (multiple controllers, selectors, shared watchers) and only delegates the
+responsibility decision.
+
+With `Custom`, the SDK registers **no** watcher and **no** queue consumer - with custom
+coordination it cannot know how leadership should drive either. `AddController` registers the
+reconciler and the entity queue, and you add your own watcher (e.g. derived from
+`ResourceWatcher<TEntity>`) plus a queue consumer (e.g. derived from
+`EntityQueueBackgroundService<TEntity>`) as hosted services. A watcher without a consumer would
+enqueue events that nothing ever drains, so the consumer is required.
 
 Enabling `WithRegistrationValidation()` makes host startup fail fast with an
 `InvalidRegistrationException` if a piece is missing, instead of starting an operator that
@@ -136,9 +171,6 @@ builder.Services
     .AddHostedService<MyCustomResourceWatcher<V1DemoEntity>>()
     .AddHostedService<EntityQueueBackgroundService<V1DemoEntity>>();
 ```
-
-For namespace-partitioned deployments prefer `LeaderElectionType.Scoped` - it keeps the entire
-default pipeline and only delegates the responsibility decision.
 
 ## Best Practices
 

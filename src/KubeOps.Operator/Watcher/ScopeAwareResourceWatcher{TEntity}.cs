@@ -23,7 +23,7 @@ namespace KubeOps.Operator.Watcher;
 
 /// <summary>
 /// A scope-aware variant of <see cref="ResourceWatcher{TEntity}"/> used with
-/// <see cref="LeaderElectionType.Scoped"/>: events are only processed for namespaces the
+/// <see cref="LeaderElectionType.Scoped"/>: events are only processed for entities the
 /// <see cref="ILeadershipScope"/> declares this instance responsible for.
 /// </summary>
 /// <typeparam name="TEntity">The type of the Kubernetes entity being watched.</typeparam>
@@ -37,6 +37,7 @@ public class ScopeAwareResourceWatcher<TEntity>(
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     ILeadershipScope leadershipScope,
+    string cachePartition = "",
     OperatorMetrics? metrics = null)
     : ResourceWatcher<TEntity>(
         activitySource,
@@ -47,6 +48,7 @@ public class ScopeAwareResourceWatcher<TEntity>(
         labelSelector,
         fieldSelector,
         client,
+        cachePartition,
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
@@ -54,109 +56,211 @@ public class ScopeAwareResourceWatcher<TEntity>(
     private readonly IEntityLabelSelector<TEntity> _labelSelector = labelSelector;
     private readonly IKubernetesClient _client = client;
 
+    // Serializes all event processing: the watch loop and the scope resync both funnel through
+    // OnEventAsync, and downstream consumers (in particular the shared pipeline dispatcher)
+    // assume a single caller.
+    private readonly SemaphoreSlim _eventLock = new(1, 1);
+
+    private readonly object _resyncGate = new();
+
     private CancellationTokenSource? _resyncCts;
+    private Task _resyncTask = Task.CompletedTask;
+    private bool _resyncRunning;
+    private bool _resyncRequested;
+    private bool _resyncStopped;
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
         logger.LogDebug("Subscribe for leadership scope updates.");
 
-        _resyncCts ??= new CancellationTokenSource();
+        // A previous StopAsync cancels the source; a restarted service needs a fresh one.
+        if (_resyncCts is null || _resyncCts.IsCancellationRequested)
+        {
+            _resyncCts?.Dispose();
+            _resyncCts = new CancellationTokenSource();
+        }
+
+        lock (_resyncGate)
+        {
+            _resyncStopped = false;
+        }
+
         leadershipScope.ScopeChanged += OnScopeChanged;
 
         return base.StartAsync(cancellationToken);
     }
 
-    public override Task StopAsync(CancellationToken cancellationToken)
+    public override async Task StopAsync(CancellationToken cancellationToken)
     {
         logger.LogDebug("Unsubscribe from leadership scope updates.");
 
         leadershipScope.ScopeChanged -= OnScopeChanged;
-        _resyncCts?.Cancel();
+        if (_resyncCts is not null)
+        {
+            await _resyncCts.CancelAsync();
+        }
 
-        return base.StopAsync(cancellationToken);
+        await Task.WhenAll(base.StopAsync(cancellationToken), StopResyncAndGetTask());
     }
 
     /// <inheritdoc/>
-    protected override async Task OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
+    protected sealed override async Task OnEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
     {
-        if (!await leadershipScope.IsResponsibleForAsync(entity.Namespace(), cancellationToken))
+        await _eventLock.WaitAsync(cancellationToken);
+        try
         {
-            logger
-                .LogTrace(
-                    """This instance is not responsible for the namespace of "{Identifier}". Skip event.""",
-                    entity.ToIdentifierString());
-            return;
-        }
+            if (!await leadershipScope.IsResponsibleForAsync(entity, cancellationToken))
+            {
+                logger
+                    .LogTrace(
+                        """This instance is not responsible for "{Identifier}". Skip event.""",
+                        entity.ToIdentifierString());
+                return;
+            }
 
-        await base.OnEventAsync(eventType, entity, cancellationToken);
+            await OnScopedEventAsync(eventType, entity, cancellationToken);
+        }
+        finally
+        {
+            _eventLock.Release();
+        }
     }
+
+    /// <summary>
+    /// Processes an event this instance is responsible for. Defaults to the regular event
+    /// handling of <see cref="ResourceWatcher{TEntity}"/>.
+    /// </summary>
+    /// <param name="eventType">One of the enumeration values that specifies the type of watch event.</param>
+    /// <param name="entity">The Kubernetes entity that triggered the watch event.</param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous event handling operation.</returns>
+    protected virtual Task OnScopedEventAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
+        => base.OnEventAsync(eventType, entity, cancellationToken);
 
     /// <inheritdoc/>
     protected override void OnDisposing()
     {
+        // Pre-drain cleanup only: no scope callback may start a new resync (unsubscribing alone
+        // does not stop a callback whose invocation list was already copied - the stop flag does),
+        // and the running resync is cancelled. The synchronization primitives stay alive until the
+        // loops and the resync are drained (see DisposeManagedResourcesAsync).
         leadershipScope.ScopeChanged -= OnScopeChanged;
+        _ = StopResyncAndGetTask();
         _resyncCts?.Cancel();
+    }
+
+    /// <inheritdoc/>
+    protected override async ValueTask DisposeManagedResourcesAsync()
+    {
+        // The watch loops are already drained; drain the fire-and-forget resync too before the
+        // synchronization primitives and (via base) the Kubernetes client are released.
+        await StopResyncAndGetTask();
+
         _resyncCts?.Dispose();
+        _eventLock.Dispose();
+        await base.DisposeManagedResourcesAsync();
     }
 
-    private void OnScopeChanged(LeadershipScopeChange change)
+    /// <inheritdoc/>
+    protected override void DisposeManagedResources()
     {
-        if (change.AcquiredNamespaces.Count == 0)
-        {
-            return;
-        }
-
-        // Fire-and-forget on purpose: this runs inside the scope implementation's change callback,
-        // which must not block on API calls. Errors are handled and logged inside the resync.
-        _ = ResyncAcquiredNamespacesAsync(change.AcquiredNamespaces, _resyncCts?.Token ?? CancellationToken.None);
+        // Synchronous fallback: like the base class, this path cannot await the drain. The
+        // container disposes via IAsyncDisposable when available, so this is best-effort only.
+        _resyncCts?.Dispose();
+        _eventLock.Dispose();
+        base.DisposeManagedResources();
     }
 
-    private async Task ResyncAcquiredNamespacesAsync(
-        IReadOnlyCollection<string> namespaces,
-        CancellationToken cancellationToken)
+    private void OnScopeChanged()
     {
-        foreach (var @namespace in namespaces)
+        // Coalesce: at most one resync runs at a time; further signals while it is running are
+        // folded into a single follow-up pass. Fire-and-forget on purpose: this runs inside the
+        // scope implementation's change callback, which must not block on API calls. Errors are
+        // handled and logged inside the resync.
+        lock (_resyncGate)
         {
-            // The watch is limited to a single namespace; acquired namespaces outside of it are
-            // never delivered by the watch and must not be resynced either.
-            if (_settings.Namespace is not null && _settings.Namespace != @namespace)
-            {
-                continue;
-            }
-
-            try
-            {
-                logger.LogInformation(
-                    "Acquired responsibility for namespace {Namespace}, re-listing {ResourceType}.",
-                    @namespace,
-                    typeof(TEntity).Name);
-
-                var entities = await _client.ListAsync<TEntity>(
-                    @namespace,
-                    await _labelSelector.GetLabelSelectorAsync(cancellationToken),
-                    cancellationToken);
-
-                foreach (var entity in entities)
-                {
-                    // Runs through the regular event path: the responsibility check (the scope may
-                    // have changed again meanwhile) and the deduplication cache (entities already
-                    // reconciled in their current state are skipped).
-                    await OnEventAsync(WatchEventType.Modified, entity, cancellationToken);
-                }
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            // A callback whose invocation started before StopAsync/dispose unsubscribed may arrive
+            // here after the drain snapshot was taken; the stop flag (set under the same lock as
+            // the snapshot) keeps it from starting a resync that would escape the drain.
+            if (_resyncStopped)
             {
                 return;
             }
-            catch (Exception e)
+
+            _resyncRequested = true;
+            if (_resyncRunning)
             {
-                logger.LogError(
-                    e,
-                    "Failed to re-list {ResourceType} in acquired namespace {Namespace}. " +
-                    "Changes made while not responsible are picked up with the next watch re-list.",
-                    typeof(TEntity).Name,
-                    @namespace);
+                return;
             }
+
+            _resyncRunning = true;
+            _resyncTask = RunResyncAsync(_resyncCts?.Token ?? CancellationToken.None);
+        }
+    }
+
+    private Task StopResyncAndGetTask()
+    {
+        // Setting the stop flag and snapshotting the task under one lock makes "no new resyncs"
+        // and the drain target a single atomic invariant.
+        lock (_resyncGate)
+        {
+            _resyncStopped = true;
+            _resyncRequested = false;
+            return _resyncTask;
+        }
+    }
+
+    private async Task RunResyncAsync(CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            lock (_resyncGate)
+            {
+                if (!_resyncRequested)
+                {
+                    _resyncRunning = false;
+                    return;
+                }
+
+                _resyncRequested = false;
+            }
+
+            await ResyncAsync(cancellationToken);
+        }
+    }
+
+    private async Task ResyncAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            logger.LogInformation(
+                "Leadership scope changed, re-listing {ResourceType} to pick up newly acquired entities.",
+                typeof(TEntity).Name);
+
+            var entities = await _client.ListAsync<TEntity>(
+                _settings.Namespace,
+                await _labelSelector.GetLabelSelectorAsync(cancellationToken),
+                cancellationToken);
+
+            foreach (var entity in entities)
+            {
+                // Runs through the regular event path: the responsibility check and the
+                // deduplication cache (entities already reconciled in their current state are
+                // skipped).
+                await OnEventAsync(WatchEventType.Modified, entity, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Stop during the resync; the re-list is abandoned on purpose.
+        }
+        catch (Exception e)
+        {
+            logger.LogError(
+                e,
+                "Failed to re-list {ResourceType} after a leadership scope change. Changes made " +
+                "while not responsible are picked up with the next watch re-list.",
+                typeof(TEntity).Name);
         }
     }
 }

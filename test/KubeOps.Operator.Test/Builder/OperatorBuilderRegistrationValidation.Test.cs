@@ -132,6 +132,67 @@ public sealed class OperatorBuilderRegistrationValidationTest
     }
 
     [Fact]
+    public async Task Should_Report_When_Last_LeadershipScope_Registration_Is_Not_Singleton()
+    {
+        // DI resolves the LAST matching registration for a single constructor dependency; an
+        // earlier singleton must not mask a later non-singleton override.
+        var validator = CreateValidator(
+            LeaderElectionType.Scoped,
+            QueueStrategy.InMemory,
+            services =>
+            {
+                services.AddSingleton(Mock.Of<ILeadershipScope>());
+                services.AddTransient(_ => Mock.Of<ILeadershipScope>());
+            });
+
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<InvalidRegistrationException>())
+            .Which.Message.Should()
+            .Contain(nameof(ILeadershipScope))
+            .And.Contain(nameof(ServiceLifetime.Transient));
+    }
+
+    [Fact]
+    public async Task Should_Pass_When_Last_LeadershipScope_Registration_Is_Singleton()
+    {
+        var validator = CreateValidator(
+            LeaderElectionType.Scoped,
+            QueueStrategy.InMemory,
+            services =>
+            {
+                services.AddTransient(_ => Mock.Of<ILeadershipScope>());
+                services.AddSingleton(Mock.Of<ILeadershipScope>());
+            });
+
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Scoped)]
+    [InlineData(ServiceLifetime.Transient)]
+    public async Task Should_Report_Non_Singleton_LeadershipScope_For_Scoped_LeaderElection(ServiceLifetime lifetime)
+    {
+        var validator = CreateValidator(
+            LeaderElectionType.Scoped,
+            QueueStrategy.InMemory,
+            services => services.Add(ServiceDescriptor.Describe(
+                typeof(ILeadershipScope),
+                _ => Mock.Of<ILeadershipScope>(),
+                lifetime)));
+
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<InvalidRegistrationException>())
+            .Which.Message.Should()
+            .Contain(nameof(ILeadershipScope))
+            .And.Contain(lifetime.ToString())
+            .And.Contain("singleton");
+    }
+
+    [Fact]
     public async Task Should_Fail_When_Custom_Queue_Strategy_Does_Not_Register_A_Queue()
     {
         // The watcher and reconciler take ITimedEntityQueue<TEntity> as a constructor dependency, so it is
