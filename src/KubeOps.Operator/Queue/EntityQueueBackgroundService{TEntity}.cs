@@ -111,6 +111,18 @@ public class EntityQueueBackgroundService<TEntity>(
 
         if (entity is not null)
         {
+            // The gate runs on the entity that will actually be reconciled — the freshly loaded object for
+            // Added/Modified, the delete snapshot for Deleted — so a decision that depends on entity state
+            // (e.g. a scope partitioned by labels or annotations) is made on current, not stale, data.
+            if (!await ShouldReconcileAsync(entity, entry, cancellationToken))
+            {
+                logger
+                    .LogDebug(
+                        """Reconciliation of "{Identifier}" was vetoed before dispatch; skipping.""",
+                        entity.ToIdentifierString());
+                return ReconciliationResult<TEntity>.Success(entity);
+            }
+
             return await reconciler.Reconcile(
                 ReconciliationContext<TEntity>.CreateFor(
                     entity,
@@ -125,6 +137,19 @@ public class EntityQueueBackgroundService<TEntity>(
                 entry.Entity.ToIdentifierString());
         return ReconciliationResult<TEntity>.Failure(entry.Entity, "Entity was not found.");
     }
+
+    /// <summary>
+    /// Gates whether a dequeued entry is reconciled, evaluated on the entity that will be reconciled: the
+    /// freshly loaded object for Added/Modified entries, the delete snapshot for Deleted entries. Returning
+    /// <see langword="false"/> skips the reconciliation. Defaults to always reconciling.
+    /// </summary>
+    /// <param name="entity">The entity that would be reconciled (current object, or delete snapshot).</param>
+    /// <param name="entry">The queue entry being processed.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns><see langword="true"/> to reconcile; <see langword="false"/> to skip.</returns>
+    protected virtual ValueTask<bool> ShouldReconcileAsync(
+        TEntity entity, QueueEntry<TEntity> entry, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(true);
 
     /// <inheritdoc/>
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)

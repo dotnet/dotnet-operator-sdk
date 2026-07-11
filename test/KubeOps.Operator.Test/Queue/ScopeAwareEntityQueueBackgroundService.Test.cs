@@ -29,18 +29,30 @@ public sealed class ScopeAwareEntityQueueBackgroundServiceTest
     private readonly Mock<IReconciler<V1OperatorIntegrationTestEntity>> _reconciler = new();
     private readonly Mock<IKubernetesClient> _client = new();
 
-    [Fact]
-    public async Task Should_Skip_Entry_When_Not_Responsible()
+    public ScopeAwareEntityQueueBackgroundServiceTest()
     {
-        _scope
-            .Setup(s => s.IsResponsibleForAsync(
-                It.IsAny<IKubernetesObject<V1ObjectMeta>>(),
+        _reconciler
+            .Setup(r => r.Reconcile(
+                It.IsAny<ReconciliationContext<V1OperatorIntegrationTestEntity>>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .ReturnsAsync((ReconciliationContext<V1OperatorIntegrationTestEntity> ctx, CancellationToken _) =>
+                ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(ctx.Entity));
+    }
+
+    [Fact]
+    public async Task Should_Reconcile_On_Current_Object_When_Snapshot_Was_Responsible_But_Current_Is_Not()
+    {
+        // The snapshot enqueued while responsible; responsibility moved away before the entry ran. The gate
+        // must see the freshly loaded object (not responsible) and skip - the stale snapshot must not win.
+        var snapshot = CreateEntity("snapshot");
+        var current = CreateEntity("current");
+        SetupLoad(snapshot, current);
+        SetupResponsibility(snapshot, responsible: true);
+        SetupResponsibility(current, responsible: false);
         await using var service = CreateService();
 
         var result = await service.InvokeReconcileSingleAsync(
-            CreateEntry("foreign-namespace"),
+            CreateEntry(snapshot, ReconciliationType.Modified),
             TestContext.Current.CancellationToken);
 
         result.IsSuccess.Should().BeTrue();
@@ -49,53 +61,99 @@ public sealed class ScopeAwareEntityQueueBackgroundServiceTest
                 It.IsAny<ReconciliationContext<V1OperatorIntegrationTestEntity>>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task Should_Reconcile_Current_Object_When_Snapshot_Was_Not_Responsible_But_Current_Is()
+    {
+        // The snapshot was not this instance's when enqueued, but responsibility moved here before it ran.
+        // The gate on the current object must allow it, and the reconciler must receive the current object.
+        var snapshot = CreateEntity("snapshot");
+        var current = CreateEntity("current");
+        SetupLoad(snapshot, current);
+        SetupResponsibility(snapshot, responsible: false);
+        SetupResponsibility(current, responsible: true);
+        await using var service = CreateService();
+
+        var result = await service.InvokeReconcileSingleAsync(
+            CreateEntry(snapshot, ReconciliationType.Modified),
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
+        _reconciler.Verify(
+            r => r.Reconcile(
+                It.Is<ReconciliationContext<V1OperatorIntegrationTestEntity>>(c => ReferenceEquals(c.Entity, current)),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task Should_Decide_Deleted_Entry_On_The_Delete_Snapshot()
+    {
+        // For Deleted there is no current object to load; the decision is made on the delete snapshot.
+        var snapshot = CreateEntity("snapshot");
+        SetupResponsibility(snapshot, responsible: true);
+        await using var service = CreateService();
+
+        var result = await service.InvokeReconcileSingleAsync(
+            CreateEntry(snapshot, ReconciliationType.Deleted),
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.Should().BeTrue();
         _client.Verify(
             c => c.GetAsync<V1OperatorIntegrationTestEntity>(
                 It.IsAny<string>(),
                 It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
+        _reconciler.Verify(
+            r => r.Reconcile(
+                It.Is<ReconciliationContext<V1OperatorIntegrationTestEntity>>(c => ReferenceEquals(c.Entity, snapshot)),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
-    public async Task Should_Reconcile_Entry_When_Responsible()
+    public async Task Should_Skip_Deleted_Entry_When_Not_Responsible_For_The_Delete_Snapshot()
     {
-        var entry = CreateEntry("owned-namespace");
-        _scope
-            .Setup(s => s.IsResponsibleForAsync(entry.Entity, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        _client
-            .Setup(c => c.GetAsync<V1OperatorIntegrationTestEntity>(
-                entry.Entity.Name(),
-                "owned-namespace",
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(entry.Entity);
-        _reconciler
-            .Setup(r => r.Reconcile(
-                It.IsAny<ReconciliationContext<V1OperatorIntegrationTestEntity>>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ReconciliationResult<V1OperatorIntegrationTestEntity>.Success(entry.Entity));
+        var snapshot = CreateEntity("snapshot");
+        SetupResponsibility(snapshot, responsible: false);
         await using var service = CreateService();
 
-        var result = await service.InvokeReconcileSingleAsync(entry, TestContext.Current.CancellationToken);
+        var result = await service.InvokeReconcileSingleAsync(
+            CreateEntry(snapshot, ReconciliationType.Deleted),
+            TestContext.Current.CancellationToken);
 
         result.IsSuccess.Should().BeTrue();
         _reconciler.Verify(
             r => r.Reconcile(
                 It.IsAny<ReconciliationContext<V1OperatorIntegrationTestEntity>>(),
                 It.IsAny<CancellationToken>()),
-            Times.Once);
+            Times.Never);
     }
 
-    private static QueueEntry<V1OperatorIntegrationTestEntity> CreateEntry(string @namespace)
-        => new(
-            new V1OperatorIntegrationTestEntity
-            {
-                Metadata = new V1ObjectMeta { Name = "test-entity", NamespaceProperty = @namespace, Uid = "uid-1" },
-            },
-            ReconciliationType.Modified,
-            ReconciliationTriggerSource.ApiServer,
-            RetryCount: 0);
+    private void SetupLoad(V1OperatorIntegrationTestEntity snapshot, V1OperatorIntegrationTestEntity current) =>
+        _client
+            .Setup(c => c.GetAsync<V1OperatorIntegrationTestEntity>(
+                snapshot.Name(),
+                snapshot.Namespace(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(current);
+
+    private void SetupResponsibility(V1OperatorIntegrationTestEntity entity, bool responsible) =>
+        _scope
+            .Setup(s => s.IsResponsibleForAsync(entity, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(responsible);
+
+    private static V1OperatorIntegrationTestEntity CreateEntity(string uid) =>
+        new()
+        {
+            Metadata = new V1ObjectMeta { Name = "test-entity", NamespaceProperty = "test-namespace", Uid = uid },
+        };
+
+    private static QueueEntry<V1OperatorIntegrationTestEntity> CreateEntry(
+        V1OperatorIntegrationTestEntity entity, ReconciliationType type) =>
+        new(entity, type, ReconciliationTriggerSource.ApiServer, RetryCount: 0);
 
     private TestableService CreateService()
         => new(

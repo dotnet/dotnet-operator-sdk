@@ -11,7 +11,6 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.LeaderElection;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
-using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 
 using Microsoft.Extensions.Logging;
@@ -46,19 +45,11 @@ public class ScopeAwareEntityQueueBackgroundService<TEntity>(
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
     /// <inheritdoc/>
-    protected override async Task<ReconciliationResult<TEntity>> ReconcileSingleAsync(
-        QueueEntry<TEntity> entry,
-        CancellationToken cancellationToken)
-    {
-        if (!await leadershipScope.IsResponsibleForAsync(entry.Entity, cancellationToken))
-        {
-            logger
-                .LogDebug(
-                    """This instance is not responsible for "{Identifier}". Skip queued reconciliation.""",
-                    entry.Entity.ToIdentifierString());
-            return ReconciliationResult<TEntity>.Success(entry.Entity);
-        }
+    protected override ValueTask<bool> ShouldReconcileAsync(
+        TEntity entity, QueueEntry<TEntity> entry, CancellationToken cancellationToken) =>
 
-        return await base.ReconcileSingleAsync(entry, cancellationToken);
-    }
+        // Checked on the entity that will actually be reconciled (the current object for Added/Modified,
+        // the delete snapshot for Deleted), so responsibility is decided on current state even when the
+        // scope partitions by a mutable entity property.
+        leadershipScope.IsResponsibleForAsync(entity, cancellationToken);
 }

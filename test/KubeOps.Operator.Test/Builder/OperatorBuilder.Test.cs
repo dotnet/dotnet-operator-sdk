@@ -9,8 +9,8 @@ using k8s;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Crds;
 using KubeOps.Abstractions.Entities;
-using KubeOps.Abstractions.LeaderElection;
 using KubeOps.Abstractions.Events;
+using KubeOps.Abstractions.LeaderElection;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
@@ -275,6 +275,7 @@ public sealed class OperatorBuilderTest
     }
 
     [Fact]
+    [Trait("Area", "ScopedLeaderElection")]
     public void Should_Add_ScopeAware_Services_For_Scoped_Leader_Election()
     {
         var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Scoped }.Build());
@@ -291,6 +292,7 @@ public sealed class OperatorBuilderTest
     }
 
     [Fact]
+    [Trait("Area", "ScopedLeaderElection")]
     public void Should_Support_Multiple_Controllers_With_ScopeAware_Shared_Watcher()
     {
         var builder = new OperatorBuilder(
@@ -312,6 +314,7 @@ public sealed class OperatorBuilderTest
     }
 
     [Fact]
+    [Trait("Area", "ScopedLeaderElection")]
     public void Should_Not_Add_Leader_Elector_For_Scoped_Leader_Election()
     {
         var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Scoped }.Build());
