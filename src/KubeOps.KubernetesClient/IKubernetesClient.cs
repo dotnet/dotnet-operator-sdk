@@ -122,10 +122,11 @@ public interface IKubernetesClient : IDisposable
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
         using var cts = new CancellationTokenSource();
+        var (labelSelector, fieldSelector) = selectors.ToExpressions();
         return ListAsync<TEntity>(
             @namespace,
-            selectors.OfType<LabelSelector>().ToExpression(),
-            selectors.OfType<FieldSelector>().ToExpression(),
+            labelSelector,
+            fieldSelector,
             cancellationToken: cts.Token);
     }
 
@@ -141,10 +142,10 @@ public interface IKubernetesClient : IDisposable
         string? @namespace = null,
         params KubernetesSelector[] selectors)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => List<TEntity>(
-            @namespace,
-            selectors.OfType<LabelSelector>().ToExpression(),
-            selectors.OfType<FieldSelector>().ToExpression());
+    {
+        var (labelSelector, fieldSelector) = selectors.ToExpressions();
+        return List<TEntity>(@namespace, labelSelector, fieldSelector);
+    }
 
     /// <summary>
     /// Create or Update an entity. This first fetches the entity from the Kubernetes API
@@ -690,7 +691,9 @@ public interface IKubernetesClient : IDisposable
         CancellationToken cancellationToken = default,
         params KubernetesSelector[] selectors)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => Watch(
+    {
+        var (labelSelector, fieldSelector) = selectors.ToExpressions();
+        return Watch(
             onEvent,
             onError,
             onClose,
@@ -698,9 +701,10 @@ public interface IKubernetesClient : IDisposable
             timeout,
             allowWatchBookmarks,
             resourceVersion,
-            selectors.OfType<LabelSelector>().ToExpression(),
-            selectors.OfType<FieldSelector>().ToExpression(),
+            labelSelector,
+            fieldSelector,
             cancellationToken);
+    }
 
     /// <summary>
     /// Create an entity watcher on the Kubernetes API.
