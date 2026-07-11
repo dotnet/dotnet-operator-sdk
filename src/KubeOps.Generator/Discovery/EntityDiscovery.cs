@@ -70,7 +70,10 @@ internal static class EntityDiscovery
             .Where(static f => f is not null)
             .Select(static (f, _) => f!.Value)
             .Collect()
-            .Select(static (arr, _) => new EquatableArray<FinalizerRegistration>(arr.Distinct().ToImmutableArray()));
+            .Select(static (arr, _) => new EquatableArray<FinalizerRegistration>(arr
+                .GroupBy(static f => f with { Location = null })
+                .Select(static g => g.First())
+                .ToImmutableArray()));
 
     private static EquatableArray<AttributedEntity> Merge(
         ImmutableArray<AttributedEntity> local,
@@ -255,7 +258,8 @@ internal static class EntityDiscovery
             : new FinalizerRegistration(
                 classSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 classSymbol.Name,
-                entity);
+                entity,
+                LocationInfo.CreateFrom(context.Node));
     }
 
     private static string? GetImplementedEntity(

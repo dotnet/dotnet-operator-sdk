@@ -9,7 +9,7 @@ resources within an operator.
 
 ## Motivation
 
-The primary goal of this generator is to reduce boilerplate code required in your operator's `Program.cs` (or startup logic). Instead of manually calling `builder.AddController<...>()`, `builder.AddFinalizer<...>()`, `builder.AddWebhook<...>()`, etc., for every component, the generator scans your project and creates extension methods that register all discovered components with a single call.
+The primary goal of this generator is to reduce boilerplate code required in your operator's `Program.cs` (or startup logic). Instead of manually calling `builder.AddController<...>()` and `builder.AddFinalizer<...>()` for every component, the generator scans your project and creates extension methods that register all discovered components with a single call.
 
 ## Usage
 
@@ -53,12 +53,77 @@ app.RunOperatorAsync();
 
 The generator will automatically generate functions for the `IOperatorBuilder`.
 
+By default, all shared classes (`EntityDefinitions`, `EntityInitializer`,
+`ControllerRegistrations`, `FinalizerRegistrations`, `OperatorBuilderExtensions`) are generated
+into the **global namespace**. Two general rules apply:
+
+- `ControllerRegistrations` / `FinalizerRegistrations` / `EntityDefinitions` /
+  `EntityInitializer` are only generated when the compilation actually contains matching
+  components.
+- `OperatorBuilderExtensions` (the `RegisterComponents` aggregate) and `EntityInitializer` are
+  `internal`: they are only meaningful for the compilation they are generated into.
+
+### Configuring the Target Namespace
+
+When multiple projects of one solution reference the generator (e.g. a class library with
+controllers and the operator itself), the generated class names must not conflict. Set the
+`KubeOpsGeneratorNamespace` MSBuild property in the participating projects to generate the shared
+classes into a distinct namespace instead of the global namespace:
+
+```xml
+<PropertyGroup>
+    <KubeOpsGeneratorNamespace>$(RootNamespace)</KubeOpsGeneratorNamespace>
+</PropertyGroup>
+```
+
+Any namespace works (`$(RootNamespace)`, `$(AssemblyName)` or a literal); invalid characters are
+sanitized. Note that top-level `Program.cs` files then need a using directive for the configured
+namespace so that `RegisterComponents()` resolves.
+
+### Multi-Assembly Composition
+
+Controllers and finalizers may live in referenced class libraries that also use the generator.
+Every assembly that contains such components is marked with an assembly-level
+`KubeOps.Abstractions.Builder.KubeOpsGeneratedRegistrationsAttribute` pointing to its (public)
+registration classes. These classes register **only the components of their own assembly** and
+never chain into further assemblies.
+
+The generated `RegisterComponents` method of the consuming compilation discovers these markers on
+all transitively referenced assemblies and invokes every registration class exactly once via a
+fully qualified call:
+
+```csharp
+using KubeOps.Abstractions.Builder;
+
+[assembly: global::KubeOps.Abstractions.Builder.KubeOpsGeneratedRegistrations("MyOperator.ControllerRegistrations", "MyOperator.FinalizerRegistrations")]
+namespace MyOperator;
+internal static class OperatorBuilderExtensions
+{
+    public static IOperatorBuilder RegisterComponents(this IOperatorBuilder builder)
+    {
+        builder.RegisterControllers();
+        builder.RegisterFinalizers();
+        global::MyLibrary.ControllerRegistrations.RegisterControllers(builder);
+        return builder;
+    }
+}
+```
+
+This flat, deduplicated composition guarantees that no component is registered twice, regardless
+of how the assemblies reference each other (e.g. app → LibA → LibB with components in all three).
+
+If two assemblies in the chain generate registration classes with the same fully qualified name
+(e.g. both use the global namespace default), the generator reports the warning **KOG002**
+and skips the conflicting registration instead of emitting ambiguous code. Set
+`KubeOpsGeneratorNamespace` in the conflicting projects to resolve it.
+
 ### Entity Metadata / Entity Definitions
 
-The generator creates a file in the root namespace called `EntityDefinitions.g.cs`.
-This file contains all entities that are annotated with the `KubernetesEntityAttribute`.
-The static class contains the `EntityMetadata` for the entities as well
-as a function to register all entities within the `IOperatorBuilder`.
+The generator creates a file named `EntityDefinitions.g.cs` (only when the compilation declares
+entities). This file contains all entities that are annotated with the
+`KubernetesEntityAttribute` and declared in the compilation itself - entities from referenced
+assemblies are listed by their declaring assembly. The static class contains the
+`EntityMetadata` for the entities.
 
 #### Example
 
@@ -147,8 +212,8 @@ public static class EntityInitializer
 
 ### Controller Registrations
 
-The generator creates a file in the root namespace called `ControllerRegistrations.g.cs`.
-This file contains a function to register all found controllers
+The generator creates a file named `ControllerRegistrations.g.cs` (only when the compilation
+contains controllers). This file contains a function to register all found controllers
 (i.e., classes that implement the `IResourceController<TEntity>` interface).
 
 #### Example
@@ -168,8 +233,8 @@ public static class ControllerRegistrations
 
 ### Finalizer Registrations
 
-The generator creates a file in the root namespace called `FinalizerRegistrations.g.cs`.
-This file contains all finalizers with generated finalizer identifiers.
+The generator creates a file named `FinalizerRegistrations.g.cs` (only when the compilation
+contains finalizers). This file contains all finalizers with generated finalizer identifiers.
 Further, a function to register all finalizers (i.e., classes that implement `IResourceFinalizer<TEntity>`) is generated.
 
 #### Example
@@ -190,45 +255,23 @@ public static class FinalizerRegistrations
 }
 ```
 
-### Webhook Registrations
-
-The generator creates a file in the root namespace called `WebhookRegistrations.g.cs`.
-This file contains a function to register all found webhooks
-(i.e., classes decorated with `[ValidationWebhook]`, `[MutationWebhook]`, or `[ConversionWebhook]`).
-
-#### Example
-
-```csharp
-using KubeOps.Abstractions.Builder;
-
-public static class WebhookRegistrations
-{
-    public static IOperatorBuilder RegisterWebhooks(this IOperatorBuilder builder)
-    {
-        // Example assuming MyValidationWebhook and MyMutationWebhook exist
-        builder.AddValidationWebhook<global::Operator.Webhooks.MyValidationWebhook, global::Operator.Entities.V1TestEntity>();
-        builder.AddMutationWebhook<global::Operator.Webhooks.MyMutationWebhook, global::Operator.Entities.V1TestEntity>();
-        return builder;
-    }
-}
-```
-
 ### General Operator Extensions
 
-The generator creates a file in the root namespace called `OperatorExtensions.g.cs`.
-It contains convenience functions to register all generated sources.
+The generator creates a file named `OperatorBuilder.g.cs`. It contains the internal
+`RegisterComponents` convenience method that registers all generated sources: the components of
+the own compilation (only the parts that exist) and the components of all marked referenced
+assemblies (see [Multi-Assembly Composition](#multi-assembly-composition)).
 
 #### Example
 
 ```csharp
 using KubeOps.Abstractions.Builder;
 
-public static class OperatorBuilderExtensions
+[assembly: global::KubeOps.Abstractions.Builder.KubeOpsGeneratedRegistrations("ControllerRegistrations", "FinalizerRegistrations")]
+internal static class OperatorBuilderExtensions
 {
     public static IOperatorBuilder RegisterComponents(this IOperatorBuilder builder)
     {
-        builder.RegisterEntities();
-        builder.RegisterWebhooks();
         builder.RegisterControllers();
         builder.RegisterFinalizers();
         return builder;

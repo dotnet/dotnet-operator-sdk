@@ -7,4 +7,5 @@ namespace KubeOps.Generator.Discovery;
 internal record struct FinalizerRegistration(
     string FullyQualifiedFinalizer,
     string IdentifierName,
-    string FullyQualifiedEntityName);
+    string FullyQualifiedEntityName,
+    LocationInfo? Location = null);

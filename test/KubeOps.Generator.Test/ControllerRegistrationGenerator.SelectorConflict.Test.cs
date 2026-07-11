@@ -16,7 +16,6 @@ namespace KubeOps.Generator.Test;
 public sealed partial class ControllerRegistrationGeneratorTest
 {
     [Fact]
-    [Trait("Area", "SelectorConflict")]
     public void Should_Report_Error_And_Skip_Registration_When_Controller_Declares_Both_Selectors()
     {
         const string input =
@@ -63,12 +62,9 @@ public sealed partial class ControllerRegistrationGeneratorTest
             .Should().ContainSingle(d => d.Id == "KOG001")
             .Which.Severity.Should().Be(DiagnosticSeverity.Error);
 
-        var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("ControllerRegistrations.g.cs"))
-            .ToString();
-
-        // The conflicting controller must not be registered (neither label- nor field-selector variant).
-        result.Should().NotContain("V1TestEntityController");
+        // The conflicting controller must not be registered (neither label- nor field-selector
+        // variant); as it is the only controller, no registration class is generated at all.
+        output.SyntaxTrees.Any(s => s.FilePath.Contains("ControllerRegistrations.g.cs")).Should().BeFalse();
     }
 
     [Fact]
@@ -123,10 +119,6 @@ public sealed partial class ControllerRegistrationGeneratorTest
             .Should().ContainSingle(d => d.Id == "KOG001")
             .Which.Severity.Should().Be(DiagnosticSeverity.Error);
 
-        var result = output.SyntaxTrees
-            .First(s => s.FilePath.Contains("ControllerRegistrations.g.cs"))
-            .ToString();
-
-        result.Should().NotContain("V1TestEntityController");
+        output.SyntaxTrees.Any(s => s.FilePath.Contains("ControllerRegistrations.g.cs")).Should().BeFalse();
     }
 }
