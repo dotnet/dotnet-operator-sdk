@@ -14,10 +14,13 @@ using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.LeaderElection;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Builder;
+using KubeOps.Operator.Constants;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 using KubeOps.Operator.Watcher;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 using Moq;
@@ -139,6 +142,80 @@ public sealed class ScopeAwareResourceWatcherTest
             Times.Once);
 
         await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Reconcile_Reacquired_Entity_At_Unchanged_Generation_On_Scope_Change()
+    {
+        // Regression: owned -> lost -> reacquired at an unchanged generation. A prior ownership term
+        // left this entity's deduplication token in the cache at generation 1. When the entity is
+        // handed back, the scope resync must still reconcile it - otherwise the takeover reconcile is
+        // silently suppressed by the generation check and never runs.
+        var entity = new V1OperatorIntegrationTestEntity
+        {
+            Metadata = new V1ObjectMeta
+            {
+                Name = "test-entity",
+                NamespaceProperty = "reacquired-namespace",
+                Uid = "uid-1",
+                Generation = 1,
+            },
+        };
+        _scope
+            .Setup(s => s.IsResponsibleForAsync(entity, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _client
+            .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
+                null,
+                "app=test",
+                "metadata.name=test-entity",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([entity]);
+        var enqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _queue
+            .Setup(q => q.Enqueue(
+                entity,
+                It.IsAny<ReconciliationType>(),
+                It.IsAny<ReconciliationTriggerSource>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true)
+            .Callback(() => enqueued.TrySetResult());
+
+        var cacheProvider = new ServiceCollection()
+            .WithResourceWatcherEntityCaching(
+                new OperatorSettingsBuilder { ReconcileStrategy = ReconcileStrategy.ByGeneration }.Build())
+            .BuildServiceProvider()
+            .GetRequiredService<IFusionCacheProvider>();
+        var cache = cacheProvider.GetCache(CacheConstants.CacheNames.ResourceWatcher);
+        var token = TestContext.Current.CancellationToken;
+
+        // Simulate the earlier ownership term: the dedup token exists at generation 1, tagged with the
+        // entity type so the scope resync can drop it.
+        await cache.SetAsync(
+            "uid-1",
+            1L,
+            tags: [typeof(V1OperatorIntegrationTestEntity).FullName!],
+            token: token);
+
+        using var watcher = CreateWatcher(cache: cache);
+        await watcher.StartAsync(token);
+
+        _scope.Raise(s => s.ScopeChanged += null);
+
+        await enqueued.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+        _queue.Verify(
+            q => q.Enqueue(
+                entity,
+                ReconciliationType.Modified,
+                It.IsAny<ReconciliationTriggerSource>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        await watcher.StopAsync(token);
     }
 
     [Fact]
@@ -348,12 +425,12 @@ public sealed class ScopeAwareResourceWatcherTest
             Metadata = new V1ObjectMeta { Name = "test-entity", NamespaceProperty = @namespace, Uid = "uid-1" },
         };
 
-    private TestableWatcher CreateWatcher(OperatorSettings? settings = null)
+    private TestableWatcher CreateWatcher(OperatorSettings? settings = null, IFusionCache? cache = null)
     {
         var cacheProvider = Mock.Of<IFusionCacheProvider>();
         Mock.Get(cacheProvider)
             .Setup(cp => cp.GetCache(It.IsAny<string>()))
-            .Returns(Mock.Of<IFusionCache>());
+            .Returns(cache ?? Mock.Of<IFusionCache>());
 
         var labelSelector = new Mock<IEntityLabelSelector<V1OperatorIntegrationTestEntity>>();
         labelSelector

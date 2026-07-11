@@ -117,10 +117,14 @@ entity; no elector, custom watcher, or custom queue consumer is required.
   responsible for are skipped before deduplication and enqueueing.
 - Every dequeued entry is re-checked, so entries that were pending when responsibility moved to
   another instance are skipped instead of reconciled twice.
-- When `ScopeChanged` is raised, the watched entities are re-listed (applying the configured
-  namespace, label selector, and field selector) and run through the regular event path, so changes that happened
-  while another instance was (or nobody was) responsible are picked up; the deduplication cache
-  skips entities that are already reconciled in their current state.
+- When `ScopeChanged` is raised, this entity type's deduplication cache is dropped and the watched
+  entities are re-listed (applying the configured namespace, label selector, and field selector)
+  and run through the regular event path, so changes that happened while another instance was (or
+  nobody was) responsible are picked up. Clearing the cache first guarantees that an entity handed
+  back to this instance is reconciled even when its `generation`/`resourceVersion` is unchanged
+  since the previous ownership term — the takeover reconcile would otherwise be suppressed as a
+  duplicate. Reconcilers must therefore be idempotent, since every in-scope entity is reconciled
+  once per scope change.
 - Losing responsibility needs no action: pending entries are skipped by the per-entry check. A
   reconciliation already in flight is *not* cancelled - reconcilers must be idempotent, and stale
   writes are rejected by the API server via `metadata.resourceVersion` (HTTP 409).

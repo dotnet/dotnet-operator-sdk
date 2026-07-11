@@ -238,6 +238,30 @@ public class ScopeAwareResourceWatcher<TEntity>(
                 "Leadership scope changed, re-listing {ResourceType} to pick up newly acquired entities.",
                 typeof(TEntity).Name);
 
+            // A scope change can hand an entity back to this instance that it previously owned and
+            // reconciled. That entity's deduplication token still reflects the earlier ownership term,
+            // so the generation/resourceVersion check in the re-list below would suppress it and the
+            // takeover reconcile would never run (an entity reacquired at an unchanged generation is
+            // the concrete case). Drop this entity type's dedup tokens so every currently in-scope
+            // entity is reconciled fresh. Mirrors LeaderAwareResourceWatcher.StoppedLeading, which
+            // clears the cache on leadership loss for the same reason. Best-effort and guarded: a
+            // cache with tagging disabled (custom configuration) would throw, and that must not abort
+            // the resync — the re-list still delivers events, only the redundant-suppression guard is
+            // lost for this pass.
+            try
+            {
+                await EntityCache.RemoveByTagAsync(EntityCacheTag, token: cancellationToken);
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(
+                    e,
+                    "Failed to drop deduplication cache entries for {ResourceType} before a scope " +
+                    "resync. Entities reacquired at an unchanged generation may not be reconciled " +
+                    "until their next change.",
+                    typeof(TEntity).Name);
+            }
+
             var entities = await _client.ListAsync<TEntity>(
                 _settings.Namespace,
                 await _labelSelector.GetLabelSelectorAsync(cancellationToken),
@@ -246,9 +270,10 @@ public class ScopeAwareResourceWatcher<TEntity>(
 
             foreach (var entity in entities)
             {
-                // Runs through the regular event path: the responsibility check and the
-                // deduplication cache (entities already reconciled in their current state are
-                // skipped).
+                // Runs through the regular event path (responsibility check + deduplication). The
+                // dedup tokens for this entity type were dropped above, so every in-scope entity is
+                // reconciled once for the takeover; the cache then re-guards against duplicate watch
+                // events for the remainder of this ownership term.
                 await OnEventAsync(WatchEventType.Modified, entity, cancellationToken);
             }
         }
