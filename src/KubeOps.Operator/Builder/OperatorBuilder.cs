@@ -187,6 +187,8 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         {
             LeaderElectionType.Single => ActivatorUtilities.CreateInstance<LeaderAwareSharedResourceWatcher<TEntity>>(
                 services, unusedQueue, labelSelector, fieldSelector, dispatcher),
+            LeaderElectionType.Scoped => ActivatorUtilities.CreateInstance<ScopeAwareSharedResourceWatcher<TEntity>>(
+                services, unusedQueue, labelSelector, fieldSelector, dispatcher),
             _ => ActivatorUtilities.CreateInstance<SharedResourceWatcher<TEntity>>(
                 services, unusedQueue, labelSelector, fieldSelector, dispatcher),
         };

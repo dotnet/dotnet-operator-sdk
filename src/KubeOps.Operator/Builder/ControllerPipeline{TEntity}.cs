@@ -127,6 +127,8 @@ internal sealed class ControllerPipeline<TEntity>(Type controllerType, Type? lab
         {
             LeaderElectionType.Single => ActivatorUtilities.CreateInstance<LeaderAwareEntityQueueBackgroundService<TEntity>>(
                 services, Queue(services), Reconciler(services)),
+            LeaderElectionType.Scoped => ActivatorUtilities.CreateInstance<ScopeAwareEntityQueueBackgroundService<TEntity>>(
+                services, Queue(services), Reconciler(services)),
             _ => ActivatorUtilities.CreateInstance<EntityQueueBackgroundService<TEntity>>(
                 services, Queue(services), Reconciler(services)),
         };
@@ -141,6 +143,8 @@ internal sealed class ControllerPipeline<TEntity>(Type controllerType, Type? lab
         services.GetRequiredService<OperatorSettings>().LeaderElectionType switch
         {
             LeaderElectionType.Single => ActivatorUtilities.CreateInstance<LeaderAwareResourceWatcher<TEntity>>(
+                services, Queue(services), LabelSelector(services), FieldSelector(services), CachePartition),
+            LeaderElectionType.Scoped => ActivatorUtilities.CreateInstance<ScopeAwareResourceWatcher<TEntity>>(
                 services, Queue(services), LabelSelector(services), FieldSelector(services), CachePartition),
             _ => ActivatorUtilities.CreateInstance<ResourceWatcher<TEntity>>(
                 services, Queue(services), LabelSelector(services), FieldSelector(services), CachePartition),

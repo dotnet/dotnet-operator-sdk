@@ -21,4 +21,18 @@ public static class SelectorExtensions
     /// <returns>A comma-joined string with all selectors converted to their expressions.</returns>
     public static string ToExpression(this IEnumerable<FieldSelector> selectors) =>
         string.Join(",", selectors.Select(x => (string)x));
+
+    /// <summary>
+    /// Split Kubernetes selectors into the label and field expressions expected by the API server.
+    /// </summary>
+    /// <param name="selectors">The label and field selectors to split.</param>
+    /// <returns>The combined label expression and combined field expression.</returns>
+    internal static (string LabelSelector, string FieldSelector) ToExpressions(
+        this IEnumerable<KubernetesSelector> selectors)
+    {
+        var selectorList = selectors as IReadOnlyCollection<KubernetesSelector> ?? selectors.ToArray();
+        return (
+            selectorList.OfType<LabelSelector>().ToExpression(),
+            selectorList.OfType<FieldSelector>().ToExpression());
+    }
 }

@@ -5,6 +5,7 @@
 using System.Globalization;
 
 using KubeOps.Abstractions.Builder;
+using KubeOps.Abstractions.LeaderElection;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
 using KubeOps.Operator.Constants;
@@ -61,6 +62,7 @@ internal sealed class OperatorRegistrationValidator(
         }
 
         ValidateCacheTagging(problems);
+        ValidateLeadershipScope(problems);
 
         if (problems.Count > 0)
         {
@@ -210,6 +212,44 @@ internal sealed class OperatorRegistrationValidator(
                 "drop an entity type's own entries on leadership loss). Remove DisableTagging from your " +
                 "ConfigureResourceWatcherEntityCache configuration, or use the default cache.",
                 cacheName));
+        }
+    }
+
+    // Scoped leader election resolves the responsibility decision through ILeadershipScope; without a
+    // registration, every scope-aware watcher and queue consumer would fail at construction with a generic
+    // DI error instead of a message that names the missing piece.
+    private void ValidateLeadershipScope(List<string> problems)
+    {
+        if (settings.LeaderElectionType != LeaderElectionType.Scoped)
+        {
+            return;
+        }
+
+        // The last unkeyed registration wins: a single constructor dependency resolves to the most
+        // recently added descriptor, so that is the instance the runtime will actually use.
+        var registration = registry.Services.LastOrDefault(d =>
+            !d.IsKeyedService && d.ServiceType == typeof(ILeadershipScope));
+
+        if (registration is null)
+        {
+            problems.Add(
+                "No ILeadershipScope is registered. LeaderElectionType.Scoped requires a scope implementation " +
+                "that decides which entities this instance is responsible for; register it via " +
+                "services.AddSingleton<ILeadershipScope, MyScope>().");
+            return;
+        }
+
+        // Every watcher and queue consumer resolves the scope separately; responsibility decisions are
+        // only consistent when they all share one instance holding one assignment state.
+        if (registration.Lifetime != ServiceLifetime.Singleton)
+        {
+            problems.Add(string.Format(
+                CultureInfo.InvariantCulture,
+                "ILeadershipScope is registered as {0}, but LeaderElectionType.Scoped requires a singleton: " +
+                "every watcher and queue consumer must share the same scope instance (and its assignment " +
+                "state) for consistent responsibility decisions. Register it via " +
+                "services.AddSingleton<ILeadershipScope, MyScope>().",
+                registration.Lifetime));
         }
     }
 

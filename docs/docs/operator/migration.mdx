@@ -76,6 +76,56 @@ Action required if you use custom queue components:
 
 ## Upgrading from v12 to v13
 
+### Kubernetes client list methods accept field selectors
+
+`IKubernetesClient.List` and `ListAsync` now accept an optional `fieldSelector` after the existing
+`labelSelector`, matching the parameter order of the upstream Kubernetes client:
+
+```csharp
+client.ListAsync<TEntity>(
+    @namespace,
+    labelSelector,
+    fieldSelector,
+    cancellationToken);
+```
+
+This changes the positional asynchronous overload. Calls that previously passed the cancellation
+token as the third positional argument must name it explicitly:
+
+```csharp
+// before (v12)
+client.ListAsync<TEntity>(@namespace, labelSelector, cancellationToken);
+
+// after (v13)
+client.ListAsync<TEntity>(@namespace, labelSelector, cancellationToken: cancellationToken);
+```
+
+The typed `params LabelSelector[]` overloads of `List`, `ListAsync`, and `Watch` now accept
+`params KubernetesSelector[]`, and the parameter was renamed from `labelSelectors` to `selectors`.
+Positional label-selector calls remain source-compatible, while label and field selectors can now
+be combined in one call:
+
+```csharp
+client.List<TEntity>(
+    @namespace,
+    new EqualsLabelSelector("app", "demo"),
+    new EqualsFieldSelector("metadata.name", "demo"));
+```
+
+Callers that passed the selectors by **name** must rename the argument, because the parameter is no
+longer called `labelSelectors`:
+
+```csharp
+// before (v12)
+client.List<TEntity>(@namespace, labelSelectors: new EqualsLabelSelector("app", "demo"));
+
+// after (v13)
+client.List<TEntity>(@namespace, selectors: new EqualsLabelSelector("app", "demo"));
+```
+
+The synchronous string-based `Watch` overload likewise accepts `fieldSelector` immediately after
+`labelSelector`, matching `List`, `ListAsync`, and `WatchAsync`.
+
 ### Generator multi-assembly composition
 
 The source generator now supports **multi-assembly composition**: controllers, finalizers and
@@ -182,6 +232,9 @@ rely on the SDK's registration.
 
 ### New in v13 (non-breaking)
 
+- **Scoped leader election**: `LeaderElectionType.Scoped` partitions responsibility across
+  instances (e.g. by namespace) via a user-registered `ILeadershipScope`, while keeping the full
+  default pipeline — see [Scoped Leader Election](./configuration/leader-election#scoped-leader-election).
 - **Multiple controllers per entity**: register several `IEntityController<TEntity>` for the same
   entity with different selectors — both fire for objects matching both selectors. Supported on the
   default in-memory queue with non-custom leader election; under `QueueStrategy.Custom` /

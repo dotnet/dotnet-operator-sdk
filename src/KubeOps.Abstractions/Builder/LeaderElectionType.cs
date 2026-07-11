@@ -24,10 +24,18 @@ public enum LeaderElectionType
     Single = 1,
 
     /// <summary>
-    /// Represents a custom leader election mechanism determined by the user.
-    /// This option allows the integration of user-defined logic for handling
-    /// leader election, enabling tailored coordination strategies beyond the
-    /// provided defaults.
+    /// Represents a custom leader election mechanism determined by the user. The SDK registers
+    /// no watcher and no queue consumer; both are supplied by the user. Intended as an escape
+    /// hatch when watcher or consumer must be replaced entirely - for partitioning
+    /// responsibility across instances, prefer <see cref="Scoped"/>.
     /// </summary>
     Custom = 2,
+
+    /// <summary>
+    /// Represents a scoped leader election mechanism where responsibility is partitioned
+    /// across multiple operator instances, e.g. by Kubernetes namespace. Requires a registered
+    /// <c>KubeOps.Abstractions.LeaderElection.ILeadershipScope</c> that decides which entities
+    /// this instance is responsible for.
+    /// </summary>
+    Scoped = 3,
 }

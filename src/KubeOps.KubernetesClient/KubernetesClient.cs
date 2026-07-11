@@ -188,6 +188,7 @@ public class KubernetesClient : IKubernetesClient
     public async Task<IList<TEntity>> ListAsync<TEntity>(
         string? @namespace = null,
         string? labelSelector = null,
+        string? fieldSelector = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
@@ -200,6 +201,7 @@ public class KubernetesClient : IKubernetesClient
                 metadata.Group ?? string.Empty,
                 metadata.Version,
                 metadata.PluralName,
+                fieldSelector: fieldSelector,
                 labelSelector: labelSelector,
                 cancellationToken: cancellationToken),
             _ => await ApiClient.CustomObjects.ListNamespacedCustomObjectAsync<EntityList<TEntity>>(
@@ -207,13 +209,17 @@ public class KubernetesClient : IKubernetesClient
                 metadata.Version,
                 @namespace,
                 metadata.PluralName,
+                fieldSelector: fieldSelector,
                 labelSelector: labelSelector,
                 cancellationToken: cancellationToken),
         }).Items;
     }
 
     /// <inheritdoc />
-    public IList<TEntity> List<TEntity>(string? @namespace = null, string? labelSelector = null)
+    public IList<TEntity> List<TEntity>(
+        string? @namespace = null,
+        string? labelSelector = null,
+        string? fieldSelector = null)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
         ThrowIfDisposed();
@@ -225,12 +231,14 @@ public class KubernetesClient : IKubernetesClient
                 metadata.Group ?? string.Empty,
                 metadata.Version,
                 metadata.PluralName,
+                fieldSelector: fieldSelector,
                 labelSelector: labelSelector),
             _ => ApiClient.CustomObjects.ListNamespacedCustomObject<EntityList<TEntity>>(
                 metadata.Group ?? string.Empty,
                 metadata.Version,
                 @namespace,
                 metadata.PluralName,
+                fieldSelector: fieldSelector,
                 labelSelector: labelSelector),
         }).Items;
     }
@@ -394,6 +402,7 @@ public class KubernetesClient : IKubernetesClient
         bool? allowWatchBookmarks = null,
         string? resourceVersion = null,
         string? labelSelector = null,
+        string? fieldSelector = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
@@ -407,6 +416,7 @@ public class KubernetesClient : IKubernetesClient
                 @namespace,
                 metadata.PluralName,
                 allowWatchBookmarks: allowWatchBookmarks,
+                fieldSelector: fieldSelector,
                 labelSelector: labelSelector,
                 resourceVersion: resourceVersion,
                 timeoutSeconds: timeout switch
@@ -421,6 +431,7 @@ public class KubernetesClient : IKubernetesClient
                 metadata.Version,
                 metadata.PluralName,
                 allowWatchBookmarks: allowWatchBookmarks,
+                fieldSelector: fieldSelector,
                 labelSelector: labelSelector,
                 resourceVersion: resourceVersion,
                 timeoutSeconds: timeout switch

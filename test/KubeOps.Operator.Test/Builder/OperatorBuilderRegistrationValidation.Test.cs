@@ -8,6 +8,7 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Builder;
+using KubeOps.Abstractions.LeaderElection;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
@@ -68,6 +69,8 @@ public sealed class OperatorBuilderRegistrationValidationTest
     [InlineData(LeaderElectionType.Single, QueueStrategy.Custom, false)]
     [InlineData(LeaderElectionType.Custom, QueueStrategy.InMemory, false)]
     [InlineData(LeaderElectionType.Custom, QueueStrategy.Custom, false)]
+    [InlineData(LeaderElectionType.Scoped, QueueStrategy.InMemory, false)]
+    [InlineData(LeaderElectionType.Scoped, QueueStrategy.Custom, false)]
     public async Task Should_Validate_Sdk_Registrations_For_All_Configuration_Combinations(
         LeaderElectionType leaderElectionType, QueueStrategy queueStrategy, bool expectValid)
     {
@@ -99,6 +102,94 @@ public sealed class OperatorBuilderRegistrationValidationTest
             .And.Contain("IEntityQueueConsumer")
             .And.Contain("LeaderElectionType.Custom")
             .And.Contain("QueueStrategy.InMemory");
+    }
+
+    [Fact]
+    public async Task Should_Report_Missing_LeadershipScope_For_Scoped_LeaderElection()
+    {
+        // Watcher, queue and consumer are SDK-registered for Scoped/InMemory; the only gap is the scope.
+        var validator = CreateValidatorForSdkRegistrations(LeaderElectionType.Scoped, QueueStrategy.InMemory);
+
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<InvalidRegistrationException>())
+            .Which.Message.Should()
+            .Contain(nameof(ILeadershipScope))
+            .And.Contain("LeaderElectionType.Scoped");
+    }
+
+    [Fact]
+    public async Task Should_Pass_For_Scoped_LeaderElection_When_Scope_Is_Registered()
+    {
+        var validator = CreateValidator(
+            LeaderElectionType.Scoped,
+            QueueStrategy.InMemory,
+            services => services.AddSingleton(Mock.Of<ILeadershipScope>()));
+
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task Should_Report_When_Last_LeadershipScope_Registration_Is_Not_Singleton()
+    {
+        // DI resolves the LAST matching registration for a single constructor dependency; an
+        // earlier singleton must not mask a later non-singleton override.
+        var validator = CreateValidator(
+            LeaderElectionType.Scoped,
+            QueueStrategy.InMemory,
+            services =>
+            {
+                services.AddSingleton(Mock.Of<ILeadershipScope>());
+                services.AddTransient(_ => Mock.Of<ILeadershipScope>());
+            });
+
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<InvalidRegistrationException>())
+            .Which.Message.Should()
+            .Contain(nameof(ILeadershipScope))
+            .And.Contain(nameof(ServiceLifetime.Transient));
+    }
+
+    [Fact]
+    public async Task Should_Pass_When_Last_LeadershipScope_Registration_Is_Singleton()
+    {
+        var validator = CreateValidator(
+            LeaderElectionType.Scoped,
+            QueueStrategy.InMemory,
+            services =>
+            {
+                services.AddTransient(_ => Mock.Of<ILeadershipScope>());
+                services.AddSingleton(Mock.Of<ILeadershipScope>());
+            });
+
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Scoped)]
+    [InlineData(ServiceLifetime.Transient)]
+    public async Task Should_Report_Non_Singleton_LeadershipScope_For_Scoped_LeaderElection(ServiceLifetime lifetime)
+    {
+        var validator = CreateValidator(
+            LeaderElectionType.Scoped,
+            QueueStrategy.InMemory,
+            services => services.Add(ServiceDescriptor.Describe(
+                typeof(ILeadershipScope),
+                _ => Mock.Of<ILeadershipScope>(),
+                lifetime)));
+
+        var act = async () => await validator.StartingAsync(TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<InvalidRegistrationException>())
+            .Which.Message.Should()
+            .Contain(nameof(ILeadershipScope))
+            .And.Contain(lifetime.ToString())
+            .And.Contain("singleton");
     }
 
     [Fact]

@@ -10,6 +10,7 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Crds;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.Events;
+using KubeOps.Abstractions.LeaderElection;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
@@ -271,6 +272,55 @@ public sealed class OperatorBuilderTest
         var hostedServices = provider.GetServices<IHostedService>().ToList();
         hostedServices.Should().ContainSingle(s => s.GetType() == typeof(SharedResourceWatcher<V1OperatorIntegrationTestEntity>));
         hostedServices.Should().ContainSingle(s => s.GetType() == typeof(ResourceWatcher<V1OperatorIntegrationTestEntity>));
+    }
+
+    [Fact]
+    [Trait("Area", "ScopedLeaderElection")]
+    public void Should_Add_ScopeAware_Services_For_Scoped_Leader_Election()
+    {
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Scoped }.Build());
+        builder.AddController<TestController, V1OperatorIntegrationTestEntity>();
+        builder.Services.AddSingleton(Mock.Of<ILeadershipScope>());
+
+        var provider = BuildResolvableProvider(builder);
+        var hostedServices = provider.GetServices<IHostedService>().ToList();
+        hostedServices.Should().ContainSingle(s => s.GetType() == typeof(ScopeAwareResourceWatcher<V1OperatorIntegrationTestEntity>));
+        hostedServices.Should().ContainSingle(s => s.GetType() == typeof(ScopeAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>));
+        hostedServices.Should().NotContain(s =>
+            s.GetType() == typeof(ResourceWatcher<V1OperatorIntegrationTestEntity>) ||
+            s.GetType() == typeof(LeaderAwareResourceWatcher<V1OperatorIntegrationTestEntity>));
+    }
+
+    [Fact]
+    [Trait("Area", "ScopedLeaderElection")]
+    public void Should_Support_Multiple_Controllers_With_ScopeAware_Shared_Watcher()
+    {
+        var builder = new OperatorBuilder(
+            new ServiceCollection(),
+            new OperatorSettingsBuilder
+            {
+                LeaderElectionType = LeaderElectionType.Scoped,
+                WatchStrategy = WatchStrategy.SharedPerEntity,
+            }.Build());
+        builder.AddControllerWithLabelSelector<TestController, V1OperatorIntegrationTestEntity, TestLabelSelector>();
+        builder.AddControllerWithLabelSelector<SecondTestController, V1OperatorIntegrationTestEntity, SecondTestLabelSelector>();
+        builder.Services.AddSingleton(Mock.Of<ILeadershipScope>());
+
+        var provider = BuildResolvableProvider(builder);
+        var hostedServices = provider.GetServices<IHostedService>().ToList();
+        hostedServices.Should().ContainSingle(s => s.GetType() == typeof(ScopeAwareSharedResourceWatcher<V1OperatorIntegrationTestEntity>));
+        hostedServices.Count(s => s.GetType() == typeof(ScopeAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>))
+            .Should().Be(2);
+    }
+
+    [Fact]
+    [Trait("Area", "ScopedLeaderElection")]
+    public void Should_Not_Add_Leader_Elector_For_Scoped_Leader_Election()
+    {
+        var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Scoped }.Build());
+
+        builder.Services.Should().NotContain(s =>
+            s.ServiceType == typeof(k8s.LeaderElection.LeaderElector));
     }
 
     [Fact]

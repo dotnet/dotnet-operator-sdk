@@ -119,11 +119,15 @@ public sealed class CertificateWebhookServiceTest : IDisposable
         public Task<IList<TEntity>> ListAsync<TEntity>(
             string? @namespace = null,
             string? labelSelector = null,
+            string? fieldSelector = null,
             CancellationToken cancellationToken = default)
             where TEntity : IKubernetesObject<V1ObjectMeta>
             => Task.FromResult<IList<TEntity>>([]);
 
-        public IList<TEntity> List<TEntity>(string? @namespace = null, string? labelSelector = null)
+        public IList<TEntity> List<TEntity>(
+            string? @namespace = null,
+            string? labelSelector = null,
+            string? fieldSelector = null)
             where TEntity : IKubernetesObject<V1ObjectMeta>
             => [];
 
@@ -176,6 +180,7 @@ public sealed class CertificateWebhookServiceTest : IDisposable
             bool? allowWatchBookmarks = null,
             string? resourceVersion = null,
             string? labelSelector = null,
+            string? fieldSelector = null,
             CancellationToken cancellationToken = default)
             where TEntity : IKubernetesObject<V1ObjectMeta>
             => throw new NotSupportedException();
