@@ -14,6 +14,7 @@ using KubeOps.Operator.Web.Webhooks.Conversion;
 
 namespace KubeOps.Operator.Web.Test.Webhooks.Conversion;
 
+[Trait("Area", "ConversionWebhook")]
 [RequiresPreviewFeatures]
 public sealed class ConversionWebhookTest
 {
@@ -68,21 +69,36 @@ public sealed class ConversionWebhookTest
         converted.Should().BeOfType<V1Subject>().Which.Spec.FullName.Should().Be("Jane Doe");
     }
 
-    [Fact(DisplayName = "Object with an unroutable source version is skipped")]
-    public void Convert_SkipsObject_WithUnroutableSourceVersion()
+    [Fact(DisplayName = "Returns an error when no conversion path exists")]
+    public void Convert_ReturnsError_WhenSourceVersionIsUnroutable()
     {
         var result = Convert(Request(
             desired: $"{Group}/v1",
             @object: """{"apiVersion":"kubeops.test/v9","kind":"Subject","metadata":{"name":"s"},"spec":{}}"""));
 
         result.Response.ConvertedObjects.Should().BeEmpty();
+        result.Response.Result.Message.Should().Contain($"{Group}/v9");
+        result.Response.Result.Message.Should().Contain($"{Group}/v1");
+        result.Response.Result.Message.Should().Contain("index 0");
     }
 
-    [Fact(DisplayName = "Converts every routable object in a batch and skips unroutable ones")]
-    public void Convert_Batch_ConvertsRoutableObjectsAndSkipsUnroutable()
+    [Fact(DisplayName = "Returns an error when an object has no apiVersion")]
+    public void Convert_ReturnsError_WhenApiVersionIsMissing()
     {
-        // A LIST response can carry many objects that repeat the same source version (exercising the per-request
-        // path cache) alongside an unroutable one (exercising the cached negative result).
+        var result = Convert(Request(
+            desired: $"{Group}/v1",
+            @object: """{"kind":"Subject","metadata":{"name":"s"},"spec":{}}"""));
+
+        result.Response.ConvertedObjects.Should().BeEmpty();
+        result.Response.Result.Message.Should().Contain("apiVersion");
+        result.Response.Result.Message.Should().Contain("index 0");
+    }
+
+    [Fact(DisplayName = "Converts every routable object in a batch")]
+    public void Convert_Batch_ConvertsRoutableObjects()
+    {
+        // A LIST response can carry many objects that repeat the same source version, exercising the per-request path
+        // cache.
         var result = Convert(new ConversionRequest
         {
             Request = new ConversionRequest.ConversionRequestData
@@ -94,7 +110,6 @@ public sealed class ConversionWebhookTest
                     JsonNode.Parse("""{"apiVersion":"kubeops.test/v2","kind":"Subject","metadata":{"name":"a"},"spec":{"firstName":"Jane","lastName":"Doe"}}""")!,
                     JsonNode.Parse("""{"apiVersion":"kubeops.test/v2","kind":"Subject","metadata":{"name":"b"},"spec":{"firstName":"John","lastName":"Roe"}}""")!,
                     JsonNode.Parse("""{"apiVersion":"kubeops.test/v3","kind":"Subject","metadata":{"name":"c"},"spec":{"firstName":"Mary","lastName":"Sue"}}""")!,
-                    JsonNode.Parse("""{"apiVersion":"kubeops.test/v9","kind":"Subject","metadata":{"name":"d"},"spec":{}}""")!,
                 ],
             },
         });
@@ -103,6 +118,28 @@ public sealed class ConversionWebhookTest
         result.Response.ConvertedObjects[0].Should().BeOfType<V1Subject>().Which.Spec.FullName.Should().Be("Jane Doe");
         result.Response.ConvertedObjects[1].Should().BeOfType<V1Subject>().Which.Spec.FullName.Should().Be("John Roe");
         result.Response.ConvertedObjects[2].Should().BeOfType<V1Subject>().Which.Spec.FullName.Should().Be("Mary Sue");
+    }
+
+    [Fact(DisplayName = "Rejects the complete batch when one object is unroutable")]
+    public void Convert_Batch_ReturnsError_WhenOneObjectIsUnroutable()
+    {
+        var result = Convert(new ConversionRequest
+        {
+            Request = new ConversionRequest.ConversionRequestData
+            {
+                Uid = "test-uid",
+                DesiredApiVersion = $"{Group}/v1",
+                Objects =
+                [
+                    JsonNode.Parse("""{"apiVersion":"kubeops.test/v2","kind":"Subject","metadata":{"name":"a"},"spec":{"firstName":"Jane","lastName":"Doe"}}""")!,
+                    JsonNode.Parse("""{"apiVersion":"kubeops.test/v9","kind":"Subject","metadata":{"name":"b"},"spec":{}}""")!,
+                ],
+            },
+        });
+
+        result.Response.ConvertedObjects.Should().BeEmpty();
+        result.Response.Result.Message.Should().Contain($"{Group}/v9");
+        result.Response.Result.Message.Should().Contain("index 1");
     }
 
     private static ConversionResponse Convert(ConversionRequest request) =>

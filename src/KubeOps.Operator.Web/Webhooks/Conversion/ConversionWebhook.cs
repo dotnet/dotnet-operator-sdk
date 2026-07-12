@@ -55,33 +55,43 @@ public abstract class ConversionWebhook<TEntity> : ControllerBase
             // The conversion chain depends only on the source and desired versions, and the desired version is constant
             // for the whole request, so the chain is cached by source apiVersion. A LIST response typically converts
             // many objects that share the same stored version, so this avoids repeating the graph search (and the scans
-            // over the conversions list) for every object. Unroutable source versions are cached as null so they are
-            // searched only once as well.
-            var paths = new Dictionary<string, (IReadOnlyList<Func<object, object>> Steps, Type SourceType)?>();
+            // over the conversions list) for every object.
+            var paths = new Dictionary<string, (IReadOnlyList<Func<object, object>> Steps, Type SourceType)>();
 
             var results = new List<object>();
-            foreach (var obj in request.Request.Objects)
+            for (var index = 0; index < request.Request.Objects.Length; index++)
             {
+                var obj = request.Request.Objects[index];
                 if (obj["apiVersion"]?.GetValue<string>() is not { } sourceApiVersion)
                 {
-                    continue;
+                    return new ConversionResponse(
+                        request.Request.Uid,
+                        $"Object at index {index} does not contain a valid apiVersion.");
                 }
 
                 if (!paths.TryGetValue(sourceApiVersion, out var path))
                 {
-                    path = TryBuildConversionPath(conversions, sourceApiVersion, request.Request.DesiredApiVersion, out var steps, out var sourceType)
-                        ? (steps, sourceType)
-                        : null;
+                    if (!TryBuildConversionPath(
+                            conversions,
+                            sourceApiVersion,
+                            request.Request.DesiredApiVersion,
+                            out var steps,
+                            out var sourceType))
+                    {
+                        return new ConversionResponse(
+                            request.Request.Uid,
+                            $"No conversion path exists from '{sourceApiVersion}' to " +
+                            $"'{request.Request.DesiredApiVersion}' for object at index {index}.");
+                    }
+
+                    path = (steps, sourceType);
                     paths[sourceApiVersion] = path;
                 }
 
-                if (path is not { } route)
-                {
-                    continue;
-                }
-
-                var converted = obj.Deserialize(route.SourceType, _serializerOptions)!;
-                foreach (var step in route.Steps)
+                var converted = obj.Deserialize(path.SourceType, _serializerOptions)
+                    ?? throw new InvalidOperationException(
+                        $"Object at index {index} could not be deserialized as '{path.SourceType}'.");
+                foreach (var step in path.Steps)
                 {
                     converted = step(converted);
                 }
