@@ -78,6 +78,33 @@ public sealed class ConversionWebhookTest
         result.Response.ConvertedObjects.Should().BeEmpty();
     }
 
+    [Fact(DisplayName = "Converts every routable object in a batch and skips unroutable ones")]
+    public void Convert_Batch_ConvertsRoutableObjectsAndSkipsUnroutable()
+    {
+        // A LIST response can carry many objects that repeat the same source version (exercising the per-request
+        // path cache) alongside an unroutable one (exercising the cached negative result).
+        var result = Convert(new ConversionRequest
+        {
+            Request = new ConversionRequest.ConversionRequestData
+            {
+                Uid = "test-uid",
+                DesiredApiVersion = $"{Group}/v1",
+                Objects =
+                [
+                    JsonNode.Parse("""{"apiVersion":"kubeops.test/v2","kind":"Subject","metadata":{"name":"a"},"spec":{"firstName":"Jane","lastName":"Doe"}}""")!,
+                    JsonNode.Parse("""{"apiVersion":"kubeops.test/v2","kind":"Subject","metadata":{"name":"b"},"spec":{"firstName":"John","lastName":"Roe"}}""")!,
+                    JsonNode.Parse("""{"apiVersion":"kubeops.test/v3","kind":"Subject","metadata":{"name":"c"},"spec":{"firstName":"Mary","lastName":"Sue"}}""")!,
+                    JsonNode.Parse("""{"apiVersion":"kubeops.test/v9","kind":"Subject","metadata":{"name":"d"},"spec":{}}""")!,
+                ],
+            },
+        });
+
+        result.Response.ConvertedObjects.Should().HaveCount(3);
+        result.Response.ConvertedObjects[0].Should().BeOfType<V1Subject>().Which.Spec.FullName.Should().Be("Jane Doe");
+        result.Response.ConvertedObjects[1].Should().BeOfType<V1Subject>().Which.Spec.FullName.Should().Be("John Roe");
+        result.Response.ConvertedObjects[2].Should().BeOfType<V1Subject>().Which.Spec.FullName.Should().Be("Mary Sue");
+    }
+
     private static ConversionResponse Convert(ConversionRequest request) =>
         (ConversionResponse)new TestConversionWebhook().Convert(request);
 
