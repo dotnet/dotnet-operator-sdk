@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.Versioning;
 using System.Text.Json;
 
@@ -49,21 +50,53 @@ public abstract class ConversionWebhook<TEntity> : ControllerBase
     {
         try
         {
-            var toConverters = AvailableConversions
-                .Where(c => c.To == request.Request.DesiredApiVersion)
-                .ToList();
+            var conversions = AvailableConversions.ToList();
+
+            // The conversion chain depends only on the source and desired versions, and the desired version is constant
+            // for the whole request, so the chain is cached by source apiVersion. A LIST response typically converts
+            // many objects that share the same stored version, so this avoids repeating the graph search (and the scans
+            // over the conversions list) for every object.
+            var paths = new Dictionary<string, (IReadOnlyList<Func<object, object>> Steps, Type SourceType)>();
+
             var results = new List<object>();
-            foreach (var obj in request.Request.Objects)
+            for (var index = 0; index < request.Request.Objects.Length; index++)
             {
-                if (obj["apiVersion"]?.GetValue<string>() is not { } targetApiVersion ||
-                    toConverters.TrueForAll(c => c.From != targetApiVersion))
+                var obj = request.Request.Objects[index];
+                if (obj["apiVersion"]?.GetValue<string>() is not { } sourceApiVersion)
                 {
-                    continue;
+                    return new ConversionResponse(
+                        request.Request.Uid,
+                        $"Object at index {index} does not contain a valid apiVersion.");
                 }
 
-                var (_, _, converter, type) = toConverters.Find(c => c.From == targetApiVersion);
+                if (!paths.TryGetValue(sourceApiVersion, out var path))
+                {
+                    if (!TryBuildConversionPath(
+                            conversions,
+                            sourceApiVersion,
+                            request.Request.DesiredApiVersion,
+                            out var steps,
+                            out var sourceType))
+                    {
+                        return new ConversionResponse(
+                            request.Request.Uid,
+                            $"No conversion path exists from '{sourceApiVersion}' to " +
+                            $"'{request.Request.DesiredApiVersion}' for object at index {index}.");
+                    }
 
-                results.Add(converter(obj.Deserialize(type, _serializerOptions)!));
+                    path = (steps, sourceType);
+                    paths[sourceApiVersion] = path;
+                }
+
+                var converted = obj.Deserialize(path.SourceType, _serializerOptions)
+                    ?? throw new InvalidOperationException(
+                        $"Object at index {index} could not be deserialized as '{path.SourceType}'.");
+                foreach (var step in path.Steps)
+                {
+                    converted = step(converted);
+                }
+
+                results.Add(converted);
             }
 
             return new ConversionResponse(request.Request.Uid, results);
@@ -72,5 +105,71 @@ public abstract class ConversionWebhook<TEntity> : ControllerBase
         {
             return new ConversionResponse(request.Request.Uid, e.ToString());
         }
+    }
+
+    /// <summary>
+    /// Builds a chain of registered converters that transforms an object from <paramref name="from"/> to
+    /// <paramref name="to"/>. Converters are registered as a hub-and-spoke set (every served version converts to and
+    /// from the storage/hub version), so the API server can legitimately request a conversion between two versions that
+    /// have no direct converter — e.g. an object persisted under a version that is no longer the storage version, read
+    /// at a third served version. In that case the conversion is composed through intermediate versions (a
+    /// breadth-first search picks the shortest chain), rather than the object being silently dropped.
+    /// </summary>
+    /// <param name="conversions">The directed conversion edges available for this webhook.</param>
+    /// <param name="from">The <c>apiVersion</c> the source object is encoded in.</param>
+    /// <param name="to">The requested <c>desiredAPIVersion</c>.</param>
+    /// <param name="steps">The ordered conversion functions to apply to the deserialized source object.</param>
+    /// <param name="sourceType">The CLR type the source object must be deserialized into before applying the steps.</param>
+    /// <returns><see langword="true"/> if a conversion chain exists; otherwise <see langword="false"/>.</returns>
+    private static bool TryBuildConversionPath(
+        IReadOnlyList<(string To, string From, Func<object, object> Converter, Type FromType)> conversions,
+        string from,
+        string to,
+        out IReadOnlyList<Func<object, object>> steps,
+        [NotNullWhen(true)] out Type? sourceType)
+    {
+        steps = [];
+        sourceType = null;
+
+        // Nothing to convert; also guards against walking an edge back to the source through the hub.
+        if (from == to)
+        {
+            return false;
+        }
+
+        // Breadth-first search over the directed conversion edges so the shortest chain is chosen. A direct converter,
+        // when one exists, is found as a single-hop path and therefore keeps the previous behaviour unchanged.
+        var queue = new Queue<List<(string To, string From, Func<object, object> Converter, Type FromType)>>();
+        var visited = new HashSet<string> { from };
+
+        foreach (var edge in conversions.Where(c => c.From == from))
+        {
+            queue.Enqueue([edge]);
+        }
+
+        while (queue.Count > 0)
+        {
+            var path = queue.Dequeue();
+            var last = path[^1];
+
+            if (last.To == to)
+            {
+                steps = [.. path.Select(e => e.Converter)];
+                sourceType = path[0].FromType;
+                return true;
+            }
+
+            if (!visited.Add(last.To))
+            {
+                continue;
+            }
+
+            foreach (var edge in conversions.Where(c => c.From == last.To))
+            {
+                queue.Enqueue([.. path, edge]);
+            }
+        }
+
+        return false;
     }
 }
