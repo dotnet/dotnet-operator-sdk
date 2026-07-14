@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 
 using FluentAssertions;
 
+using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Entities;
@@ -250,6 +251,97 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
 
         var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"];
         specProperties.Title.Should().Be("My Title");
+    }
+
+    [Trait("Area", "SchemaMetadata")]
+    [Fact]
+    public void Should_Set_Default_Value()
+    {
+        var crd = _mlc.Transpile(typeof(DefaultValueAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+        specProperties.DefaultProperty.Should().Be(42L);
+    }
+
+    [Trait("Area", "SchemaMetadata")]
+    [Fact]
+    public void Should_Set_Structured_Default_Value_From_Json()
+    {
+        var crd = _mlc.Transpile(typeof(JsonDefaultValueAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+        specProperties.DefaultProperty.Should().BeEquivalentTo(new Dictionary<string, object?>());
+        KubernetesYaml.Serialize(crd).Should().Contain("default: {}");
+    }
+
+    [Trait("Area", "SchemaMetadata")]
+    [Fact]
+    public void Should_Set_Example()
+    {
+        var crd = _mlc.Transpile(typeof(ExampleAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+        specProperties.Example.Should().Be("example");
+    }
+
+    [Trait("Area", "SchemaMetadata")]
+    [Fact]
+    public void Should_Set_Structured_Example_From_Json()
+    {
+        var crd = _mlc.Transpile(typeof(JsonExampleAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+        specProperties.Example.Should().BeEquivalentTo(new Dictionary<string, object?> { ["enabled"] = true });
+    }
+
+    [Trait("Area", "SchemaMetadata")]
+    [Fact]
+    public void Should_Reject_Invalid_Structured_Value_Json()
+    {
+        var action = () => _mlc.Transpile(typeof(InvalidJsonDefaultValueAttrEntity));
+
+        action.Should().Throw<TranspilationFailedException>()
+            .WithMessage("*DefaultValueAttribute*contains invalid JSON*");
+    }
+
+    [Trait("Area", "SchemaMetadata")]
+    [Fact]
+    public void Should_Reject_Json_Parsing_For_Non_String_Value()
+    {
+        var action = () => _mlc.Transpile(typeof(NonStringJsonDefaultValueAttrEntity));
+
+        action.Should().Throw<TranspilationFailedException>()
+            .WithMessage("*DefaultValueAttribute*only enable JSON parsing for string values*");
+    }
+
+    [Trait("Area", "SchemaMetadata")]
+    [Fact]
+    public void Should_Override_Format()
+    {
+        var crd = _mlc.Transpile(typeof(FormatAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+        specProperties.Format.Should().Be("uri");
+    }
+
+    [Trait("Area", "SchemaMetadata")]
+    [Fact]
+    public void Should_Remove_Inferred_Format()
+    {
+        var crd = _mlc.Transpile(typeof(NoFormatAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+        specProperties.Format.Should().BeNull();
+    }
+
+    [Trait("Area", "SchemaMetadata")]
+    [Fact]
+    public void Should_Override_Enum_Values()
+    {
+        var crd = _mlc.Transpile(typeof(EnumValuesAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["property"];
+        specProperties.EnumProperty.Should().Equal(30L, 60L, 90L);
     }
 
     [Trait("Area", "SchemaMetadata")]
@@ -1211,6 +1303,69 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     {
         [Title("My Title")]
         public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class DefaultValueAttrEntity : CustomKubernetesEntity
+    {
+        [DefaultValue(42)]
+        public int Property { get; set; }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class JsonDefaultValueAttrEntity : CustomKubernetesEntity
+    {
+        [DefaultValue("{}", Json = true)]
+        public Dictionary<string, object> Property { get; set; } = [];
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class InvalidJsonDefaultValueAttrEntity : CustomKubernetesEntity
+    {
+        [DefaultValue("{", Json = true)]
+        public Dictionary<string, object> Property { get; set; } = [];
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class NonStringJsonDefaultValueAttrEntity : CustomKubernetesEntity
+    {
+        [DefaultValue(1, Json = true)]
+        public int Property { get; set; }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class ExampleAttrEntity : CustomKubernetesEntity
+    {
+        [Example("example")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class JsonExampleAttrEntity : CustomKubernetesEntity
+    {
+        [Example("{\"enabled\":true}", Json = true)]
+        public Dictionary<string, object> Property { get; set; } = [];
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class FormatAttrEntity : CustomKubernetesEntity
+    {
+        [Format("uri")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class NoFormatAttrEntity : CustomKubernetesEntity
+    {
+        [Format(null)]
+        public int Property { get; set; }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class EnumValuesAttrEntity : CustomKubernetesEntity
+    {
+        [EnumValues(30, 60, 90)]
+        public int Property { get; set; }
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]

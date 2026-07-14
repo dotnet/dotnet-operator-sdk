@@ -103,7 +103,17 @@ Common options:
 - `--clear-out`: Clear output directory before generation
 - `--docker-image`: Specify Docker image name
 - `--docker-image-tag`: Specify Docker image tag
+- `--resources`: Generate only the selected resource groups. Accepted values are `all`, `rbac`, `dockerfile`,
+  `certificates`, `deployment`, `webhooks`, `crds`, `namespace`, and `kustomization`. Multiple values may be
+  supplied after the option. The default is `all`, preserving the complete output of earlier versions.
 - `--no-ansi`: Disable ANSI colored output (useful for CI/CD pipelines)
+
+Selecting a resource group controls which files are written. Dependencies needed while producing a selected file,
+such as certificate material embedded in conversion webhook configuration, may still be created in memory but are
+not written unless their resource group is selected.
+
+Generated CRDs explicitly use `conversion.strategy: None` unless a conversion webhook is registered for the CRD.
+For registered conversion webhooks, the strategy is `Webhook` and includes the webhook client configuration.
 
 ## Cluster Information
 

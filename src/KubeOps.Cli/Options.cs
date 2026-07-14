@@ -5,6 +5,7 @@
 using System.CommandLine;
 using System.Text.RegularExpressions;
 
+using KubeOps.Cli.Commands.Generator;
 using KubeOps.Cli.Output;
 
 namespace KubeOps.Cli;
@@ -74,5 +75,13 @@ internal static class Options
         Description = "The Kubernetes namespace for the operator deployment. " +
                       "If omitted, a namespace resource for the operator deployment is generated using the default system namespace naming. " +
                       "If specified, the namespace is not generated and must already exist in the cluster.",
+    };
+
+    public static readonly Option<OperatorResource[]> OperatorResources = new("--resources")
+    {
+        Description = "The operator resources to generate. Specify one or more of: all, rbac, dockerfile, " +
+                      "certificates, deployment, webhooks, crds, namespace, kustomization.",
+        DefaultValueFactory = _ => [OperatorResource.All],
+        AllowMultipleArgumentsPerToken = true,
     };
 }
