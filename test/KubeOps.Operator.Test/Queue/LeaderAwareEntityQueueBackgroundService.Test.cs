@@ -12,6 +12,7 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
@@ -418,6 +419,7 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
                     new OperatorSettingsBuilder { Namespace = "unit-test" }.Build()),
                 logger,
                 elector,
+                Mock.Of<IEntityLoggingScopeFactory<V1OperatorIntegrationTestEntity>>(),
                 metrics)
         {
             _elector = elector;

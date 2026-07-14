@@ -11,6 +11,7 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 
@@ -36,6 +37,7 @@ internal sealed class LeaderAwareSharedResourceWatcher<TEntity>(
     IKubernetesClient client,
     LeaderElector elector,
     SharedPipelineDispatcher<TEntity> dispatcher,
+    IEntityLoggingScopeFactory<TEntity> scopeFactory,
     OperatorMetrics? metrics = null)
     : LeaderAwareResourceWatcher<TEntity>(
         activitySource,
@@ -47,6 +49,7 @@ internal sealed class LeaderAwareSharedResourceWatcher<TEntity>(
         fieldSelector,
         client,
         elector,
+        scopeFactory,
         cachePartition: string.Empty,
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>

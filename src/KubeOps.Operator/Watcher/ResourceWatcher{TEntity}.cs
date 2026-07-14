@@ -36,6 +36,7 @@ public class ResourceWatcher<TEntity>(
     IEntityLabelSelector<TEntity> labelSelector,
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
+    IEntityLoggingScopeFactory<TEntity> scopeFactory,
     string cachePartition = "",
     OperatorMetrics? metrics = null)
     : RestartableHostedService, ISharedWatchDedup<TEntity>
@@ -181,7 +182,7 @@ public class ResourceWatcher<TEntity>(
                                    cancellationToken: cancellationToken))
                 {
                     using var activity = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
-                    using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(type, entity));
+                    using var scope = logger.BeginScope(scopeFactory.CreateFor(type, entity));
 
                     metrics?.RecordWatchEvent(typeof(TEntity).Name, type.ToMetricString());
 

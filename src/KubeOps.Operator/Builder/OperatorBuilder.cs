@@ -343,6 +343,11 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         Services.AddSingleton(typeof(IEntityLabelSelector<>), typeof(DefaultEntityLabelSelector<>));
         Services.AddSingleton(typeof(IEntityFieldSelector<>), typeof(DefaultEntityFieldSelector<>));
 
+        // The factory is the public scope-creation boundary. It delegates enrichment to a no-op pipeline
+        // when no IEntityLoggingScopeEnricher<TEntity> is registered.
+        Services.TryAddSingleton(typeof(EntityLoggingScopeEnricherPipeline<>));
+        Services.TryAddSingleton(typeof(IEntityLoggingScopeFactory<>), typeof(EntityLoggingScopeFactory<>));
+
         if (Settings.LeaderElectionType == LeaderElectionType.Single)
         {
             Services.AddLeaderElection();

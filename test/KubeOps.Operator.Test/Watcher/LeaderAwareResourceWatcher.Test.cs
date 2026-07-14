@@ -12,6 +12,7 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Constants;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 using KubeOps.Operator.Watcher;
@@ -275,7 +276,8 @@ public sealed class LeaderAwareResourceWatcherTest
                 new DefaultEntityLabelSelector<V1OperatorIntegrationTestEntity>(),
                 new DefaultEntityFieldSelector<V1OperatorIntegrationTestEntity>(),
                 client,
-                elector)
+                elector,
+                Mock.Of<IEntityLoggingScopeFactory<V1OperatorIntegrationTestEntity>>())
         {
             _elector = elector;
         }

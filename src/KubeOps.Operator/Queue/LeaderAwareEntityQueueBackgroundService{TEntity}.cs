@@ -12,6 +12,7 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.LeaderElection;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 
 using Microsoft.Extensions.Logging;
@@ -55,6 +56,7 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
     IEntityReconcileCoordinator<TEntity> coordinator,
     ILogger<LeaderAwareEntityQueueBackgroundService<TEntity>> logger,
     LeaderElector elector,
+    IEntityLoggingScopeFactory<TEntity> scopeFactory,
     OperatorMetrics? metrics = null)
     : EntityQueueBackgroundService<TEntity>(
         activitySource,
@@ -64,6 +66,7 @@ public class LeaderAwareEntityQueueBackgroundService<TEntity>(
         reconciler,
         coordinator,
         logger,
+        scopeFactory,
         metrics), ILeaderAwareEntityQueueConsumer<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {

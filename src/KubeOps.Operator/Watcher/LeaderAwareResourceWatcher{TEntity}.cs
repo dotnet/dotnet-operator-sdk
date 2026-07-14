@@ -12,6 +12,7 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.LeaderElection;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 
@@ -31,6 +32,7 @@ public class LeaderAwareResourceWatcher<TEntity>(
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     LeaderElector elector,
+    IEntityLoggingScopeFactory<TEntity> scopeFactory,
     string cachePartition = "",
     OperatorMetrics? metrics = null)
     : ResourceWatcher<TEntity>(
@@ -42,6 +44,7 @@ public class LeaderAwareResourceWatcher<TEntity>(
         labelSelector,
         fieldSelector,
         client,
+        scopeFactory,
         cachePartition,
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>

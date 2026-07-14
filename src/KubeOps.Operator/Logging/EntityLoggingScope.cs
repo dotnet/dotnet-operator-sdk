@@ -7,6 +7,7 @@ using System.Collections;
 using k8s;
 using k8s.Models;
 
+using KubeOps.Abstractions.Logging;
 using KubeOps.Abstractions.Reconciliation;
 
 namespace KubeOps.Operator.Logging;
@@ -31,47 +32,30 @@ public sealed record EntityLoggingScope : IReadOnlyCollection<KeyValuePair<strin
     private IReadOnlyDictionary<string, object> Values { get; }
 
     /// <summary>
-    /// Creates a new instance of <see cref="EntityLoggingScope"/> for the provided Kubernetes entity and event type.
+    /// Creates an unenriched logging scope for the provided Kubernetes watch event.
     /// </summary>
-    /// <typeparam name="TEntity">
-    /// The type of the Kubernetes entity. Must implement <see cref="IKubernetesObject{V1ObjectMeta}"/>.
-    /// </typeparam>
-    /// <param name="eventType">
-    /// The type of the watch event for the entity (e.g., Added, Modified, Deleted, or Bookmark).
-    /// </param>
-    /// <param name="entity">
-    /// The Kubernetes entity associated with the logging scope. This includes metadata such as Kind, Namespace, Name, UID, and ResourceVersion.
-    /// </param>
-    /// <returns>
-    /// A new <see cref="EntityLoggingScope"/> instance containing contextual key-value pairs
-    /// related to the event type and the provided Kubernetes entity.
-    /// </returns>
+    /// <typeparam name="TEntity">The Kubernetes entity type.</typeparam>
+    /// <param name="eventType">The watch event type.</param>
+    /// <param name="entity">The entity associated with the event.</param>
+    /// <returns>A logging scope containing the built-in identification fields.</returns>
     public static EntityLoggingScope CreateFor<TEntity>(WatchEventType eventType, TEntity entity)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => CreateLoggingScope(eventType.ToString(), ReconciliationTriggerSource.ApiServer, entity);
+        => CreateUnenriched(eventType.ToString(), ReconciliationTriggerSource.ApiServer, entity);
 
     /// <summary>
-    /// Creates a new instance of <see cref="EntityLoggingScope"/> for the given Kubernetes entity and reconciliation operation type.
+    /// Creates an unenriched logging scope for the provided reconciliation.
     /// </summary>
-    /// <typeparam name="TEntity">
-    /// The type of the Kubernetes entity. Must implement <see cref="IKubernetesObject{V1ObjectMeta}"/>.
-    /// </typeparam>
-    /// <param name="eventType">
-    /// The type of reconciliation operation for the entity (e.g., Added, Modified, or Deleted).
-    /// </param>
-    /// <param name="reconciliationTriggerSource">
-    /// The source of the reconciliation trigger (e.g., ApiServer, Operator). This provides additional context for the logging scope.
-    /// </param>
-    /// <param name="entity">
-    /// The Kubernetes entity associated with the logging scope. This includes metadata such as Kind, Namespace, Name, UID, and ResourceVersion.
-    /// </param>
-    /// <returns>
-    /// A new <see cref="EntityLoggingScope"/> instance containing contextual key-value pairs
-    /// related to the reconciliation operation type and the provided Kubernetes entity.
-    /// </returns>
-    public static EntityLoggingScope CreateFor<TEntity>(ReconciliationType eventType, ReconciliationTriggerSource reconciliationTriggerSource, TEntity entity)
+    /// <typeparam name="TEntity">The Kubernetes entity type.</typeparam>
+    /// <param name="eventType">The reconciliation operation type.</param>
+    /// <param name="reconciliationTriggerSource">The source that triggered the reconciliation.</param>
+    /// <param name="entity">The entity associated with the reconciliation.</param>
+    /// <returns>A logging scope containing the built-in identification fields.</returns>
+    public static EntityLoggingScope CreateFor<TEntity>(
+        ReconciliationType eventType,
+        ReconciliationTriggerSource reconciliationTriggerSource,
+        TEntity entity)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => CreateLoggingScope(eventType.ToString(), reconciliationTriggerSource, entity);
+        => CreateUnenriched(eventType.ToString(), reconciliationTriggerSource, entity);
 
     /// <inheritdoc />
     public IEnumerator<KeyValuePair<string, object>> GetEnumerator()
@@ -85,17 +69,46 @@ public sealed record EntityLoggingScope : IReadOnlyCollection<KeyValuePair<strin
     IEnumerator IEnumerable.GetEnumerator()
         => GetEnumerator();
 
-    private static EntityLoggingScope CreateLoggingScope<TEntity>(string eventType, ReconciliationTriggerSource triggerSource, TEntity entity)
+    internal static EntityLoggingScope Create<TEntity>(
+        string eventType,
+        ReconciliationTriggerSource triggerSource,
+        TEntity entity,
+        EntityLoggingPhase phase,
+        EntityLoggingScopeEnricherPipeline<TEntity> enrichers)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => new(
-            new Dictionary<string, object>(7)
-            {
-                { "EventType", eventType },
-                { "ReconciliationTriggerSource", triggerSource },
-                { nameof(entity.Kind), entity.Kind },
-                { "Namespace", entity.Namespace() },
-                { "Name", entity.Name() },
-                { "Uid", entity.Uid() },
-                { "ResourceVersion", entity.ResourceVersion() },
-            });
+    {
+        var items = new Dictionary<string, object>(7);
+        SetBuiltInProperties(items, eventType, triggerSource, entity);
+
+        enrichers.Enrich(entity, phase, items);
+
+        return new(items);
+    }
+
+    private static EntityLoggingScope CreateUnenriched<TEntity>(
+        string eventType,
+        ReconciliationTriggerSource triggerSource,
+        TEntity entity)
+        where TEntity : IKubernetesObject<V1ObjectMeta>
+    {
+        var items = new Dictionary<string, object>(7);
+        SetBuiltInProperties(items, eventType, triggerSource, entity);
+        return new(items);
+    }
+
+    private static void SetBuiltInProperties<TEntity>(
+        IDictionary<string, object> items,
+        string eventType,
+        ReconciliationTriggerSource triggerSource,
+        TEntity entity)
+        where TEntity : IKubernetesObject<V1ObjectMeta>
+    {
+        items["EventType"] = eventType;
+        items["ReconciliationTriggerSource"] = triggerSource;
+        items[nameof(entity.Kind)] = entity.Kind;
+        items["Namespace"] = entity.Namespace();
+        items["Name"] = entity.Name();
+        items["Uid"] = entity.Uid();
+        items["ResourceVersion"] = entity.ResourceVersion();
+    }
 }

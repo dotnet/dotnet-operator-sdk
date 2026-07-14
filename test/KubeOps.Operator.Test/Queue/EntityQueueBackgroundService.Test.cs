@@ -11,6 +11,7 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 
@@ -163,6 +164,7 @@ public sealed class EntityQueueBackgroundServiceTest
             reconcilerMock.Object,
             new EntityReconcileCoordinator<V1ConfigMap>(effectiveSettings),
             Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>(),
+            Mock.Of<IEntityLoggingScopeFactory<V1ConfigMap>>(),
             metrics);
 
         // Keep the drain bound short so tests that intentionally block a worker across StopAsync/dispose don't
@@ -317,7 +319,8 @@ public sealed class EntityQueueBackgroundServiceTest
             queue,
             reconcilerMock.Object,
             new EntityReconcileCoordinator<V1ConfigMap>(settings),
-            Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>())
+            Mock.Of<ILogger<EntityQueueBackgroundService<V1ConfigMap>>>(),
+            Mock.Of<IEntityLoggingScopeFactory<V1ConfigMap>>())
         {
             // The BarrierQueue ignores cancellation, so bound the stop/dispose drain short.
             DrainGracePeriod = TimeSpan.FromMilliseconds(200),
