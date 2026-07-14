@@ -230,6 +230,19 @@ constructed it directly are affected.
 **Migration:** pass the concrete controller type when constructing `Reconciler<TEntity>` yourself, or
 rely on the SDK's registration.
 
+### Entity logging scopes are created through a factory
+
+`ResourceWatcher<TEntity>`, `EntityQueueBackgroundService<TEntity>` and their leader-/scope-aware
+derivations take an additional `IEntityLoggingScopeFactory<TEntity>` argument. The factory applies all
+registered enrichers while creating the scope (see
+[Logging](./observability/logging#enriching-scopes-with-custom-fields)).
+
+**Migration:** resolve `IEntityLoggingScopeFactory<TEntity>` through dependency injection. Use its
+`CreateFor(...)` methods to create an enriched scope, and pass the factory when directly constructing or
+subclassing the watcher and queue types. `EntityLoggingScope.CreateFor(...)` remains available for standalone,
+unenriched scopes. The default factory is registered automatically per entity type and is a no-op beyond the
+built-in fields when no enrichers are configured.
+
 ### New in v13 (non-breaking)
 
 - **Scoped leader election**: `LeaderElectionType.Scoped` partitions responsibility across

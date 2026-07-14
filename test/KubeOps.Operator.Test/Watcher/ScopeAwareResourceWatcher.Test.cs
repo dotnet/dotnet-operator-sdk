@@ -16,6 +16,7 @@ using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
 using KubeOps.Operator.Builder;
 using KubeOps.Operator.Constants;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 using KubeOps.Operator.Watcher;
@@ -468,7 +469,8 @@ public sealed class ScopeAwareResourceWatcherTest
             labelSelector,
             fieldSelector,
             client,
-            leadershipScope)
+            leadershipScope,
+            Mock.Of<IEntityLoggingScopeFactory<V1OperatorIntegrationTestEntity>>())
     {
         public Task InvokeOnEventAsync(
             WatchEventType eventType,

@@ -13,6 +13,7 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.LeaderElection;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 
@@ -175,11 +176,12 @@ public sealed class ScopeAwareEntityQueueBackgroundServiceTest
             reconciler,
             Mock.Of<IEntityReconcileCoordinator<V1OperatorIntegrationTestEntity>>(),
             Mock.Of<ILogger<ScopeAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>>>(),
-            leadershipScope)
+            leadershipScope,
+            Mock.Of<IEntityLoggingScopeFactory<V1OperatorIntegrationTestEntity>>())
     {
         public Task<ReconciliationResult<V1OperatorIntegrationTestEntity>> InvokeReconcileSingleAsync(
             QueueEntry<V1OperatorIntegrationTestEntity> entry,
-            CancellationToken cancellationToken)
-            => ReconcileSingleAsync(entry, cancellationToken);
+            CancellationToken cancellationToken) =>
+            ReconcileSingleAsync(entry, cancellationToken);
     }
 }

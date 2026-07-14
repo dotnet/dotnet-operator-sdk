@@ -744,7 +744,16 @@ public sealed class ResourceWatcherTest
         IEntityLabelSelector<V1OperatorIntegrationTestEntity> labelSelector,
         IEntityFieldSelector<V1OperatorIntegrationTestEntity> fieldSelector,
         IKubernetesClient client)
-        : ResourceWatcher<V1OperatorIntegrationTestEntity>(activitySource, logger, cacheProvider, queue, settings, labelSelector, fieldSelector, client)
+        : ResourceWatcher<V1OperatorIntegrationTestEntity>(
+            activitySource,
+            logger,
+            cacheProvider,
+            queue,
+            settings,
+            labelSelector,
+            fieldSelector,
+            client,
+            Mock.Of<IEntityLoggingScopeFactory<V1OperatorIntegrationTestEntity>>())
     {
         public Task InvokeOnEventAsync(WatchEventType eventType, V1OperatorIntegrationTestEntity entity, CancellationToken cancellationToken)
             => OnEventAsync(eventType, entity, cancellationToken);

@@ -10,6 +10,7 @@ using k8s.Models;
 using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 
@@ -39,6 +40,7 @@ internal sealed class SharedResourceWatcher<TEntity>(
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     SharedPipelineDispatcher<TEntity> dispatcher,
+    IEntityLoggingScopeFactory<TEntity> scopeFactory,
     OperatorMetrics? metrics = null)
     : ResourceWatcher<TEntity>(
         activitySource,
@@ -49,6 +51,7 @@ internal sealed class SharedResourceWatcher<TEntity>(
         labelSelector,
         fieldSelector,
         client,
+        scopeFactory,
         cachePartition: string.Empty,
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>

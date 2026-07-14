@@ -11,6 +11,7 @@ using KubeOps.Abstractions.Builder;
 using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.LeaderElection;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
 
@@ -37,6 +38,7 @@ internal sealed class ScopeAwareSharedResourceWatcher<TEntity>(
     IKubernetesClient client,
     ILeadershipScope leadershipScope,
     SharedPipelineDispatcher<TEntity> dispatcher,
+    IEntityLoggingScopeFactory<TEntity> scopeFactory,
     OperatorMetrics? metrics = null)
     : ScopeAwareResourceWatcher<TEntity>(
         activitySource,
@@ -48,6 +50,7 @@ internal sealed class ScopeAwareSharedResourceWatcher<TEntity>(
         fieldSelector,
         client,
         leadershipScope,
+        scopeFactory,
         cachePartition: string.Empty,
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>

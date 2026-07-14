@@ -6,40 +6,104 @@ sidebar_position: 1
 
 # Logging
 
-## Logging with `ILogger` and Scopes
+## Logging with `ILogger` and scopes
 
-This project uses Microsoft's [`ILogger`](https://learn.microsoft.com/en-us/dotnet/core/extensions/logging) interface for logging. It provides a standardized and extensible way to capture events within the application.
+KubeOps uses Microsoft's [`ILogger`](https://learn.microsoft.com/en-us/dotnet/core/extensions/logging) abstraction.
+Application code can use the same logging pipeline by injecting a category logger such as
+`ILogger<V1DemoEntityController>`.
 
 Using _scopes_ enables hierarchical organization of log messages and allows contextual information to be attached to each entry.
 
-### ILogger Basics
+### `ILogger` basics
 
-The `ILogger` interface is part of [`Microsoft.Extensions.Logging`](https://www.nuget.org/packages/Microsoft.Extensions.Logging) and provides methods to log messages at various severity levels (e.g., `Information`, `Warning`, `Error`).
+The default application builders (`WebApplication.CreateBuilder` and `Host.CreateApplicationBuilder`) register
+logging automatically. For a manually assembled service collection, call `services.AddLogging()`.
 
-Logging can be enabled using either `WebApplication.CreateBuilder`, `Host.CreateDefaultBuilder`, or the `AddLogging` extension method on the `IServiceCollection`.
-
-You can log from your code by injecting `ILogger<MyEntityController>` (or a similar type) into your component.
-
-### Using Scopes
+### Entity scopes
 
 Scopes define a logical boundary in which all log entries are automatically enriched with contextual metadata. This is especially useful for correlating logs related to a specific request or operation.
 
-By default, two components start a new scope for each operation they perform:
+Two operator components create entity scopes:
 
-- The [ResourceWatcher](https://github.com/dotnet/dotnet-operator-sdk/blob/main/src/KubeOps.Operator/Watcher/ResourceWatcher%7BTEntity%7D.cs) opens a scope for every watch event received from the Kubernetes API server.
-- The [EntityQueueBackgroundService](https://github.com/dotnet/dotnet-operator-sdk/blob/main/src/KubeOps.Operator/Queue/EntityQueueBackgroundService%7BTEntity%7D.cs) opens a scope for every queue entry it processes before invoking the reconciler.
+- `ResourceWatcher<TEntity>` opens a scope around every watch event received from the Kubernetes API server,
+  including bookmark events.
+- `EntityQueueBackgroundService<TEntity>` opens one scope around every dequeued entry. The scope is built from the
+  entity snapshot stored in the queue and covers lock handling, entity loading, reconciliation, retry scheduling,
+  and skips. A later retry is a new queue entry and therefore receives a new scope.
 
 Both scopes carry the same fields:
 
-- `EventType`: Type of the reconciliation operation (`Added`, `Modified`, `Deleted`)
-- `ReconciliationTriggerSource`: Origin of the reconciliation request (`ApiServer` for watch events, `Operator` for internal retries and periodic requeues)
-- `Kind`: Custom Resource Definition (CRD) kind
-- `Namespace`: CRD namespace
-- `Name`: CRD name
-- `Uid`: CRD unique identifier
-- `ResourceVersion`: CRD resource version
+- `EventType`: watch/reconciliation operation (`Added`, `Modified`, `Deleted`, or `Bookmark` for watch scopes)
+- `ReconciliationTriggerSource`: `ApiServer` for watch-derived work, or `Operator` for a delayed requeue requested
+  by a reconciler. Error retries and lock-conflict requeues preserve the trigger source of the original entry
+- `Kind`: Kubernetes object kind
+- `Namespace`: Kubernetes object namespace
+- `Name`: Kubernetes object name
+- `Uid`: Kubernetes object UID
+- `ResourceVersion`: Kubernetes object resource version
 
-You can create additional scopes in your code using `logger.BeginScope(state)`, where `state` can be either a string or a custom object.
+For `Added` and `Modified` entries, the queue service still loads the current object from the API server before
+dispatching it to the reconciler. The logging scope deliberately remains based on the queued event snapshot. Its
+`ResourceVersion` and entity-derived custom fields therefore describe the event that caused the queue entry, not
+necessarily the newer object instance passed to the reconciler. Controllers that need a scope based on the current
+object can create one explicitly through `IEntityLoggingScopeFactory<TEntity>`.
+
+### Enriching scopes with custom fields
+
+The built-in fields can be extended with custom structured properties on both watch and reconcile scopes.
+Implement `IEntityLoggingScopeEnricher<TEntity>` for the entity type and register it on the operator builder:
+
+```csharp
+public sealed class DemoEnricher : IEntityLoggingScopeEnricher<V1DemoEntity>
+{
+    public void Enrich(
+        V1DemoEntity entity,
+        EntityLoggingPhase phase,
+        IDictionary<string, object> properties)
+    {
+        properties.TryAdd("Owner", entity.Spec.Owner);
+        properties.TryAdd("Phase", phase);
+    }
+}
+```
+
+```csharp
+builder.AddEntityLoggingScopeEnricher<V1DemoEntity, DemoEnricher>();
+```
+
+Inject `IEntityLoggingScopeFactory<TEntity>` when application code needs the same enriched scope:
+
+```csharp
+public sealed class DemoService(
+    ILogger<DemoService> logger,
+    IEntityLoggingScopeFactory<V1DemoEntity> scopeFactory)
+{
+    public void LogWatchEvent(WatchEventType eventType, V1DemoEntity entity)
+    {
+        using var scope = logger.BeginScope(scopeFactory.CreateFor(eventType, entity));
+        logger.LogInformation("Processing an application-defined watch event.");
+    }
+}
+```
+
+Semantics and constraints:
+
+- **Lifetime**: enrichers are registered and resolved as singletons and must be thread-safe because watch and
+  reconciliation scopes can be created concurrently.
+- **Synchronous hot path**: `Enrich` is called whenever an entity scope is built: once per watch event and once per
+  dequeued reconciliation entry. Enrichers must be synchronous, cheap, side-effect free, and only read from the
+  supplied `entity`; do not perform I/O or call the Kubernetes API.
+- **Phase**: `phase` is either `Watch` or `Reconcile`, so an enricher can contribute
+  phase-specific data.
+- **Order and add-only semantics**: enrichers run in registration order. Contributions are merged with
+  first-writer-wins semantics, so enrichers cannot change or remove the built-in identification fields or
+  properties contributed by an earlier enricher.
+- **Error isolation**: if an enricher throws, the failure is logged and skipped; the remaining enrichers
+  still run and watching/reconciliation is never interrupted.
+
+`EntityLoggingScope.CreateFor(...)` remains available for standalone scopes that only need the seven built-in
+fields. It does not resolve dependency injection and therefore does not run registered enrichers; use
+`IEntityLoggingScopeFactory<TEntity>` when enrichment is required.
 
 To include scopes in the logging output, they must be explicitly enabled either via configuration or code:
 
@@ -60,29 +124,26 @@ To include scopes in the logging output, they must be explicitly enabled either 
 }
 ```
 
-**Programmatic configuration:**
+**Programmatic console configuration:**
 
 ```csharp
-builder
-    .ConfigureLogging((hostBuilderContext, loggingBuilder) =>
-    {
-        loggingBuilder
-            .AddSimpleConsole(options => options.IncludeScopes = true);
-    });
+builder.Logging.AddSimpleConsole(options => options.IncludeScopes = true);
 ```
 
 :::tip
-To enable scopes with OpenTelemetry, configure it as follows:
+For the OpenTelemetry logging provider, enable scope capture when registering the provider:
 
-```json
-"OpenTelemetry": {
-  "IncludeScopes": true,
-  "ParseStateValues": true,
-  "IncludeFormattedMessage": true
-}
+```csharp
+builder.Logging.AddOpenTelemetry(options =>
+{
+    options.IncludeScopes = true;
+    options.ParseStateValues = true;
+    options.IncludeFormattedMessage = true;
+});
 ```
 
-The scope state must be an `IReadOnlyDictionary<string, object?>` to ensure correct serialization and inclusion in log entries.
+This registers the provider; configure an exporter separately. Projects using `KubeOps.Aspire` can instead call
+`AddKubeOpsServiceDefaults()`, which enables OpenTelemetry scope capture as part of the service defaults.
 :::
 
 :::tip
