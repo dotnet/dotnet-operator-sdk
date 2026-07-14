@@ -15,6 +15,7 @@ using KubeOps.Abstractions.Entities;
 using KubeOps.Abstractions.LeaderElection;
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Logging;
 using KubeOps.Operator.Queue;
 using KubeOps.Operator.Test.TestEntities;
 using KubeOps.Operator.Watcher;
@@ -120,7 +121,8 @@ public sealed class ScopeAwareSharedResourceWatcherTest
             Mock.Of<IEntityFieldSelector<V1OperatorIntegrationTestEntity>>(),
             Mock.Of<IKubernetesClient>(),
             Mock.Of<ILeadershipScope>(),
-            dispatcher);
+            dispatcher,
+            Mock.Of<IEntityLoggingScopeFactory<V1OperatorIntegrationTestEntity>>());
     }
 
     private static V1OperatorIntegrationTestEntity CreateEntity() =>

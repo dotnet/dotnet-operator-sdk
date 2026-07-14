@@ -37,6 +37,7 @@ public class ScopeAwareResourceWatcher<TEntity>(
     IEntityFieldSelector<TEntity> fieldSelector,
     IKubernetesClient client,
     ILeadershipScope leadershipScope,
+    IEntityLoggingScopeFactory<TEntity> scopeFactory,
     string cachePartition = "",
     OperatorMetrics? metrics = null)
     : ResourceWatcher<TEntity>(
@@ -48,6 +49,7 @@ public class ScopeAwareResourceWatcher<TEntity>(
         labelSelector,
         fieldSelector,
         client,
+        scopeFactory,
         cachePartition,
         metrics)
     where TEntity : IKubernetesObject<V1ObjectMeta>

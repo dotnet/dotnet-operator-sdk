@@ -66,6 +66,7 @@ public class EntityQueueBackgroundService<TEntity>(
     IReconciler<TEntity> reconciler,
     IEntityReconcileCoordinator<TEntity> coordinator,
     ILogger<EntityQueueBackgroundService<TEntity>> logger,
+    IEntityLoggingScopeFactory<TEntity> scopeFactory,
     OperatorMetrics? metrics = null) : RestartableHostedService, IEntityQueueConsumer<TEntity>
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
@@ -216,7 +217,11 @@ public class EntityQueueBackgroundService<TEntity>(
     private async Task ProcessEntryAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
         using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event for "{entry.Entity.ToIdentifierString()}".""", ActivityKind.Consumer);
-        using var scope = logger.BeginScope(EntityLoggingScope.CreateFor(entry.ReconciliationType, entry.ReconciliationTriggerSource, entry.Entity));
+        using var scope = logger.BeginScope(
+            scopeFactory.CreateFor(
+                entry.ReconciliationType,
+                entry.ReconciliationTriggerSource,
+                entry.Entity));
 
         try
         {

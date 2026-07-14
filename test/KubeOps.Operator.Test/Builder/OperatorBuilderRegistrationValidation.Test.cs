@@ -607,15 +607,15 @@ public sealed class OperatorBuilderRegistrationValidationTest
     // Test doubles for a user-provided Custom watcher / queue consumer. Validation inspects the service
     // descriptors only (it never constructs these), so the null base arguments are never dereferenced.
     private sealed class CustomWatcher() : ResourceWatcher<V1OperatorIntegrationTestEntity>(
-        null!, null!, null!, null!, null!, null!, null!, null!);
+        null!, null!, null!, null!, null!, null!, null!, null!, null!);
 
     private sealed class CustomConsumer() : EntityQueueBackgroundService<V1OperatorIntegrationTestEntity>(
-        null!, null!, null!, null!, null!, null!, null!);
+        null!, null!, null!, null!, null!, null!, null!, null!);
 
     // A leadership-aware consumer (implements ILeaderAwareEntityQueueConsumer via the base class).
     private sealed class CustomLeaderAwareConsumer()
         : LeaderAwareEntityQueueBackgroundService<V1OperatorIntegrationTestEntity>(
-            null!, null!, null!, null!, null!, null!, null!, null!);
+            null!, null!, null!, null!, null!, null!, null!, null!, null!);
 
     // A custom queue that does NOT implement ISuspendableEntityQueue. Validation inspects the registration
     // descriptor only and never constructs it, so the members can throw.
