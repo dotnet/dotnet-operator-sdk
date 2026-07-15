@@ -42,7 +42,7 @@
         </PropertyGroup>
 
         <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
-              Command="$(KubeOpsCli) generate operator $(NoAnsi) --out $(KubeOpsConfigOut) $(KubeOpsResourcesOption) $(DockerImage) $(DockerImageTag) $(OperatorName) $(MSBuildProjectFullPath)" />
+              Command="$(KubeOpsCli) generate operator $(NoAnsi) --out $(KubeOpsConfigOut) $(DockerImage) $(DockerImageTag) $(OperatorName) $(MSBuildProjectFullPath) $(KubeOpsResourcesOption)" />
     </Target>
 
     <Target Name="GenerateOperatorResources"

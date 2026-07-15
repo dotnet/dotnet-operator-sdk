@@ -749,9 +749,10 @@ public static class Crds
                     props = new() { Type = Object, XKubernetesPreserveUnknownFields = true };
                 }
 
-                if (type.GetCustomAttributeData<DefaultValueAttribute>() is { } defaultValue)
+                if (type.GetInheritedCustomAttributesData<DefaultValueAttribute>().FirstOrDefault() is { } defaultValue)
                 {
                     props.DefaultProperty = MapSchemaValue(type, defaultValue, context);
+                    CrdSchemaAttributeValidator.ValidateDefaultValue(type, props, props.DefaultProperty);
                 }
 
                 return props;

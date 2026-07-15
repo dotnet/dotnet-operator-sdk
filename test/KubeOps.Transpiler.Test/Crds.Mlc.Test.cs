@@ -288,6 +288,16 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
 
     [Trait("Area", "SchemaMetadata")]
     [Fact]
+    public void Should_Inherit_Structured_Default_Value_From_Status_Base_Type()
+    {
+        var crd = _mlc.Transpile(typeof(InheritedStatusDefaultValueAttrEntity));
+
+        var statusSchema = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["status"];
+        statusSchema.DefaultProperty.Should().BeEquivalentTo(new Dictionary<string, object?>());
+    }
+
+    [Trait("Area", "SchemaMetadata")]
+    [Fact]
     public void Should_Set_Example()
     {
         var crd = _mlc.Transpile(typeof(ExampleAttrEntity));
@@ -1343,6 +1353,19 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
             [DefaultValue(0)]
             public long ObservedGeneration { get; set; }
         }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "InheritedTestEntity")]
+    public class InheritedStatusDefaultValueAttrEntity :
+        CustomKubernetesEntity<InheritedStatusDefaultValueAttrEntity.EntitySpec,
+            InheritedStatusDefaultValueAttrEntity.EntityStatus>
+    {
+        public class EntitySpec;
+
+        [DefaultValue("{}", Json = true)]
+        public class EntityStatusBase;
+
+        public class EntityStatus : EntityStatusBase;
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]

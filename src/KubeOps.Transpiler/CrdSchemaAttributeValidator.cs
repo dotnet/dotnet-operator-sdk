@@ -51,7 +51,14 @@ internal static class CrdSchemaAttributeValidator
         ValidateListTopologyAttributes(prop, props, context);
         ValidateMapTopologyAttribute(prop, props);
         ValidateValidationRuleAttributes(prop, prop.GetCustomAttributesData<ValidationRuleAttribute>(), context);
+        if (prop.GetCustomAttributeData<DefaultValueAttribute>() is not null)
+        {
+            ValidateDefaultValue(prop, props, props.DefaultProperty);
+        }
     }
+
+    public static void ValidateDefaultValue(MemberInfo source, V1JSONSchemaProps schema, object? value)
+        => ValidateDefaultValue(source, schema, value, "$", nameof(DefaultValueAttribute));
 
     public static void ValidatePrinterColumn(
         MemberInfo source,
@@ -313,6 +320,141 @@ internal static class CrdSchemaAttributeValidator
         // https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apis/apiextensions/validation/validation.go
         EnsureSchemaType(prop, nameof(XMapTypeAttribute), props, ObjectSchemaType);
     }
+
+    private static void ValidateDefaultValue(
+        MemberInfo source,
+        V1JSONSchemaProps schema,
+        object? value,
+        string path,
+        string attributeName)
+    {
+        if (value is null)
+        {
+            if (!schema.Nullable.GetValueOrDefault())
+            {
+                throw InvalidSchemaAttribute(
+                    source,
+                    attributeName,
+                    $"Default value at '{path}' is null, but the generated schema is not nullable.");
+            }
+
+            return;
+        }
+
+        if (schema.XKubernetesIntOrString.GetValueOrDefault())
+        {
+            if (value is string || IsInteger(value))
+            {
+                return;
+            }
+
+            throw DefaultTypeMismatch(source, attributeName, path, "integer or string");
+        }
+
+        switch (schema.Type)
+        {
+            case "boolean" when value is not bool:
+                throw DefaultTypeMismatch(source, attributeName, path, "boolean");
+            case "integer" when !IsInteger(value):
+                throw DefaultTypeMismatch(source, attributeName, path, "integer");
+            case "number" when !IsNumber(value):
+                throw DefaultTypeMismatch(source, attributeName, path, "number");
+            case "string" when value is not string:
+                throw DefaultTypeMismatch(source, attributeName, path, "string");
+            case ArraySchemaType:
+                ValidateDefaultArray(source, schema, value, path, attributeName);
+                break;
+            case ObjectSchemaType:
+                ValidateDefaultObject(source, schema, value, path, attributeName);
+                break;
+        }
+
+        if (schema.EnumProperty is { Count: > 0 } allowedValues &&
+            !allowedValues.Any(allowed => Equals(allowed, value)))
+        {
+            throw InvalidSchemaAttribute(
+                source,
+                attributeName,
+                $"Default value at '{path}' is not one of the generated enum values.");
+        }
+    }
+
+    private static void ValidateDefaultArray(
+        MemberInfo source,
+        V1JSONSchemaProps schema,
+        object value,
+        string path,
+        string attributeName)
+    {
+        if (value is not IReadOnlyList<object?> values)
+        {
+            throw DefaultTypeMismatch(source, attributeName, path, ArraySchemaType);
+        }
+
+        if (schema.Items is not V1JSONSchemaProps itemSchema)
+        {
+            return;
+        }
+
+        for (var index = 0; index < values.Count; index++)
+        {
+            ValidateDefaultValue(source, itemSchema, values[index], $"{path}[{index}]", attributeName);
+        }
+    }
+
+    private static void ValidateDefaultObject(
+        MemberInfo source,
+        V1JSONSchemaProps schema,
+        object value,
+        string path,
+        string attributeName)
+    {
+        if (value is not IReadOnlyDictionary<string, object?> values)
+        {
+            throw DefaultTypeMismatch(source, attributeName, path, ObjectSchemaType);
+        }
+
+        foreach (var (name, propertyValue) in values)
+        {
+            var propertyPath = $"{path}.{name}";
+            if (schema.Properties?.TryGetValue(name, out var propertySchema) == true)
+            {
+                ValidateDefaultValue(source, propertySchema, propertyValue, propertyPath, attributeName);
+                continue;
+            }
+
+            if (schema.AdditionalProperties is V1JSONSchemaProps additionalPropertySchema)
+            {
+                ValidateDefaultValue(source, additionalPropertySchema, propertyValue, propertyPath, attributeName);
+                continue;
+            }
+
+            if (schema.XKubernetesPreserveUnknownFields.GetValueOrDefault())
+            {
+                continue;
+            }
+
+            throw InvalidSchemaAttribute(
+                source,
+                attributeName,
+                $"Default value at '{path}' contains unknown property '{name}'.");
+        }
+    }
+
+    private static bool IsInteger(object value) =>
+        value is sbyte or byte or short or ushort or int or uint or long or ulong;
+
+    private static bool IsNumber(object value) => IsInteger(value) || value is float or double or decimal;
+
+    private static InvalidTypeException DefaultTypeMismatch(
+        MemberInfo source,
+        string attributeName,
+        string path,
+        string schemaType)
+        => InvalidSchemaAttribute(
+            source,
+            attributeName,
+            $"Default value at '{path}' does not match schema type '{schemaType}'.");
 
     private static void ValidateValidationRuleAttribute(
         MemberInfo source,

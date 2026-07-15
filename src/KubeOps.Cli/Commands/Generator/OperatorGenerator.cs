@@ -87,7 +87,9 @@ internal static class OperatorGenerator
 
         var mutators = parser.GetMutatedEntities().ToList();
         var validators = parser.GetValidatedEntities().ToList();
-        var hasWebhooks = mutators.Count > 0 || validators.Count > 0 || parser.GetConvertedEntities().Any();
+        var hasAdmissionWebhooks = mutators.Count > 0 || validators.Count > 0;
+        var hasConversionWebhooks = parser.GetConvertedEntities().Any();
+        var hasWebhooks = hasAdmissionWebhooks || hasConversionWebhooks;
 
         if (ShouldGenerate(OperatorResource.Rbac))
         {
@@ -103,9 +105,12 @@ internal static class OperatorGenerator
 
         if (hasWebhooks)
         {
-            var requiresCertificates = ShouldGenerate(OperatorResource.Certificates) ||
-                                       ShouldGenerate(OperatorResource.Webhooks) ||
-                                       ShouldGenerate(OperatorResource.Crds);
+            var requiresCertificates = RequiresCertificates(
+                ShouldGenerate(OperatorResource.Certificates),
+                ShouldGenerate(OperatorResource.Webhooks),
+                ShouldGenerate(OperatorResource.Crds),
+                hasAdmissionWebhooks,
+                hasConversionWebhooks);
             ResultOutput? certificateOutput = null;
             if (requiresCertificates)
             {
@@ -234,4 +239,14 @@ internal static class OperatorGenerator
 
         return ExitCodes.Success;
     }
+
+    internal static bool RequiresCertificates(
+        bool generatesCertificates,
+        bool generatesWebhookConfigurations,
+        bool generatesCrds,
+        bool hasAdmissionWebhooks,
+        bool hasConversionWebhooks)
+        => generatesCertificates ||
+           (generatesWebhookConfigurations && hasAdmissionWebhooks) ||
+           (generatesCrds && hasConversionWebhooks);
 }

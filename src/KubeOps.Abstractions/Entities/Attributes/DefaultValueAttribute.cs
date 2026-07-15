@@ -7,7 +7,7 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Defines the default value of a property or type in the generated OpenAPI schema.
 /// </summary>
-[AttributeUsage(AttributeTargets.Property | AttributeTargets.Class)]
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Class, Inherited = true)]
 public sealed class DefaultValueAttribute : Attribute
 {
     /// <summary>

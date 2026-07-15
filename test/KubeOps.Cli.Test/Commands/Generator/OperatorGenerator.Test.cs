@@ -30,4 +30,40 @@ public sealed class OperatorGeneratorTest
         result.Errors.Should().BeEmpty();
         result.GetValue(Options.OperatorResources).Should().Equal(OperatorResource.Crds, OperatorResource.Rbac);
     }
+
+    [Fact]
+    public void BuildTarget_WhenResourcesAreConfigured_ThenPlacesThemAfterPositionalArguments()
+    {
+        var targetPath = Path.GetFullPath(
+            "../../../../../src/KubeOps.Operator/Build/KubeOps.Operator.targets",
+            AppContext.BaseDirectory);
+        var target = File.ReadAllText(targetPath);
+
+        target.IndexOf("$(OperatorName) $(MSBuildProjectFullPath)", StringComparison.Ordinal).Should()
+            .BeLessThan(target.IndexOf("$(KubeOpsResourcesOption)", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(true, false, false, false, false, true)]
+    [InlineData(false, true, false, true, false, true)]
+    [InlineData(false, false, true, false, true, true)]
+    [InlineData(false, false, true, true, false, false)]
+    [InlineData(false, true, false, false, true, false)]
+    public void RequiresCertificates_WhenResourcesAndWebhookTypesAreSpecified_ThenUsesActualDependencies(
+        bool generatesCertificates,
+        bool generatesWebhookConfigurations,
+        bool generatesCrds,
+        bool hasAdmissionWebhooks,
+        bool hasConversionWebhooks,
+        bool expected)
+    {
+        var result = OperatorGenerator.RequiresCertificates(
+            generatesCertificates,
+            generatesWebhookConfigurations,
+            generatesCrds,
+            hasAdmissionWebhooks,
+            hasConversionWebhooks);
+
+        result.Should().Be(expected);
+    }
 }
