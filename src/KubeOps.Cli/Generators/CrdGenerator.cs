@@ -6,8 +6,6 @@ using System.Reflection;
 
 using k8s.Models;
 
-using KubeOps.Abstractions.Entities.Attributes;
-
 using KubeOps.Cli.Output;
 using KubeOps.Cli.Transpilation;
 using KubeOps.Transpiler;
@@ -19,8 +17,7 @@ internal sealed class CrdGenerator(MetadataLoadContext parser, byte[] caBundle,
 {
     public void Generate(ResultOutput output)
     {
-        var entities = parser.GetEntities().ToList();
-        var crds = parser.Transpile(entities, parser.GetInheritedAttributeResolver()).ToList();
+        var crds = parser.Transpile(parser.GetEntities(), parser.GetInheritedAttributeResolver()).ToList();
         var conversionWebhooks = parser.GetConvertedEntities().ToList();
 
         foreach (var crd in crds)
@@ -30,7 +27,7 @@ internal sealed class CrdGenerator(MetadataLoadContext parser, byte[] caBundle,
 
             ConfigureConversion(crd, hasConversionWebhook, caBundle);
 
-            output.Add(GetFileName(crd, entities), crd);
+            output.Add($"{crd.Metadata.Name.Replace('.', '_')}.{outputFormat.GetFileExtension()}", crd);
         }
     }
 
@@ -58,41 +55,5 @@ internal sealed class CrdGenerator(MetadataLoadContext parser, byte[] caBundle,
                 },
             }
             : new() { Strategy = "None" };
-    }
-
-    internal static string ResolveFileName(
-        string customResourceDefinitionName,
-        OutputFormat format,
-        IReadOnlyList<string?> configuredNames)
-    {
-        return configuredNames switch
-        {
-            { Count: > 1 } => throw new InvalidOperationException(
-                $"The versions of CRD '{customResourceDefinitionName}' specify conflicting output file names."),
-            [var fileName] when string.IsNullOrWhiteSpace(fileName) || Path.GetFileName(fileName) != fileName =>
-                throw new InvalidOperationException(
-                    $"The configured output file name for CRD '{customResourceDefinitionName}' " +
-                    "must be a non-empty file name."),
-            [var fileName] => fileName!,
-            _ => $"{customResourceDefinitionName.Replace('.', '_')}.{format.GetFileExtension()}",
-        };
-    }
-
-    private string GetFileName(V1CustomResourceDefinition crd, IEnumerable<Type> entities)
-    {
-        var configuredNames = entities
-            .Where(entity =>
-            {
-                var metadata = parser.ToEntityMetadata(entity).Metadata;
-                return $"{metadata.PluralName}.{metadata.Group}" == crd.Metadata.Name;
-            })
-            .Select(entity => entity.GetCustomAttributeData<CustomResourceDefinitionFileNameAttribute>())
-            .Where(attribute => attribute is not null)
-            .Select(attribute => attribute!.GetCustomAttributeCtorArg<string>(parser, 0))
-            .Where(fileName => fileName is not null)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-
-        return ResolveFileName(crd.Metadata.Name, outputFormat, configuredNames);
     }
 }

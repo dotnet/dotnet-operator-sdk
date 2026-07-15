@@ -7,7 +7,6 @@ using FluentAssertions;
 using k8s.Models;
 
 using KubeOps.Cli.Generators;
-using KubeOps.Cli.Output;
 
 namespace KubeOps.Cli.Test.Generators;
 
@@ -38,46 +37,6 @@ public sealed class CrdGeneratorTest
         crd.Spec.Conversion.Webhook.ClientConfig.CaBundle.Should().Equal(caBundle);
         crd.Spec.Conversion.Webhook.ClientConfig.Service.Path.Should().Be("/convert/testing.dev/widgets");
         crd.Spec.Conversion.Webhook.ClientConfig.Service.Name.Should().Be("service");
-    }
-
-    [Fact]
-    public void ResolveFileName_WhenNoNameIsConfigured_ThenUsesExistingFallback()
-    {
-        var result = CrdGenerator.ResolveFileName("widgets.testing.dev", OutputFormat.Yaml, []);
-
-        result.Should().Be("widgets_testing_dev.yaml");
-    }
-
-    [Fact]
-    public void ResolveFileName_WhenNameIsConfigured_ThenUsesConfiguredName()
-    {
-        var result = CrdGenerator.ResolveFileName(
-            "widgets.testing.dev",
-            OutputFormat.Yaml,
-            ["widget.testing.dev.yaml"]);
-
-        result.Should().Be("widget.testing.dev.yaml");
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("../widget.yaml")]
-    public void ResolveFileName_WhenConfiguredNameIsInvalid_ThenThrows(string fileName)
-    {
-        var action = () => CrdGenerator.ResolveFileName("widgets.testing.dev", OutputFormat.Yaml, [fileName]);
-
-        action.Should().Throw<InvalidOperationException>();
-    }
-
-    [Fact]
-    public void ResolveFileName_WhenVersionsConfigureConflictingNames_ThenThrows()
-    {
-        var action = () => CrdGenerator.ResolveFileName(
-            "widgets.testing.dev",
-            OutputFormat.Yaml,
-            ["widget-v1.yaml", "widget-v2.yaml"]);
-
-        action.Should().Throw<InvalidOperationException>();
     }
 
     private static V1CustomResourceDefinition CreateCrd() => new()

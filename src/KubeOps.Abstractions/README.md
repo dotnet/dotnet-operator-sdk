@@ -24,5 +24,5 @@ By depending only on this package, you can define your entities and interfaces w
 
 Entity properties can describe OpenAPI schema metadata with attributes such as `[DefaultValue]`, `[Example]`,
 `[Format]`, and `[EnumValues]`. String defaults and examples can set `Json = true` to represent structured JSON
-objects or arrays. `[CustomResourceDefinitionFileName]` on an entity controls the generated CRD file name; when it
-is absent, the CLI retains its standard fully-qualified-name fallback.
+objects or arrays. `[DefaultValue]` can also be applied to a class to set the default wherever that type occurs in
+the generated schema, including the `spec` or `status` subresource.

@@ -578,7 +578,7 @@ public static class Crds
     }
 
     private static object? MapSchemaValue(
-        PropertyInfo property,
+        MemberInfo member,
         CustomAttributeData attribute,
         MetadataLoadContext context)
     {
@@ -592,7 +592,7 @@ public static class Crds
         {
             throw new InvalidTypeException(
                 $"The attribute '{attribute.AttributeType.Name}' on " +
-                $"'{property.DeclaringType?.FullName}.{property.Name}' can only enable JSON parsing for string values.");
+                $"'{GetSchemaMemberName(member)}' can only enable JSON parsing for string values.");
         }
 
         try
@@ -604,10 +604,16 @@ public static class Crds
         {
             throw new InvalidTypeException(
                 $"The attribute '{attribute.AttributeType.Name}' on " +
-                $"'{property.DeclaringType?.FullName}.{property.Name}' contains invalid JSON.",
+                $"'{GetSchemaMemberName(member)}' contains invalid JSON.",
                 exception);
         }
     }
+
+    private static string GetSchemaMemberName(MemberInfo member) => member switch
+    {
+        Type type => type.FullName ?? type.Name,
+        _ => $"{member.DeclaringType?.FullName}.{member.Name}",
+    };
 
     private static object? MapJsonElement(JsonElement element) => element.ValueKind switch
     {
@@ -703,9 +709,10 @@ public static class Crds
                 var validationRules = type.GetInheritedCustomAttributesData<ValidationRuleAttribute>().ToList();
                 CrdSchemaAttributeValidator.ValidateValidationRuleAttributes(type, validationRules, context);
 
+                V1JSONSchemaProps props;
                 try
                 {
-                    return new()
+                    props = new()
                     {
                         Type = Object,
                         Description =
@@ -739,8 +746,15 @@ public static class Crds
                 {
                     // Class-level [PreserveUnknownFields] opts the whole type out: if a member cannot
                     // be represented (cycle or non-transpilable type), degrade to an opaque object.
-                    return new() { Type = Object, XKubernetesPreserveUnknownFields = true };
+                    props = new() { Type = Object, XKubernetesPreserveUnknownFields = true };
                 }
+
+                if (type.GetCustomAttributeData<DefaultValueAttribute>() is { } defaultValue)
+                {
+                    props.DefaultProperty = MapSchemaValue(type, defaultValue, context);
+                }
+
+                return props;
         }
     }
 

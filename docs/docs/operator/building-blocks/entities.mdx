@@ -97,9 +97,6 @@ KubeOps provides various attributes to customize and validate your entities:
 - `[EntityScope]`: Specifies if the entity is namespaced or cluster-wide
 - `[StorageVersion]`: Marks an entity as the storage version for version conversion
 - `[KubernetesEntityShortNames]`: Defines short names for the CRD (e.g., "deploy" for "deployment")
-- `[CustomResourceDefinitionFileName]`: Overrides the generated CRD file name, including its extension. If omitted,
-  KubeOps keeps using the CRD's fully qualified name with dots replaced by underscores and appends the selected
-  output format extension. Apply the same file name to every version of a multi-version CRD.
 
 ### Validation Attributes
 
@@ -150,8 +147,9 @@ public class EntitySpec
 - `[Description]`: Adds a description to a property or entity
 - `[Title]`: Adds a title to a property or entity
 - `[ExternalDocs]`: Links to external documentation
-- `[DefaultValue]`: Adds an OpenAPI default value. Set `Json = true` on a string argument to represent structured
-  values such as objects or arrays instead of a literal string
+- `[DefaultValue]`: Adds an OpenAPI default value to a property or class. Set `Json = true` on a string argument to
+  represent structured values such as objects or arrays instead of a literal string. A class-level default applies
+  wherever that type is used in the schema, including the `spec` or `status` subresource
 - `[Example]`: Adds an OpenAPI example. Set `Json = true` for structured JSON examples
 - `[Format]`: Overrides the inferred OpenAPI format, for example `[Format("uri")]` or `[Format("email")]`.
   Use `[Format(null)]` to suppress an inferred format such as `int32`
@@ -180,7 +178,6 @@ The CRD transpiler maps property types recursively. A **circular type reference*
 [KubernetesEntity(Group = "demo.kubeops.dev", ApiVersion = "v1", Kind = "DemoEntity")]
 [EntityScope(EntityScope.Namespaced)]
 [KubernetesEntityShortNames("demo")]
-[CustomResourceDefinitionFileName("demoentities.demo.kubeops.dev.yaml")]
 [Description("A demo entity for testing purposes")]
 public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec, V1DemoEntity.V1DemoEntityStatus>
 {
@@ -209,8 +206,13 @@ public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec
         public Dictionary<string, object> Labels { get; set; } = [];
     }
 
+    [DefaultValue("{}", Json = true)]
     public class V1DemoEntityStatus
     {
+        [DefaultValue(0)]
+        [Description("Last reconciled resource generation")]
+        public long ObservedGeneration { get; set; }
+
         [Description("Current state of the entity")]
         public string CurrentState { get; set; } = string.Empty;
 
