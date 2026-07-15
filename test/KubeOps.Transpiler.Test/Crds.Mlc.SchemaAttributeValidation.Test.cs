@@ -48,6 +48,11 @@ public sealed partial class CrdsMlcTest
     [InlineData(typeof(ValidationRuleWithUnsupportedReasonEntity), "reason")]
     [InlineData(typeof(ValidationRuleWithCarriageReturnRuleWithoutMessageEntity), "line breaks")]
     [InlineData(typeof(ValidationRuleWithMultilineRuleWithoutMessageEntity), "line breaks")]
+    [InlineData(typeof(EmptyEnumValuesEntity), "At least one enum value")]
+    [InlineData(typeof(DuplicateEnumValuesEntity), "unique")]
+    [InlineData(typeof(EnumValuesWithIncompatibleTypeEntity), "schema type")]
+    [InlineData(typeof(EmptyFormatEntity), "OpenAPI format")]
+    [InlineData(typeof(WhitespaceFormatEntity), "OpenAPI format")]
     public void Should_Reject_Invalid_Schema_Attribute_Combinations(Type type, string expectedMessage)
     {
         var act = () => _mlc.Transpile(type);
@@ -80,6 +85,9 @@ public sealed partial class CrdsMlcTest
     [InlineData(typeof(ValidationRuleWithEmptyMessageExpressionEntity))]
     [InlineData(typeof(GenericAdditionalPrinterColumnWithEmptyFormatEntity))]
     [InlineData(typeof(ValidationRuleWithTrailingNewlineRuleEntity))]
+    [InlineData(typeof(StringIntOrStringEnumValuesEntity))]
+    [InlineData(typeof(IntegerIntOrStringEnumValuesEntity))]
+    [InlineData(typeof(IntegerEnumValuesOnNumberEntity))]
     public void Should_Not_Reject_OpenApi_Validation_Keywords_That_Kubernetes_Accepts(Type type)
     {
         var act = () => _mlc.Transpile(type);
@@ -497,5 +505,61 @@ public sealed partial class CrdsMlcTest
     private sealed class SchemaValidationNestedObject
     {
         public string Value { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class EmptyEnumValuesEntity : CustomKubernetesEntity
+    {
+        [EnumValues(new string[] { })]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class DuplicateEnumValuesEntity : CustomKubernetesEntity
+    {
+        [EnumValues("duplicate", "duplicate")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class EnumValuesWithIncompatibleTypeEntity : CustomKubernetesEntity
+    {
+        [EnumValues("one", "two")]
+        public int Property { get; set; }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class EmptyFormatEntity : CustomKubernetesEntity
+    {
+        [Format("")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class WhitespaceFormatEntity : CustomKubernetesEntity
+    {
+        [Format(" ")]
+        public string Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class StringIntOrStringEnumValuesEntity : CustomKubernetesEntity
+    {
+        [EnumValues("value")]
+        public IntOrString Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class IntegerIntOrStringEnumValuesEntity : CustomKubernetesEntity
+    {
+        [EnumValues(1)]
+        public IntOrString Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class IntegerEnumValuesOnNumberEntity : CustomKubernetesEntity
+    {
+        [EnumValues(1, 2)]
+        public double Property { get; set; }
     }
 }

@@ -47,6 +47,8 @@ internal static class CrdSchemaAttributeValidator
 
     public static void Validate(PropertyInfo prop, V1JSONSchemaProps props, MetadataLoadContext context)
     {
+        ValidateFormatAttribute(prop, context);
+        ValidateEnumValuesAttribute(prop, props);
         ValidateUniqueItems(prop);
         ValidateListTopologyAttributes(prop, props, context);
         ValidateMapTopologyAttribute(prop, props);
@@ -104,6 +106,66 @@ internal static class CrdSchemaAttributeValidator
         {
             ValidateValidationRuleAttribute(source, validation, context);
         }
+    }
+
+    private static void ValidateFormatAttribute(PropertyInfo prop, MetadataLoadContext context)
+    {
+        if (prop.GetCustomAttributeData<FormatAttribute>() is not { } formatAttribute)
+        {
+            return;
+        }
+
+        var format = formatAttribute.GetCustomAttributeCtorArg<string?>(context, 0);
+        if (format is not null && string.IsNullOrWhiteSpace(format))
+        {
+            throw InvalidSchemaAttribute(
+                prop,
+                nameof(FormatAttribute),
+                "OpenAPI format must be null or contain at least one non-whitespace character.");
+        }
+    }
+
+    private static void ValidateEnumValuesAttribute(PropertyInfo prop, V1JSONSchemaProps props)
+    {
+        if (prop.GetCustomAttributeData<EnumValuesAttribute>() is null)
+        {
+            return;
+        }
+
+        var values = props.EnumProperty ?? [];
+        if (values.Count == 0)
+        {
+            throw InvalidSchemaAttribute(prop, nameof(EnumValuesAttribute), "At least one enum value is required.");
+        }
+
+        if (values.Distinct().Count() != values.Count)
+        {
+            throw InvalidSchemaAttribute(prop, nameof(EnumValuesAttribute), "Enum values must be unique.");
+        }
+
+        if (values.Any(value => !IsEnumValueCompatible(props, value)))
+        {
+            throw InvalidSchemaAttribute(
+                prop,
+                nameof(EnumValuesAttribute),
+                $"Enum values must match the generated schema type '{props.Type ?? "integer or string"}'.");
+        }
+    }
+
+    private static bool IsEnumValueCompatible(V1JSONSchemaProps props, object value)
+    {
+        if (props.XKubernetesIntOrString.GetValueOrDefault())
+        {
+            return value is string or long;
+        }
+
+        return props.Type switch
+        {
+            "string" => value is string,
+            "integer" => value is long,
+            "number" => value is long or double,
+            _ => false,
+        };
     }
 
     private static void ValidateUniqueItems(PropertyInfo prop)
