@@ -150,8 +150,7 @@ public class EntitySpec
 - `[DefaultValue]`: Adds an OpenAPI default value to a property or class. Set `Json = true` on a string argument to
   represent structured values such as objects or arrays instead of a literal string. A class-level default applies
   wherever that type is used in the schema, including the `spec` or `status` subresource. Class-level defaults are
-  inherited. The transpiler rejects defaults whose JSON type, object properties, or enum value do not match the
-  generated schema
+  inherited
 - `[Example]`: Adds an OpenAPI example. Set `Json = true` for structured JSON examples
 - `[Format]`: Overrides the inferred OpenAPI format, for example `[Format("uri")]` or `[Format("email")]`.
   Use `[Format(null)]` to suppress an inferred format such as `int32`

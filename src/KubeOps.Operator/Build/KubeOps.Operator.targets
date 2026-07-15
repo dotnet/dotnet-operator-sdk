@@ -32,7 +32,6 @@
         <PropertyGroup>
             <DockerImage Condition="'$(DockerImage)' != ''">--docker-image $(DockerImage)</DockerImage>
             <DockerImageTag Condition="'$(DockerImageTag)' != ''">--docker-image-tag $(DockerImageTag)</DockerImageTag>
-            <KubeOpsResourcesOption Condition="'$(KubeOpsConfigResources)' != ''">--resources $(KubeOpsConfigResources)</KubeOpsResourcesOption>
 
             <!-- Detect CI/Build Server environments -->
             <KubeOpsIsCI Condition="'$(KubeOpsIsCI)' == '' And ('$(TF_BUILD)' != '' Or '$(GITHUB_ACTIONS)' != '' Or '$(JENKINS_URL)' != '' Or '$(GITLAB_CI)' != '' Or '$(CIRCLECI)' != '' Or '$(TRAVIS)' != '' Or '$(APPVEYOR)' != '' Or '$(TEAMCITY_VERSION)' != '' Or '$(BITBUCKET_BUILD_NUMBER)' != '' Or '$(CI)' == 'true')">true</KubeOpsIsCI>
@@ -42,7 +41,7 @@
         </PropertyGroup>
 
         <Exec WorkingDirectory="$(MSBuildProjectDirectory)"
-              Command="$(KubeOpsCli) generate operator $(NoAnsi) --out $(KubeOpsConfigOut) $(DockerImage) $(DockerImageTag) $(OperatorName) $(MSBuildProjectFullPath) $(KubeOpsResourcesOption)" />
+              Command="$(KubeOpsCli) generate operator $(NoAnsi) --out $(KubeOpsConfigOut) $(DockerImage) $(DockerImageTag) $(OperatorName) $(MSBuildProjectFullPath)" />
     </Target>
 
     <Target Name="GenerateOperatorResources"

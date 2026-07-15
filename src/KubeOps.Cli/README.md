@@ -46,10 +46,6 @@ The `generate operator` command creates all necessary resources for deploying yo
 - **Namespace**: A dedicated namespace for your operator
 - **Kustomization**: Kustomize configuration for managing all resources
 
-By default, all resources are generated. Use `--resources` to select one or more output groups. Accepted values are
-`all`, `rbac`, `dockerfile`, `certificates`, `deployment`, `webhooks`, `crds`, `namespace`, and `kustomization`.
-Omitting the option is equivalent to `--resources all`.
-
 If your operator includes webhooks (mutations or validations), additional resources are generated:
 
 - **CA and Server Certificates**: For secure webhook communication

@@ -33,9 +33,6 @@ You can customize the build process by setting the following MSBuild properties 
     <!-- Custom output directory (defaults to 'config') -->
     <KubeOpsConfigOut>$(MSBuildProjectDirectory)\k8s</KubeOpsConfigOut>
 
-    <!-- Optional space-separated resource groups (defaults to all) -->
-    <KubeOpsConfigResources>crds deployment</KubeOpsConfigResources>
-
     <!-- Custom Docker image name -->
     <DockerImage>my-registry/my-operator</DockerImage>
 
@@ -116,7 +113,6 @@ The build process consists of several MSBuild targets:
      - `OperatorName`: Assembly name (lowercase)
      - `KubeOpsCli`: Path to the KubeOps CLI tool
      - `KubeOpsConfigOut`: Output directory for generated resources
-     - `KubeOpsConfigResources`: Optional space-separated resource groups passed to `--resources`
 
 2. **GetAssemblyBeforeTimestamp**:
 

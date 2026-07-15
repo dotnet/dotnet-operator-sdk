@@ -41,7 +41,6 @@ internal static class OperatorGenerator
                     Options.AccessibleDockerTag,
                     Options.NoAnsi,
                     Options.OperatorNamespace,
-                    Options.OperatorResources,
                     Arguments.OperatorName,
                     Arguments.SolutionOrProjectFile,
                 };
@@ -63,10 +62,6 @@ internal static class OperatorGenerator
         var dockerImage = parseResult.GetValue(Options.AccessibleDockerImage)!;
         var dockerImageTag = parseResult.GetValue(Options.AccessibleDockerTag)!;
         var operatorNamespace = parseResult.GetValue(Options.OperatorNamespace);
-        var resources = parseResult.GetValue(Options.OperatorResources) ?? [OperatorResource.All];
-        var selectedResources = resources.ToHashSet();
-        var generateAll = selectedResources.Contains(OperatorResource.All);
-        bool ShouldGenerate(OperatorResource resource) => generateAll || selectedResources.Contains(resource);
         var effectiveNamespace = operatorNamespace ?? $"{name}-system";
 
         var result = new ResultOutput(console, format);
@@ -87,128 +82,89 @@ internal static class OperatorGenerator
 
         var mutators = parser.GetMutatedEntities().ToList();
         var validators = parser.GetValidatedEntities().ToList();
-        var hasAdmissionWebhooks = mutators.Count > 0 || validators.Count > 0;
-        var hasConversionWebhooks = parser.GetConvertedEntities().Any();
-        var hasWebhooks = hasAdmissionWebhooks || hasConversionWebhooks;
+        var hasWebhooks = mutators.Count > 0 || validators.Count > 0 || parser.GetConvertedEntities().Any();
 
-        if (ShouldGenerate(OperatorResource.Rbac))
-        {
-            console.MarkupLine("[green]Generate RBAC rules.[/]");
-            new RbacGenerator(parser, format, effectiveNamespace).Generate(result);
-        }
+        console.MarkupLine("[green]Generate RBAC rules.[/]");
+        new RbacGenerator(parser, format, effectiveNamespace).Generate(result);
 
-        if (ShouldGenerate(OperatorResource.Dockerfile))
-        {
-            console.MarkupLine("[green]Generate Dockerfile.[/]");
-            new DockerfileGenerator(hasWebhooks).Generate(result);
-        }
+        console.MarkupLine("[green]Generate Dockerfile.[/]");
+        new DockerfileGenerator(hasWebhooks).Generate(result);
 
         if (hasWebhooks)
         {
-            var requiresCertificates = RequiresCertificates(
-                ShouldGenerate(OperatorResource.Certificates),
-                ShouldGenerate(OperatorResource.Webhooks),
-                ShouldGenerate(OperatorResource.Crds),
-                hasAdmissionWebhooks,
-                hasConversionWebhooks);
-            ResultOutput? certificateOutput = null;
-            if (requiresCertificates)
-            {
-                console.MarkupLine(
-                    "[yellow]The operator contains webhooks of some sort, generating required certificate material.[/]");
-                certificateOutput = ShouldGenerate(OperatorResource.Certificates)
-                    ? result
-                    : new ResultOutput(console, format);
-                new CertificateGenerator($"{name}-{OperatorName}", effectiveNamespace).Generate(certificateOutput);
-            }
+            console.MarkupLine(
+                "[yellow]The operator contains webhooks of some sort, generating webhook operator specific resources.[/]");
 
-            var caBundle = certificateOutput is null
-                ? []
-                : Encoding.ASCII.GetBytes(certificateOutput["ca.pem"].ToString() ?? string.Empty);
+            console.MarkupLine("[green]Generate CA and Server certificates.[/]");
+            new CertificateGenerator($"{name}-{OperatorName}", effectiveNamespace).Generate(result);
 
-            if (ShouldGenerate(OperatorResource.Deployment))
-            {
-                console.MarkupLine("[green]Generate Deployment and Service.[/]");
-                new WebhookDeploymentGenerator(format).Generate(result);
-            }
+            console.MarkupLine("[green]Generate Deployment and Service.[/]");
+            new WebhookDeploymentGenerator(format).Generate(result);
 
-            if (ShouldGenerate(OperatorResource.Webhooks))
-            {
-                console.MarkupLine("[green]Generate Validation Webhooks.[/]");
-                new ValidationWebhookGenerator(validators, caBundle, format).Generate(result);
+            var caBundle = Encoding.ASCII.GetBytes(result["ca.pem"].ToString() ?? string.Empty);
 
-                console.MarkupLine("[green]Generate Mutation Webhooks.[/]");
-                new MutationWebhookGenerator(mutators, caBundle, format).Generate(result);
-            }
+            console.MarkupLine("[green]Generate Validation Webhooks.[/]");
+            new ValidationWebhookGenerator(validators, caBundle, format).Generate(result);
 
-            if (ShouldGenerate(OperatorResource.Crds))
-            {
-                console.MarkupLine("[green]Generate CRDs.[/]");
-                new CrdGenerator(parser, caBundle, format).Generate(result);
-            }
+            console.MarkupLine("[green]Generate Mutation Webhooks.[/]");
+            new MutationWebhookGenerator(mutators, caBundle, format).Generate(result);
+
+            console.MarkupLine("[green]Generate CRDs.[/]");
+            new CrdGenerator(parser, caBundle, format).Generate(result);
         }
         else
         {
-            if (ShouldGenerate(OperatorResource.Deployment))
-            {
-                console.MarkupLine("[green]Generate Deployment.[/]");
-                new DeploymentGenerator(format).Generate(result);
-            }
+            console.MarkupLine("[green]Generate Deployment.[/]");
+            new DeploymentGenerator(format).Generate(result);
 
-            if (ShouldGenerate(OperatorResource.Crds))
-            {
-                console.MarkupLine("[green]Generate CRDs.[/]");
-                new CrdGenerator(parser, [], format).Generate(result);
-            }
+            console.MarkupLine("[green]Generate CRDs.[/]");
+            new CrdGenerator(parser, [], format).Generate(result);
         }
 
-        if (operatorNamespace is null && ShouldGenerate(OperatorResource.Namespace))
+        if (operatorNamespace is null)
         {
             result.Add(
                 $"namespace.{format.GetFileExtension()}",
                 new V1Namespace { Metadata = new() { Name = "system" } }.Initialize());
         }
 
-        if (ShouldGenerate(OperatorResource.Kustomization))
-        {
-            result.Add(
-                $"kustomization.{format.GetFileExtension()}",
-                new KustomizationConfig
-                {
-                    NamePrefix = $"{name}-",
-                    Namespace = effectiveNamespace,
-                    Labels = [new(new Dictionary<string, string> { { OperatorName, name }, })],
-                    Resources = result.DefaultFormatFiles.ToList(),
-                    Images =
-                        new List<KustomizationImage>
+        result.Add(
+            $"kustomization.{format.GetFileExtension()}",
+            new KustomizationConfig
+            {
+                NamePrefix = $"{name}-",
+                Namespace = effectiveNamespace,
+                Labels = [new(new Dictionary<string, string> { { OperatorName, name }, })],
+                Resources = result.DefaultFormatFiles.ToList(),
+                Images =
+                    new List<KustomizationImage>
+                    {
+                        new() { Name = OperatorName, NewName = dockerImage, NewTag = dockerImageTag, },
+                    },
+                ConfigMapGenerator = hasWebhooks
+                    ? new List<KustomizationConfigMapGenerator>
+                    {
+                        new()
                         {
-                            new() { Name = OperatorName, NewName = dockerImage, NewTag = dockerImageTag, },
-                        },
-                    ConfigMapGenerator = hasWebhooks && ShouldGenerate(OperatorResource.Deployment)
-                        ? new List<KustomizationConfigMapGenerator>
-                        {
-                            new()
+                            Name = "webhook-config",
+                            Literals = new List<string>
                             {
-                                Name = "webhook-config",
-                                Literals = new List<string>
-                                {
-                                    "KESTREL__ENDPOINTS__HTTP__URL=http://0.0.0.0:5000",
-                                    "KESTREL__ENDPOINTS__HTTPS__URL=https://0.0.0.0:5001",
-                                    "KESTREL__ENDPOINTS__HTTPS__CERTIFICATE__PATH=/certs/svc.pem",
-                                    "KESTREL__ENDPOINTS__HTTPS__CERTIFICATE__KEYPATH=/certs/svc-key.pem",
-                                },
+                                "KESTREL__ENDPOINTS__HTTP__URL=http://0.0.0.0:5000",
+                                "KESTREL__ENDPOINTS__HTTPS__URL=https://0.0.0.0:5001",
+                                "KESTREL__ENDPOINTS__HTTPS__CERTIFICATE__PATH=/certs/svc.pem",
+                                "KESTREL__ENDPOINTS__HTTPS__CERTIFICATE__KEYPATH=/certs/svc-key.pem",
                             },
-                        }
-                        : null,
-                    SecretGenerator = hasWebhooks && ShouldGenerate(OperatorResource.Certificates)
-                        ? new List<KustomizationSecretGenerator>
-                        {
-                            new() { Name = "webhook-ca", Files = new List<string> { "ca.pem", "ca-key.pem", }, },
-                            new() { Name = "webhook-cert", Files = new List<string> { "svc.pem", "svc-key.pem", }, },
-                        }
-                        : null,
-                });
-        }
+                        },
+                    }
+                    : null,
+                SecretGenerator = hasWebhooks
+                    ? new List<KustomizationSecretGenerator>
+                    {
+                        new() { Name = "webhook-ca", Files = new List<string> { "ca.pem", "ca-key.pem", }, },
+                        new() { Name = "webhook-cert", Files = new List<string> { "svc.pem", "svc-key.pem", }, },
+                    }
+                    : null,
+            });
 
         if (outPath is not null)
         {
@@ -239,14 +195,4 @@ internal static class OperatorGenerator
 
         return ExitCodes.Success;
     }
-
-    internal static bool RequiresCertificates(
-        bool generatesCertificates,
-        bool generatesWebhookConfigurations,
-        bool generatesCrds,
-        bool hasAdmissionWebhooks,
-        bool hasConversionWebhooks)
-        => generatesCertificates ||
-           (generatesWebhookConfigurations && hasAdmissionWebhooks) ||
-           (generatesCrds && hasConversionWebhooks);
 }

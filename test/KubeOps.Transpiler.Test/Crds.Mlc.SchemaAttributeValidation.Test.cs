@@ -48,9 +48,6 @@ public sealed partial class CrdsMlcTest
     [InlineData(typeof(ValidationRuleWithUnsupportedReasonEntity), "reason")]
     [InlineData(typeof(ValidationRuleWithCarriageReturnRuleWithoutMessageEntity), "line breaks")]
     [InlineData(typeof(ValidationRuleWithMultilineRuleWithoutMessageEntity), "line breaks")]
-    [InlineData(typeof(DefaultValueWithIncompatibleTypeEntity), "does not match schema type")]
-    [InlineData(typeof(ObjectDefaultValueWithUnknownPropertyEntity), "unknown property")]
-    [InlineData(typeof(DefaultValueOutsideEnumEntity), "enum values")]
     public void Should_Reject_Invalid_Schema_Attribute_Combinations(Type type, string expectedMessage)
     {
         var act = () => _mlc.Transpile(type);
@@ -83,7 +80,6 @@ public sealed partial class CrdsMlcTest
     [InlineData(typeof(ValidationRuleWithEmptyMessageExpressionEntity))]
     [InlineData(typeof(GenericAdditionalPrinterColumnWithEmptyFormatEntity))]
     [InlineData(typeof(ValidationRuleWithTrailingNewlineRuleEntity))]
-    [InlineData(typeof(ObjectDefaultValueWithKnownPropertyEntity))]
     public void Should_Not_Reject_OpenApi_Validation_Keywords_That_Kubernetes_Accepts(Type type)
     {
         var act = () => _mlc.Transpile(type);
@@ -501,34 +497,5 @@ public sealed partial class CrdsMlcTest
     private sealed class SchemaValidationNestedObject
     {
         public string Value { get; set; } = null!;
-    }
-
-    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
-    private sealed class DefaultValueWithIncompatibleTypeEntity : CustomKubernetesEntity
-    {
-        [DefaultValue("wrong")]
-        public int Property { get; set; }
-    }
-
-    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
-    private sealed class ObjectDefaultValueWithUnknownPropertyEntity : CustomKubernetesEntity
-    {
-        [DefaultValue("{\"unknown\":true}", Json = true)]
-        public SchemaValidationNestedObject Property { get; set; } = null!;
-    }
-
-    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
-    private sealed class ObjectDefaultValueWithKnownPropertyEntity : CustomKubernetesEntity
-    {
-        [DefaultValue("{\"value\":\"known\"}", Json = true)]
-        public SchemaValidationNestedObject Property { get; set; } = null!;
-    }
-
-    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
-    private sealed class DefaultValueOutsideEnumEntity : CustomKubernetesEntity
-    {
-        [DefaultValue(10)]
-        [EnumValues(30, 60, 90)]
-        public int Property { get; set; }
     }
 }

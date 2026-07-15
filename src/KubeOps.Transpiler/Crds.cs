@@ -752,7 +752,6 @@ public static class Crds
                 if (type.GetInheritedCustomAttributesData<DefaultValueAttribute>().FirstOrDefault() is { } defaultValue)
                 {
                     props.DefaultProperty = MapSchemaValue(type, defaultValue, context);
-                    CrdSchemaAttributeValidator.ValidateDefaultValue(type, props, props.DefaultProperty);
                 }
 
                 return props;
