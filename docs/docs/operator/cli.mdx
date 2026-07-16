@@ -105,6 +105,9 @@ Common options:
 - `--docker-image-tag`: Specify Docker image tag
 - `--no-ansi`: Disable ANSI colored output (useful for CI/CD pipelines)
 
+Generated CRDs explicitly use `conversion.strategy: None` unless a conversion webhook is registered for the CRD.
+For registered conversion webhooks, the strategy is `Webhook` and includes the webhook client configuration.
+
 ## Cluster Information
 
 The `version` command shows information about your current Kubernetes cluster:

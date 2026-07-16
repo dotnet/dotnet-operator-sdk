@@ -19,3 +19,10 @@ By depending only on this package, you can define your entities and interfaces w
 
 - Define your CRD entity classes in a separate library, shared between your operator and potentially other applications.
 - Build tools that need to understand KubeOps entity definitions without needing the operator runtime.
+
+## CRD schema metadata
+
+Entity properties can describe OpenAPI schema metadata with attributes such as `[DefaultValue]`, `[Example]`,
+`[Format]`, and `[EnumValues]`. String defaults and examples can set `Json = true` to represent structured JSON
+objects or arrays. `[DefaultValue]` can also be applied to a class to set the default wherever that type occurs in
+the generated schema, including the `spec` or `status` subresource.

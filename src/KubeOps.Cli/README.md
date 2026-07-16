@@ -53,6 +53,9 @@ If your operator includes webhooks (mutations or validations), additional resour
 - **Service**: For exposing webhook endpoints
 - **Secret Generators**: For managing webhook certificates
 
+Generated CRDs explicitly use `conversion.strategy: None` unless a conversion webhook is registered for the CRD.
+When one is registered, the strategy is `Webhook` and the corresponding webhook client configuration is generated.
+
 ### Install
 
 Installs the operator and its CRDs into a Kubernetes cluster.

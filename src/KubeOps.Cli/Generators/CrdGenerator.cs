@@ -4,6 +4,8 @@
 
 using System.Reflection;
 
+using k8s.Models;
+
 using KubeOps.Cli.Output;
 using KubeOps.Cli.Transpilation;
 using KubeOps.Transpiler;
@@ -20,29 +22,38 @@ internal sealed class CrdGenerator(MetadataLoadContext parser, byte[] caBundle,
 
         foreach (var crd in crds)
         {
-            if (conversionWebhooks
-                    .Find(wh => crd.Spec.Group == wh.Group && crd.Spec.Names.Kind == wh.Kind) is not null)
-            {
-                crd.Spec.Conversion = new()
-                {
-                    Strategy = "Webhook",
-                    Webhook = new()
-                    {
-                        ConversionReviewVersions = new[] { "v1" },
-                        ClientConfig = new()
-                        {
-                            CaBundle = caBundle,
-                            Service = new()
-                            {
-                                Path = $"/convert/{crd.Spec.Group}/{crd.Spec.Names.Plural}",
-                                Name = "service",
-                            },
-                        },
-                    },
-                };
-            }
+            var hasConversionWebhook = conversionWebhooks
+                .Find(wh => crd.Spec.Group == wh.Group && crd.Spec.Names.Kind == wh.Kind) is not null;
+
+            ConfigureConversion(crd, hasConversionWebhook, caBundle);
 
             output.Add($"{crd.Metadata.Name.Replace('.', '_')}.{outputFormat.GetFileExtension()}", crd);
         }
+    }
+
+    internal static void ConfigureConversion(
+        V1CustomResourceDefinition crd,
+        bool hasConversionWebhook,
+        byte[] caBundle)
+    {
+        crd.Spec.Conversion = hasConversionWebhook
+            ? new()
+            {
+                Strategy = "Webhook",
+                Webhook = new()
+                {
+                    ConversionReviewVersions = ["v1"],
+                    ClientConfig = new()
+                    {
+                        CaBundle = caBundle,
+                        Service = new()
+                        {
+                            Path = $"/convert/{crd.Spec.Group}/{crd.Spec.Names.Plural}",
+                            Name = "service",
+                        },
+                    },
+                },
+            }
+            : new() { Strategy = "None" };
     }
 }

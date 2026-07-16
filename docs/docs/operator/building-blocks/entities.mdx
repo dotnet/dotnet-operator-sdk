@@ -140,12 +140,22 @@ public class EntitySpec
 - `[UniqueItems]`: **Rejected by the transpiler.** Kubernetes CRD schemas do not allow `uniqueItems: true`, so applying this attribute now fails transpilation. Use `[XListType(XListType.Set)]` for Kubernetes set semantics instead
 - `[PropertyLimits]`: Specifies minimum and maximum number of properties for an object
 - `[ValidationRule]`: Defines custom validation rules using CEL expressions. Can be applied to properties and to class types — in both cases it emits `x-kubernetes-validations` on the corresponding schema node. When applied to both a class and a property of that type, the rules are merged (class rules first, then property rules). Class-level rules are also collected across the **class inheritance chain**: a rule placed on a base class is inherited by every derived entity or nested type, and all rules found along the chain are merged onto the schema node
+- `[EnumValues]`: Overrides the allowed string, integer, or floating-point values emitted as the OpenAPI `enum`.
+  Values must be non-empty, unique, and compatible with the generated string, integer, number, or
+  `IntOrString` schema
 
 ### Documentation Attributes
 
 - `[Description]`: Adds a description to a property or entity
 - `[Title]`: Adds a title to a property or entity
 - `[ExternalDocs]`: Links to external documentation
+- `[DefaultValue]`: Adds an OpenAPI default value to a property or class. Set `Json = true` on a string argument to
+  represent structured values such as objects or arrays instead of a literal string. A class-level default applies
+  wherever that type is used in the schema, including the `spec` or `status` subresource. Class-level defaults are
+  inherited
+- `[Example]`: Adds an OpenAPI example. Set `Json = true` for structured JSON examples
+- `[Format]`: Overrides the inferred OpenAPI format, for example `[Format("uri")]` or `[Format("email")]`.
+  Use `[Format(null)]` to suppress an inferred format such as `int32`; empty or whitespace-only formats are rejected
 
 ### Display Attributes
 
@@ -182,6 +192,7 @@ public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec
         public string Username { get; set; } = string.Empty;
 
         [Description("Number of replicas to run")]
+        [DefaultValue(1)]
         [RangeMinimum(1)]
         [RangeMaximum(10)]
         public int Replicas { get; set; } = 1;
@@ -189,10 +200,22 @@ public class V1DemoEntity : CustomKubernetesEntity<V1DemoEntity.V1DemoEntitySpec
         [Pattern(@"^[a-z0-9-]+$")]
         [Description("The namespace where resources should be created")]
         public string? TargetNamespace { get; set; }
+
+        [Format("uri")]
+        [Example("https://example.com/events")]
+        public string? CallbackUrl { get; set; }
+
+        [DefaultValue("{}", Json = true)]
+        public Dictionary<string, object> Labels { get; set; } = [];
     }
 
+    [DefaultValue("{}", Json = true)]
     public class V1DemoEntityStatus
     {
+        [DefaultValue(0)]
+        [Description("Last reconciled resource generation")]
+        public long ObservedGeneration { get; set; }
+
         [Description("Current state of the entity")]
         public string CurrentState { get; set; } = string.Empty;
 

@@ -355,6 +355,29 @@ public static class Crds
         props.Title ??= prop.GetCustomAttributeData<TitleAttribute>()
             ?.GetCustomAttributeCtorArg<string>(context, 0);
 
+        if (prop.GetCustomAttributeData<DefaultValueAttribute>() is { } defaultValue)
+        {
+            props.DefaultProperty = MapSchemaValue(prop, defaultValue, context);
+        }
+
+        if (prop.GetCustomAttributeData<ExampleAttribute>() is { } example)
+        {
+            props.Example = MapSchemaValue(prop, example, context);
+        }
+
+        if (prop.GetCustomAttributeData<FormatAttribute>() is { } format)
+        {
+            props.Format = format.GetCustomAttributeCtorArg<string>(context, 0);
+        }
+
+        if (prop.GetCustomAttributeData<EnumValuesAttribute>() is { } enumValues)
+        {
+            props.EnumProperty = enumValues.ConstructorArguments[0].Value is
+                ReadOnlyCollection<CustomAttributeTypedArgument> values
+                    ? values.Select(value => value.Value!).ToList()
+                    : null;
+        }
+
         if (prop.IsNullable())
         {
             // Default to Nullable to null to avoid generating `nullable:false`
@@ -554,6 +577,58 @@ public static class Crds
         };
     }
 
+    private static object? MapSchemaValue(
+        MemberInfo member,
+        CustomAttributeData attribute,
+        MetadataLoadContext context)
+    {
+        var value = attribute.ConstructorArguments[0].Value;
+        if (!attribute.GetCustomAttributeNamedArg<bool>(context, "Json"))
+        {
+            return value;
+        }
+
+        if (value is not string json)
+        {
+            throw new InvalidTypeException(
+                $"The attribute '{attribute.AttributeType.Name}' on " +
+                $"'{GetSchemaMemberName(member)}' can only enable JSON parsing for string values.");
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return MapJsonElement(document.RootElement);
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidTypeException(
+                $"The attribute '{attribute.AttributeType.Name}' on " +
+                $"'{GetSchemaMemberName(member)}' contains invalid JSON.",
+                exception);
+        }
+    }
+
+    private static string GetSchemaMemberName(MemberInfo member) => member switch
+    {
+        Type type => type.FullName ?? type.Name,
+        _ => $"{member.DeclaringType?.FullName}.{member.Name}",
+    };
+
+    private static object? MapJsonElement(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => element.EnumerateObject()
+            .ToDictionary(property => property.Name, property => MapJsonElement(property.Value)),
+        JsonValueKind.Array => element.EnumerateArray().Select(MapJsonElement).ToList(),
+        JsonValueKind.String => element.GetString(),
+        JsonValueKind.Number when element.TryGetInt64(out var integer) => integer,
+        JsonValueKind.Number => element.GetDouble(),
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.Null => null,
+        _ => throw new JsonException($"Unsupported JSON value kind '{element.ValueKind}'."),
+    };
+
     private static List<V1ValidationRule>? MapValidationRules(
         this MetadataLoadContext context,
         IEnumerable<CustomAttributeData> attributesData)
@@ -634,9 +709,10 @@ public static class Crds
                 var validationRules = type.GetInheritedCustomAttributesData<ValidationRuleAttribute>().ToList();
                 CrdSchemaAttributeValidator.ValidateValidationRuleAttributes(type, validationRules, context);
 
+                V1JSONSchemaProps props;
                 try
                 {
-                    return new()
+                    props = new()
                     {
                         Type = Object,
                         Description =
@@ -670,8 +746,15 @@ public static class Crds
                 {
                     // Class-level [PreserveUnknownFields] opts the whole type out: if a member cannot
                     // be represented (cycle or non-transpilable type), degrade to an opaque object.
-                    return new() { Type = Object, XKubernetesPreserveUnknownFields = true };
+                    props = new() { Type = Object, XKubernetesPreserveUnknownFields = true };
                 }
+
+                if (type.GetInheritedCustomAttributesData<DefaultValueAttribute>().FirstOrDefault() is { } defaultValue)
+                {
+                    props.DefaultProperty = MapSchemaValue(type, defaultValue, context);
+                }
+
+                return props;
         }
     }
 
