@@ -1,3 +1,5 @@
+const isStableRelease = process.env.SEMANTIC_RELEASE_STABLE === "true";
+
 export default {
   debug: true,
   plugins: [
@@ -44,9 +46,12 @@ export default {
     [
       "@semantic-release/github",
       {
-        successComment: false,
+        successComment: isStableRelease ? undefined : false,
+        successCommentCondition: isStableRelease
+          ? "<% return Boolean(issue.pull_request); %>"
+          : false,
         failComment: false,
-        releasedLabels: false,
+        releasedLabels: isStableRelease ? ["released"] : false,
         assets: [
           {
             path: "src/**/bin/Release/**/*.nupkg",
