@@ -15,6 +15,7 @@ jobs:
       id-token: write
       contents: write
       issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -52,6 +53,7 @@ jobs:
       - name: Semantic Release
         run: ./.release/node_modules/.bin/semantic-release -e ./.release/release.base.mjs -e ./.release/release.main.mjs
         env:
+          SEMANTIC_RELEASE_STABLE: "true"
           DEBUG: semantic-release:*
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
           GH_NUGET_API_KEY: ${{ secrets.GITHUB_TOKEN }}
