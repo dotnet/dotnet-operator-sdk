@@ -6,7 +6,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Aspire.Hosting.Testing" Version="13.4.6" />
+      <PackageReference Include="Aspire.Hosting.Testing" Version="13.5.0" />
     </ItemGroup>
 
 </Project>
