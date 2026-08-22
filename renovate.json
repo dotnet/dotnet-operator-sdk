@@ -72,6 +72,13 @@
       "allowedVersions": "9.3.1"
     },
     {
+      "description": ["Keep semantic-release at or below the latest version supported by the repository patch."],
+      "matchManagers": ["npm"],
+      "matchFileNames": [".release/**"],
+      "matchPackageNames": ["semantic-release"],
+      "allowedVersions": "<=25.0.9"
+    },
+    {
       "description": ["Aspire.Hosting.Kubernetes only ships prerelease versions, so allow unstable updates for it."],
       "matchManagers": ["nuget"],
       "matchPackageNames": ["Aspire.Hosting.Kubernetes"],
