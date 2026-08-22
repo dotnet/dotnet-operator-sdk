@@ -62,6 +62,20 @@
       "allowedVersions": "<18.0.0"
     },
     {
+      "description": ["Keep Roslyn packages at or below the latest version supported by net8.0 and net9.0."],
+      "matchManagers": ["nuget"],
+      "matchFileNames": ["**/KubeOps.Cli.csproj"],
+      "matchPackageNames": [
+        "Microsoft.CodeAnalysis",
+        "Microsoft.CodeAnalysis.Common",
+        "Microsoft.CodeAnalysis.CSharp",
+        "Microsoft.CodeAnalysis.CSharp.Workspaces",
+        "Microsoft.CodeAnalysis.Workspaces.MSBuild"
+      ],
+      "matchCurrentValue": "/^5\\.6\\./",
+      "allowedVersions": "<=5.6.0"
+    },
+    {
       "matchPackageNames": ["JsonPatch.Net"],
       "allowedVersions": "<=4.0.1"
     },
