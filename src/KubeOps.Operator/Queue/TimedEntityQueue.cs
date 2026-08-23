@@ -77,7 +77,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
     {
         _logger = logger;
         _metrics = metrics;
-        _timerTask = Task.Run(ProcessScheduledEntriesAsync);
+        _timerTask = Task.Run(ProcessScheduledEntriesAsync, CancellationToken.None);
 
         // The gauge callbacks are invoked by the (long-lived) meter for its whole lifetime, which
         // outlives this queue. After Dispose() the BlockingCollection would throw
@@ -240,7 +240,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
         _timerCts.Cancel();
 
         // Wait for timer task to complete (with timeout)
-        _timerTask.Wait(TimeSpan.FromSeconds(5));
+        _timerTask.Wait(TimeSpan.FromSeconds(5), CancellationToken.None);
 
         // Dispose resources
         _timer.Dispose();

@@ -46,12 +46,12 @@ internal sealed class RoslynInheritedAttributeResolver(IReadOnlyList<Compilation
             }
 
             var model = compilation.GetSemanticModel(decl.SyntaxTree);
-            if (model.GetSymbolInfo(decl.Initializer!).Symbol is not IMethodSymbol baseCtor)
+            if (model.GetSymbolInfo(decl.Initializer).Symbol is not IMethodSymbol baseCtor)
             {
                 continue;
             }
 
-            var values = ResolveArguments(model, decl.Initializer!.ArgumentList.Arguments, baseCtor, symbol);
+            var values = ResolveArguments(model, decl.Initializer.ArgumentList.Arguments, baseCtor, symbol);
             if (values.Count > 0)
             {
                 propertyValues = values;
