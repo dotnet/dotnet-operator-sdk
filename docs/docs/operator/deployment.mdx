@@ -59,6 +59,21 @@ This will:
 - Install CRDs
 - Set up any required configurations
 
+### Namespaced Operators
+
+When `OperatorSettings.Namespace` is assigned a compile-time constant, generated manifests use that namespace for
+both the operator deployment and its `Role`/`RoleBinding`. The namespace must already exist; KubeOps does not generate
+a `Namespace` object for this case.
+
+```csharp
+builder.Services.AddKubernetesOperator(settings =>
+    settings.Namespace = "tenant-a");
+```
+
+The initial implementation intentionally keeps the deployment and watch namespace identical. An explicit CLI
+`--namespace` value must therefore match the configured watch namespace. Operators without a configured namespace
+retain the existing cluster-wide RBAC and generated `<operator>-system` namespace.
+
 ## Generated Deployment Files
 
 KubeOps generates the following files in your config directory:

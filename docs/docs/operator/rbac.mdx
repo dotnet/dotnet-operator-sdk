@@ -21,6 +21,29 @@ Kubernetes RBAC works through four main resources:
 
 When you generate installation files for your operator (via the [CLI](./cli) or as part of the [build](./build-customization)), KubeOps automatically creates the necessary RBAC configurations for the operator's service account. These configurations define what resources and operations your operator is allowed to perform and are applied as part of the [deployment](./deployment).
 
+### Automatic RBAC Scope
+
+KubeOps derives the generated RBAC scope from the existing operator configuration. A compile-time constant namespace
+produces a namespaced `Role` and `RoleBinding`:
+
+```csharp
+builder.Services.AddKubernetesOperator(settings =>
+    settings.Namespace = "tenant-a");
+```
+
+When `Namespace` is not configured, KubeOps generates the existing cluster-wide `ClusterRole` and
+`ClusterRoleBinding`. No separate RBAC option is required.
+
+The CLI performs static analysis and does not execute application startup code. Namespace values loaded from runtime
+configuration or assigned through an external configuration method cannot be resolved safely. In those cases, the
+CLI prints a warning and retains cluster-wide RBAC for compatibility. String literals, `const string` values, direct
+property assignment, and `WithNamespace` are supported.
+
+The initial namespaced generation support deploys the operator into the watched namespace. If the CLI `--namespace`
+option is supplied, it must match `OperatorSettings.Namespace`. Cluster-scoped entities and non-resource URL rules
+cannot be granted by a namespaced `Role` and cause generation to fail. For string-based `GenericRbacAttribute` rules,
+make sure every referenced resource is namespaced.
+
 :::note[Local Development]
 During local development, you typically use an admin account that has full cluster access. Therefore, RBAC restrictions don't apply, and you don't need to worry about permissions. However, it's still good practice to define the required RBAC rules for production use.
 :::
@@ -139,6 +162,8 @@ KubeOps automatically adds default RBAC rules for:
    - Operator has more access than needed
    - Security risks from broad permissions
    - Hard to audit and maintain
+   - A dynamic namespace configuration cannot be resolved during manifest generation and therefore falls back to
+     cluster-wide RBAC
 
 3. **Incorrect Resource Definitions**:
    - Wrong API groups

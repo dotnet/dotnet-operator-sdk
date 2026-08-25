@@ -122,6 +122,11 @@ publish.SkipCrds();
 publish.SkipRbac();
 ```
 
+RBAC scope is inferred from the operator project's `AddKubernetesOperator` configuration. A constant
+`OperatorSettings.Namespace` produces a `Role` and `RoleBinding`; an unset namespace produces cluster-wide RBAC.
+For a namespaced operator, set the existing publish `Namespace` option to the same value. No separate Aspire RBAC
+option is required.
+
 With a Kubernetes environment, `aspire publish` writes the generated Helm chart. `aspire deploy` uses the same Kubernetes environment and deployment engine to install it. The KubeOps integration hooks into Aspire's Kubernetes resource customization path (`PublishAsKubernetesService`) rather than running a separate KubeOps deployment.
 
 The integration filters KubeOps' generated `Deployment` out of the additional resource set because Aspire owns the workload. KubeOps deployment settings such as replicas, termination grace period, environment variables, resource requirements, `POD_NAMESPACE`, and the service account are merged into the Aspire-owned deployment instead. The chart therefore deploys one operator deployment, not a service-only placeholder and not a duplicate operator.

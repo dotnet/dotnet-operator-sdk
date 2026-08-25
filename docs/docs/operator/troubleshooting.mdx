@@ -9,6 +9,22 @@ sidebar_position: 13
 This page collects the most common problems when running a KubeOps operator, their causes, and
 where to find the relevant configuration.
 
+## Generated RBAC remains cluster-wide
+
+**Symptom:** `OperatorSettings.Namespace` is configured, but manifest generation warns that the watch scope cannot be
+determined and emits a `ClusterRole` and `ClusterRoleBinding`.
+
+The CLI analyzes source code without executing application startup. Use a string literal or `const string` directly
+inside the `AddKubernetesOperator` lambda when namespaced RBAC should be generated:
+
+```csharp
+builder.Services.AddKubernetesOperator(settings =>
+    settings.Namespace = "tenant-a");
+```
+
+Values read from runtime configuration and configuration delegates passed as method groups cannot be determined
+statically. They intentionally retain cluster-wide RBAC to avoid generating insufficient permissions.
+
 ## Reconciliation does not fire
 
 **Symptom:** You change a resource, but `ReconcileAsync` is never called.
