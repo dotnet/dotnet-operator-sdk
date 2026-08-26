@@ -31,6 +31,7 @@ public class IntegrationTestCollection : ICollectionFixture<CrdInstaller>, IColl
 }
 
 [Collection(IntegrationTestCollection.Name)]
+[Trait("Category", "Integration")]
 public abstract class IntegrationTestBase;
 
 public sealed class CrdInstaller : IAsyncLifetime
