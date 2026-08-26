@@ -11,4 +11,5 @@ public class IntegrationTestCollection
 }
 
 [Collection(IntegrationTestCollection.Name)]
+[Trait("Category", "Integration")]
 public abstract class IntegrationTestBase;
