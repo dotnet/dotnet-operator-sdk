@@ -19,7 +19,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 9.x
+          dotnet-version: 10.x
 
       - name: Linting
         run: dotnet format --verify-no-changes

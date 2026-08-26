@@ -15,7 +15,8 @@ using Spectre.Console.Testing;
 
 namespace KubeOps.Cli.Test.Management;
 
-public class InstallIntegrationTest
+[Trait("Category", "Integration")]
+public sealed class InstallIntegrationTest
 {
     private static readonly string ProjectPath =
         Path.Join(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "..", "examples", "Operator",

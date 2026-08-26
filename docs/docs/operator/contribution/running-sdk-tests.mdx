@@ -26,10 +26,11 @@ of your **current kubeconfig context**. Only run them against a disposable devel
 dotnet test
 
 # Run tests for a specific project
-dotnet test test/KubeOps.Operator.Test/KubeOps.Operator.Test.csproj
+dotnet test --project test/KubeOps.Operator.Test/KubeOps.Operator.Test.csproj
 
 # Run only unit tests (skip integration tests) — no cluster required
-dotnet test test/KubeOps.Operator.Test/ --filter "FullyQualifiedName!~Integration"
+dotnet test --project test/KubeOps.Operator.Test/KubeOps.Operator.Test.csproj \
+  --filter-not-trait "Category=Integration"
 
 # Run a single test by name
 dotnet test --filter "FullyQualifiedName~MyTestClass.MyTestMethod"
@@ -43,7 +44,8 @@ dotnet test --filter "FullyQualifiedName~MyTestClass.MyTestMethod"
 - Integration tests inherit `IntegrationTestBase`, override
   `ConfigureHost(HostApplicationBuilder)` to wire up the operator under test, and use
   `TestNamespaceProvider` for namespace isolation. The shared integration collection disables
-  parallelization and installs the required CRDs once per run.
+  parallelization and installs the required CRDs once per run. `IntegrationTestBase` also applies
+  the `Category=Integration` trait so integration tests can be excluded consistently.
 
 When you add a feature, cover it with unit tests; if it changes the watch → queue → reconcile
 behavior against a real API server, add an integration test as well.
