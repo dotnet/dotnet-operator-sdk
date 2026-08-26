@@ -26,10 +26,11 @@ of your **current kubeconfig context**. Only run them against a disposable devel
 dotnet test
 
 # Run tests for a specific project
-dotnet test test/KubeOps.Operator.Test/KubeOps.Operator.Test.csproj
+dotnet test --project test/KubeOps.Operator.Test/KubeOps.Operator.Test.csproj
 
 # Run only unit tests (skip integration tests) — no cluster required
-dotnet test test/KubeOps.Operator.Test/ --filter "FullyQualifiedName!~Integration"
+dotnet test --project test/KubeOps.Operator.Test/KubeOps.Operator.Test.csproj \
+  --filter "FullyQualifiedName!~Integration"
 
 # Run a single test by name
 dotnet test --filter "FullyQualifiedName~MyTestClass.MyTestMethod"

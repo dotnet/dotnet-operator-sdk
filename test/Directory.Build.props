@@ -4,11 +4,11 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
-        <IsTestProject>true</IsTestProject>
+        <IsTestProject>$(MSBuildProjectName.EndsWith('.Test'))</IsTestProject>
         <EnablePreviewFeatures>true</EnablePreviewFeatures>
     </PropertyGroup>
 
-    <ItemGroup>
+    <ItemGroup Condition="'$(IsTestProject)' == 'true'">
         <PackageReference Include="FluentAssertions" Version="8.10.0" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
         <PackageReference Include="xunit.v3" Version="4.0.0" />
@@ -26,7 +26,7 @@
         </PackageReference>
     </ItemGroup>
 
-    <ItemGroup>
+    <ItemGroup Condition="'$(IsTestProject)' == 'true'">
         <ProjectReference Include="$(MSBuildThisFileDirectory)\..\src\KubeOps.Abstractions\KubeOps.Abstractions.csproj" />
         <Using Include="Xunit"/>
     </ItemGroup>
