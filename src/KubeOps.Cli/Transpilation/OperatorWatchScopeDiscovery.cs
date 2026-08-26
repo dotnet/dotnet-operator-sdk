@@ -152,6 +152,26 @@ internal static class OperatorWatchScopeDiscovery
 
         public SyntaxNode? UnknownSyntax { get; private set; }
 
+        public override void VisitAnonymousFunction(IAnonymousFunctionOperation operation)
+        {
+            if (ReferencesSettingsBuilder(operation))
+            {
+                SetUnknown(
+                    operation.Syntax,
+                    "The operator settings builder is captured by a nested lambda and cannot be evaluated statically.");
+            }
+        }
+
+        public override void VisitLocalFunction(ILocalFunctionOperation operation)
+        {
+            if (ReferencesSettingsBuilder(operation))
+            {
+                SetUnknown(
+                    operation.Syntax,
+                    "The operator settings builder is captured by a local function and cannot be evaluated statically.");
+            }
+        }
+
         public override void VisitSimpleAssignment(ISimpleAssignmentOperation operation)
         {
             if (operation.Target is IPropertyReferenceOperation property
@@ -239,6 +259,18 @@ internal static class OperatorWatchScopeDiscovery
                    && IsKnownSettingsExtension(instanceInvocation.TargetMethod);
         }
 
+        private static bool IsValidKubernetesNamespace(string value)
+        {
+            const int maxLength = 63;
+            return value.Length <= maxLength
+                   && IsLowercaseLetterOrDigit(value[0])
+                   && IsLowercaseLetterOrDigit(value[^1])
+                   && value.All(character => IsLowercaseLetterOrDigit(character) || character == '-');
+        }
+
+        private static bool IsLowercaseLetterOrDigit(char value) =>
+            (value >= 'a' && value <= 'z') || (value >= '0' && value <= '9');
+
         private void AddValue(IOperation operation, SyntaxNode syntax)
         {
             if (IsConditional(syntax))
@@ -260,12 +292,26 @@ internal static class OperatorWatchScopeDiscovery
                 return;
             }
 
+            if (value.Value is string @namespace && !IsValidKubernetesNamespace(@namespace))
+            {
+                SetUnknown(
+                    syntax,
+                    "The watch namespace must be a valid DNS-1123 label containing at most 63 lowercase " +
+                    "alphanumeric characters or '-', and must start and end with an alphanumeric character.");
+                return;
+            }
+
             _values.Add((string?)value.Value);
         }
 
         private bool UsesSettingsBuilderDirectly(IInvocationOperation operation) =>
             IsSettingsBuilder(operation.Instance)
             || operation.Arguments.Any(argument => IsSettingsBuilder(argument.Value));
+
+        private bool ReferencesSettingsBuilder(IOperation operation) =>
+            (operation is IParameterReferenceOperation parameterReference
+             && SymbolEqualityComparer.Default.Equals(parameterReference.Parameter, settingsParameter))
+            || operation.ChildOperations.Any(ReferencesSettingsBuilder);
 
         private bool IsSettingsBuilder(IOperation? operation)
         {

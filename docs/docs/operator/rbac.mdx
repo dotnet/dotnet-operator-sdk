@@ -39,6 +39,10 @@ configuration or assigned through an external configuration method cannot be res
 CLI prints a warning and retains cluster-wide RBAC for compatibility. String literals, `const string` values, direct
 property assignment, and `WithNamespace` are supported.
 
+Statically resolved namespaces must be valid Kubernetes DNS-1123 labels: at most 63 lowercase alphanumeric characters
+or `-`, starting and ending with an alphanumeric character. Invalid values produce a warning and retain cluster-wide
+RBAC instead of generating invalid namespaced manifests.
+
 The initial namespaced generation support deploys the operator into the watched namespace. If the CLI `--namespace`
 option is supplied, it must match `OperatorSettings.Namespace`. Cluster-scoped entities and non-resource URL rules
 cannot be granted by a namespaced `Role` and cause generation to fail. For string-based `GenericRbacAttribute` rules,

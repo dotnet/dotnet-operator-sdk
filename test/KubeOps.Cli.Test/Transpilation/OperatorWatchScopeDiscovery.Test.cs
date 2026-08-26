@@ -2,13 +2,10 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Reflection;
-
 using FluentAssertions;
 
 using KubeOps.Abstractions.Builder;
 using KubeOps.Cli.Transpilation;
-using KubeOps.Operator;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -17,7 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace KubeOps.Cli.Test.Transpilation;
 
 [Trait("Area", "Rbac")]
-public class OperatorWatchScopeDiscoveryTest
+public sealed class OperatorWatchScopeDiscoveryTest
 {
     [Fact]
     public void Should_Detect_Cluster_Wide_Registration_Without_Configuration()
@@ -52,6 +49,40 @@ public class OperatorWatchScopeDiscoveryTest
 
         scope.Kind.Should().Be(OperatorWatchScopeKind.Namespaced);
         scope.Namespace.Should().Be("tenant-a");
+    }
+
+    [Theory]
+    [InlineData(" ")]
+    [InlineData("Tenant-a")]
+    [InlineData("-tenant-a")]
+    [InlineData("tenant-a-")]
+    [InlineData("tenant.a")]
+    public void Should_Report_Invalid_Constant_Namespace_As_Unknown(string invalidNamespace)
+    {
+        var scope = Discover(
+            $$"""
+            const string WatchNamespace = "{{invalidNamespace}}";
+            services.AddKubernetesOperator(settings => settings.Namespace = WatchNamespace);
+            """);
+
+        scope.Kind.Should().Be(OperatorWatchScopeKind.Unknown);
+        scope.Diagnostics.Should().ContainSingle()
+            .Which.Message.Should().Contain("DNS-1123 label");
+    }
+
+    [Fact]
+    public void Should_Report_Too_Long_Constant_Namespace_As_Unknown()
+    {
+        var invalidNamespace = new string('a', 64);
+        var scope = Discover(
+            $$"""
+            const string WatchNamespace = "{{invalidNamespace}}";
+            services.AddKubernetesOperator(settings => settings.Namespace = WatchNamespace);
+            """);
+
+        scope.Kind.Should().Be(OperatorWatchScopeKind.Unknown);
+        scope.Diagnostics.Should().ContainSingle()
+            .Which.Message.Should().Contain("DNS-1123 label");
     }
 
     [Fact]
@@ -133,6 +164,54 @@ public class OperatorWatchScopeDiscoveryTest
             .Which.Message.Should().Contain("different watch namespaces");
     }
 
+    [Fact]
+    public void Should_Report_Settings_Captured_By_Nested_Lambda_As_Unknown()
+    {
+        var scope = Discover(
+            """
+            services.AddKubernetesOperator(settings =>
+            {
+                System.Action configureLater = () => settings.Namespace = "tenant-a";
+            });
+            """);
+
+        scope.Kind.Should().Be(OperatorWatchScopeKind.Unknown);
+        scope.Diagnostics.Should().ContainSingle()
+            .Which.Message.Should().Contain("nested lambda");
+    }
+
+    [Fact]
+    public void Should_Report_Settings_Captured_By_Local_Function_As_Unknown()
+    {
+        var scope = Discover(
+            """
+            services.AddKubernetesOperator(settings =>
+            {
+                void ConfigureLater() => settings.Namespace = "tenant-a";
+            });
+            """);
+
+        scope.Kind.Should().Be(OperatorWatchScopeKind.Unknown);
+        scope.Diagnostics.Should().ContainSingle()
+            .Which.Message.Should().Contain("local function");
+    }
+
+    [Fact]
+    public void Should_Ignore_Unrelated_Nested_Lambda()
+    {
+        var scope = Discover(
+            """
+            services.AddKubernetesOperator(settings =>
+            {
+                System.Action unrelated = () => { };
+                settings.Namespace = "tenant-a";
+            });
+            """);
+
+        scope.Kind.Should().Be(OperatorWatchScopeKind.Namespaced);
+        scope.Namespace.Should().Be("tenant-a");
+    }
+
     private static OperatorWatchScope Discover(string statements)
     {
         var source = $$"""
@@ -164,7 +243,7 @@ public class OperatorWatchScopeDiscoveryTest
         var paths = trustedPlatformAssemblies.Split(Path.PathSeparator).Concat(new[]
         {
             typeof(OperatorSettingsBuilder).Assembly.Location,
-            typeof(KubeOps.Operator.ServiceCollectionExtensions).Assembly.Location,
+            typeof(Operator.ServiceCollectionExtensions).Assembly.Location,
             typeof(IServiceCollection).Assembly.Location,
             typeof(ServiceCollection).Assembly.Location,
         });
