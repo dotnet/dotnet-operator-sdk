@@ -37,6 +37,9 @@ internal static partial class AssemblyLoader
     private static readonly ConditionalWeakTable<MetadataLoadContext, IInheritedAttributeResolver>
         InheritedAttributeResolvers = new();
 
+    private static readonly ConditionalWeakTable<MetadataLoadContext, OperatorWatchScope>
+        OperatorWatchScopes = new();
+
     static AssemblyLoader()
     {
         MSBuildLocator.RegisterDefaults();
@@ -54,6 +57,11 @@ internal static partial class AssemblyLoader
         => InheritedAttributeResolvers.TryGetValue(context, out var resolver)
             ? resolver
             : ReflectionInheritedAttributeResolver.Default;
+
+    public static OperatorWatchScope GetOperatorWatchScope(this MetadataLoadContext context) =>
+        OperatorWatchScopes.TryGetValue(context, out var scope)
+            ? scope
+            : OperatorWatchScope.ClusterWide;
 
     public static Task<MetadataLoadContext> ForProject(
         IAnsiConsole console,
@@ -93,6 +101,8 @@ internal static partial class AssemblyLoader
 
             InheritedAttributeResolvers.AddOrUpdate(
                 mlc, new RoslynInheritedAttributeResolver(new[] { compilation }));
+            OperatorWatchScopes.AddOrUpdate(
+                mlc, OperatorWatchScopeDiscovery.Discover(new[] { compilation }));
 
             return mlc;
         });
@@ -178,6 +188,9 @@ internal static partial class AssemblyLoader
             InheritedAttributeResolvers.AddOrUpdate(
                 mlc,
                 new RoslynInheritedAttributeResolver(assemblies.Select(a => a.Compilation).ToList()));
+            OperatorWatchScopes.AddOrUpdate(
+                mlc,
+                OperatorWatchScopeDiscovery.Discover(assemblies.Select(a => a.Compilation)));
 
             return mlc;
         });

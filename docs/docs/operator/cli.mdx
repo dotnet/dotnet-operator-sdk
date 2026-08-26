@@ -108,6 +108,21 @@ Common options:
 Generated CRDs explicitly use `conversion.strategy: None` unless a conversion webhook is registered for the CRD.
 For registered conversion webhooks, the strategy is `Webhook` and includes the webhook client configuration.
 
+### Automatic RBAC Scope
+
+The generator reads the `AddKubernetesOperator` configuration from the project source. If
+`OperatorSettings.Namespace` is assigned a compile-time constant, it emits a `Role` and `RoleBinding` in that
+namespace. If no namespace is assigned, it emits the existing `ClusterRole` and `ClusterRoleBinding`.
+
+```csharp
+builder.Services.AddKubernetesOperator(settings =>
+    settings.Namespace = "tenant-a");
+```
+
+No additional CLI option is needed. Runtime-derived or indirect namespace values cannot be evaluated without running
+application code, so the CLI warns and falls back to cluster-wide RBAC. When using `--namespace` together with a
+statically configured watch namespace, both values must match.
+
 ## Cluster Information
 
 The `version` command shows information about your current Kubernetes cluster:

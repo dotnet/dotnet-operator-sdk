@@ -9,10 +9,12 @@ using k8s;
 using k8s.Models;
 
 using KubeOps.Abstractions.Kustomize;
+using KubeOps.Abstractions.Rbac;
 using KubeOps.Cli.Extensions;
 using KubeOps.Cli.Generators;
 using KubeOps.Cli.Output;
 using KubeOps.Cli.Transpilation;
+using KubeOps.Transpiler;
 
 using Spectre.Console;
 
@@ -62,8 +64,6 @@ internal static class OperatorGenerator
         var dockerImage = parseResult.GetValue(Options.AccessibleDockerImage)!;
         var dockerImageTag = parseResult.GetValue(Options.AccessibleDockerTag)!;
         var operatorNamespace = parseResult.GetValue(Options.OperatorNamespace);
-        var effectiveNamespace = operatorNamespace ?? $"{name}-system";
-
         var result = new ResultOutput(console, format);
         console.WriteLine("Generate operator resources.");
 
@@ -80,12 +80,38 @@ internal static class OperatorGenerator
             _ => throw new NotSupportedException("Only *.csproj, *.sln, and *.slnx files are supported."),
         };
 
+        var watchScope = parser.GetOperatorWatchScope();
+        foreach (var diagnostic in watchScope.Diagnostics ?? [])
+        {
+            console.MarkupLineInterpolated($"[yellow]Warning:[/] {diagnostic}");
+        }
+
+        var effectiveNamespace = watchScope.Kind switch
+        {
+            OperatorWatchScopeKind.Namespaced when operatorNamespace is null => watchScope.Namespace!,
+            OperatorWatchScopeKind.Namespaced when operatorNamespace != watchScope.Namespace =>
+                throw new InvalidOperationException(
+                    $"The deployment namespace '{operatorNamespace}' differs from the statically configured " +
+                    $"operator watch namespace '{watchScope.Namespace}'. Separate deployment and watch namespaces " +
+                    "are not supported by generated manifests."),
+            _ => operatorNamespace ?? $"{name}-system",
+        };
+
+        if (watchScope.Kind == OperatorWatchScopeKind.Namespaced
+            && parser.GetRbacAttributes().Any(attribute =>
+                attribute.AttributeType == parser.GetContextType<GenericRbacAttribute>()))
+        {
+            console.MarkupLine(
+                "[yellow]Warning:[/] Generic RBAC rules must reference namespaced resources when the operator " +
+                "watch namespace is configured.");
+        }
+
         var mutators = parser.GetMutatedEntities().ToList();
         var validators = parser.GetValidatedEntities().ToList();
         var hasWebhooks = mutators.Count > 0 || validators.Count > 0 || parser.GetConvertedEntities().Any();
 
         console.MarkupLine("[green]Generate RBAC rules.[/]");
-        new RbacGenerator(parser, format, effectiveNamespace).Generate(result);
+        new RbacGenerator(parser, format, effectiveNamespace, watchScope).Generate(result);
 
         console.MarkupLine("[green]Generate Dockerfile.[/]");
         new DockerfileGenerator(hasWebhooks).Generate(result);
@@ -121,7 +147,7 @@ internal static class OperatorGenerator
             new CrdGenerator(parser, [], format).Generate(result);
         }
 
-        if (operatorNamespace is null)
+        if (operatorNamespace is null && watchScope.Kind != OperatorWatchScopeKind.Namespaced)
         {
             result.Add(
                 $"namespace.{format.GetFileExtension()}",
