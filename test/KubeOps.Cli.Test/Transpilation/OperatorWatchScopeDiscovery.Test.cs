@@ -118,6 +118,26 @@ public sealed class OperatorWatchScopeDiscoveryTest
             .Which.Message.Should().Contain("compile-time constant");
     }
 
+    [Theory]
+    [InlineData("string? value = null; _ = value?.Contains(settings.Namespace = \"tenant-a\");")]
+    [InlineData("_ = false && (settings.Namespace = \"tenant-a\") is not null;")]
+    [InlineData("_ = true || (settings.Namespace = \"tenant-a\") is not null;")]
+    [InlineData("string? value = \"selected\"; _ = value ?? (settings.Namespace = \"tenant-a\");")]
+    public void Should_Report_Conditionally_Evaluated_Namespace_As_Unknown(string statement)
+    {
+        var scope = Discover(
+            $$"""
+            services.AddKubernetesOperator(settings =>
+            {
+                {{statement}}
+            });
+            """);
+
+        scope.Kind.Should().Be(OperatorWatchScopeKind.Unknown);
+        scope.Diagnostics.Should().ContainSingle()
+            .Which.Message.Should().Contain("conditionally");
+    }
+
     [Fact]
     public void Should_Report_Method_Group_As_Unknown()
     {

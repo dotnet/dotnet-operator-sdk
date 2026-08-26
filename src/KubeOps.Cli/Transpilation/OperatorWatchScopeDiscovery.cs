@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
 
@@ -229,10 +230,12 @@ internal static class OperatorWatchScopeDiscovery
         private static bool IsSettingsExtension(IMethodSymbol method, string methodName) =>
             method.Name == methodName && IsKnownSettingsExtension(method);
 
-        private static bool IsConditional(SyntaxNode syntax) => syntax.Ancestors().Any(ancestor => ancestor is
-            IfStatementSyntax or ElseClauseSyntax or SwitchStatementSyntax or SwitchExpressionSyntax
-            or ConditionalExpressionSyntax or ForStatementSyntax or ForEachStatementSyntax
-            or WhileStatementSyntax or DoStatementSyntax or TryStatementSyntax);
+        private static bool IsConditional(SyntaxNode syntax) => syntax.Ancestors().Any(ancestor =>
+            (ancestor is IfStatementSyntax or ElseClauseSyntax or SwitchStatementSyntax or SwitchExpressionSyntax
+                or ConditionalExpressionSyntax or ConditionalAccessExpressionSyntax or ForStatementSyntax
+                or ForEachStatementSyntax or WhileStatementSyntax or DoStatementSyntax or TryStatementSyntax)
+            || (ancestor.Kind() is SyntaxKind.LogicalAndExpression or SyntaxKind.LogicalOrExpression
+                or SyntaxKind.CoalesceExpression));
 
         private static bool IsSafeSettingsReference(IParameterReferenceOperation operation)
         {
