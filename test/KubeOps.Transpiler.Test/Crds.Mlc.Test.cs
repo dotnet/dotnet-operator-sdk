@@ -851,6 +851,19 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Should().Contain(p => p.Key == "otherName");
     }
 
+    [Trait("Area", "PropertyAttributes")]
+    [Fact]
+    public void Should_Not_Recurse_Into_Ignored_Self_Referential_Property()
+    {
+        // A self-referential property marked with [Ignore] must not be traversed during
+        // printer-column discovery, otherwise CRD generation recurses until it overflows the stack.
+        var crd = _mlc.Transpile(typeof(RecursiveIgnoreAttrEntity));
+
+        var specProperties = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"];
+        specProperties.Properties.Should().ContainKey("data");
+        specProperties.Properties.Should().NotContainKey("children");
+    }
+
     [Trait("Area", "General")]
     [Fact]
     public void Should_Use_Kubernetes_Json_Property_Naming_For_Acronym_Prefixes()
@@ -1740,6 +1753,18 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         {
             [Ignore]
             public string Property { get; set; } = null!;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    public class RecursiveIgnoreAttrEntity : CustomKubernetesEntity<RecursiveIgnoreAttrEntity.EntitySpec>
+    {
+        public class EntitySpec
+        {
+            public string Data { get; set; } = null!;
+
+            [Ignore]
+            public List<EntitySpec>? Children { get; set; }
         }
     }
 

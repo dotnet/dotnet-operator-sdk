@@ -220,6 +220,7 @@ public static class Crds
         inheritedAttributeResolver ??= ReflectionInheritedAttributeResolver.Default;
 
         var props = type.GetProperties()
+            .Where(p => p.GetCustomAttributeData<IgnoreAttribute>() == null)
             .Select(p => (Prop: p, Path: string.Empty, Ancestors: (IReadOnlySet<Type>)new HashSet<Type> { type }))
             .ToList();
         while (props.Count > 0)
@@ -233,6 +234,7 @@ public static class Crds
             {
                 IReadOnlySet<Type> childAncestors = new HashSet<Type>(ancestors) { prop.PropertyType };
                 props.AddRange(prop.PropertyType.GetProperties()
+                    .Where(p => p.GetCustomAttributeData<IgnoreAttribute>() == null)
                     .Select(p => (Prop: p, Path: $"{path}.{prop.GetPropertyName(context)}", Ancestors: childAncestors)));
             }
 
