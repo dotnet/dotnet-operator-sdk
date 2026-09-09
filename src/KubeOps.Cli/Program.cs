@@ -21,4 +21,4 @@ if (parseResult.Action is ParseErrorAction errorAction)
     errorAction.ShowTypoCorrections = true;
 }
 
-await parseResult.InvokeAsync();
+return await parseResult.InvokeAsync();
