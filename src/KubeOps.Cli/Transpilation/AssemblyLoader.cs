@@ -40,6 +40,9 @@ internal static partial class AssemblyLoader
     private static readonly ConditionalWeakTable<MetadataLoadContext, OperatorWatchScope>
         OperatorWatchScopes = new();
 
+    private static readonly string CliDirectory =
+        AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+
     static AssemblyLoader()
     {
         MSBuildLocator.RegisterDefaults();
@@ -229,9 +232,20 @@ internal static partial class AssemblyLoader
 
     private static IEnumerable<TypeInfo> GetTypesToInspect(this MetadataLoadContext context) => context
         .GetAssemblies()
+        .Where(a => !IsCliAssembly(a))
         .SelectMany(a => a.DefinedTypes)
         .Where(t => t is { IsInterface: false, IsAbstract: false, IsGenericType: false })
         .OrderBy(t => t.FullName, StringComparer.Ordinal);
+
+    // Assemblies next to the CLI only end up in the context because Utilities.GetContextType falls back to
+    // LoadFromAssemblyPath. Their references (e.g. Microsoft.CodeAnalysis) are not part of the
+    // PathAssemblyResolver, so inspecting them throws FileNotFoundException.
+    private static bool IsCliAssembly(Assembly assembly) =>
+        !string.IsNullOrEmpty(assembly.Location) &&
+        string.Equals(
+            Path.GetDirectoryName(assembly.Location)?.TrimEnd(Path.DirectorySeparatorChar),
+            CliDirectory,
+            StringComparison.OrdinalIgnoreCase);
 
     [GeneratedRegex(".*")]
     private static partial Regex DefaultRegex();

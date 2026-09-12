@@ -154,6 +154,18 @@ All commands support these options:
 - `--project`: Regex pattern to filter projects in a solution
 - `--target-framework`: Specify target framework for solution projects
 
+### Exit Codes
+
+The CLI returns the exit code of the executed command, so failures can be detected in scripts,
+MSBuild `Exec` tasks or CI pipelines:
+
+| Code | Meaning                                       |
+| ---- | --------------------------------------------- |
+| `0`  | Success                                       |
+| `1`  | Error (an unhandled exception occurred)       |
+| `2`  | Aborted by the user (confirmation prompt)     |
+| `99` | Usage error (invalid arguments or options)    |
+
 ### Common Use Cases
 
 1. **Development Setup**:
