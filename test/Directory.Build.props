@@ -11,12 +11,12 @@
     <ItemGroup Condition="'$(IsTestProject)' == 'true'">
         <PackageReference Include="FluentAssertions" Version="8.10.0" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.0" />
-        <PackageReference Include="xunit.v3" Version="4.0.0" />
+        <PackageReference Include="xunit.v3" Version="4.0.1" />
         <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="xunit.analyzers" Version="2.0.0">
+        <PackageReference Include="xunit.analyzers" Version="2.1.0">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
