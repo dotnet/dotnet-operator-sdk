@@ -71,7 +71,8 @@ builder.Services.AddKubernetesOperator(settings =>
 ```
 
 The initial implementation intentionally keeps the deployment and watch namespace identical. An explicit CLI
-`--namespace` value must therefore match the configured watch namespace. Operators without a configured namespace
+`--namespace` value must therefore match a statically configured watch namespace. Operators that read their watch
+namespace at runtime can request namespaced manifests with `--rbac-scope namespaced`. Operators without a configured namespace
 retain the existing cluster-wide RBAC and generated `<operator>-system` namespace.
 
 ## Generated Deployment Files

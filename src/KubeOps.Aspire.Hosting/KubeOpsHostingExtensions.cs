@@ -561,6 +561,12 @@ public static class KubeOpsHostingExtensions
             options.DockerImageTag,
         };
 
+        if (!string.IsNullOrWhiteSpace(options.RbacScope))
+        {
+            arguments.Add("--rbac-scope");
+            arguments.Add(options.RbacScope);
+        }
+
         if (!string.IsNullOrWhiteSpace(options.TargetFramework))
         {
             arguments.Add("--target-framework");

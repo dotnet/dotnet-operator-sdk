@@ -43,8 +43,31 @@ Statically resolved namespaces must be valid Kubernetes DNS-1123 labels: at most
 or `-`, starting and ending with an alphanumeric character. Invalid values produce a warning and retain cluster-wide
 RBAC instead of generating invalid namespaced manifests.
 
+### Explicit RBAC Scope
+
+Namespaces that are only known at runtime (for example a `WATCH_NAMESPACE` environment variable) cannot be resolved
+statically. Use the `--rbac-scope` option to decide the scope explicitly instead:
+
+```bash
+kubeops generate operator --rbac-scope namespaced --namespace tenant-a my-operator ./MyOperator.csproj
+```
+
+| Value        | Result                                                                    |
+| ------------ | ------------------------------------------------------------------------- |
+| `auto`       | Default. Derives the scope from the operator configuration in the source. |
+| `cluster`    | Always generates `ClusterRole` and `ClusterRoleBinding`.                  |
+| `namespaced` | Always generates `Role` and `RoleBinding`.                                |
+
+With `--rbac-scope namespaced`, the namespace of the generated `Role` and `RoleBinding` is taken from `--namespace`,
+otherwise from a statically discovered namespace, otherwise it falls back to `<operator-name>-system`. In the fallback
+case the namespace resource is generated as well, so the kustomization can be relocated with
+`kustomize edit set namespace`.
+
+For MSBuild based generation the same values are available through the `KubeOpsRbacScope` and `KubeOpsNamespace`
+properties, see [build customization](./build-customization).
+
 The initial namespaced generation support deploys the operator into the watched namespace. If the CLI `--namespace`
-option is supplied, it must match `OperatorSettings.Namespace`. Cluster-scoped entities and non-resource URL rules
+option is supplied, it must match a statically configured `OperatorSettings.Namespace`. Cluster-scoped entities and non-resource URL rules
 cannot be granted by a namespaced `Role` and cause generation to fail. For string-based `GenericRbacAttribute` rules,
 make sure every referenced resource is namespaced.
 
