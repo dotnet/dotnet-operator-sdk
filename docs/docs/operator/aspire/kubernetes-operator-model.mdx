@@ -124,8 +124,12 @@ publish.SkipRbac();
 
 RBAC scope is inferred from the operator project's `AddKubernetesOperator` configuration. A constant
 `OperatorSettings.Namespace` produces a `Role` and `RoleBinding`; an unset namespace produces cluster-wide RBAC.
-For a namespaced operator, set the existing publish `Namespace` option to the same value. No separate Aspire RBAC
-option is required.
+For a namespaced operator, set the existing publish `Namespace` option to the same value. If the watch namespace is
+only known at runtime, set `RbacScope` to `namespaced` (or `cluster` to force cluster-wide RBAC):
+
+```csharp
+publish.RbacScope = "namespaced";
+```
 
 With a Kubernetes environment, `aspire publish` writes the generated Helm chart. `aspire deploy` uses the same Kubernetes environment and deployment engine to install it. The KubeOps integration hooks into Aspire's Kubernetes resource customization path (`PublishAsKubernetesService`) rather than running a separate KubeOps deployment.
 

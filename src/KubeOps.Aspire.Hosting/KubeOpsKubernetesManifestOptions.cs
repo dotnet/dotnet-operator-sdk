@@ -31,6 +31,15 @@ public sealed class KubeOpsKubernetesManifestOptions
     public string? Namespace { get; set; }
 
     /// <summary>
+    /// Gets or sets the RBAC scope passed to the KubeOps generator.
+    /// </summary>
+    /// <remarks>
+    /// Supported values are <c>auto</c>, <c>cluster</c>, and <c>namespaced</c>. If omitted, the generator
+    /// derives the scope from the operator configuration in the source code.
+    /// </remarks>
+    public string? RbacScope { get; set; }
+
+    /// <summary>
     /// Gets or sets the Kubernetes service account used by the Aspire generated workload.
     /// </summary>
     public string ServiceAccountName { get; set; } = "default";

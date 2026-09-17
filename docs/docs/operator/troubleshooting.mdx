@@ -25,6 +25,14 @@ builder.Services.AddKubernetesOperator(settings =>
 Values read from runtime configuration and configuration delegates passed as method groups cannot be determined
 statically. They intentionally retain cluster-wide RBAC to avoid generating insufficient permissions.
 
+If the namespace is only known at runtime, request the scope explicitly instead:
+
+```bash
+kubeops generate operator --rbac-scope namespaced --namespace tenant-a my-operator ./MyOperator.csproj
+```
+
+The same applies to MSBuild based generation with `<KubeOpsRbacScope>namespaced</KubeOpsRbacScope>`.
+
 ## Reconciliation does not fire
 
 **Symptom:** You change a resource, but `ReconcileAsync` is never called.

@@ -230,12 +230,18 @@ internal static class OperatorWatchScopeDiscovery
         private static bool IsSettingsExtension(IMethodSymbol method, string methodName) =>
             method.Name == methodName && IsKnownSettingsExtension(method);
 
-        private static bool IsConditional(SyntaxNode syntax) => syntax.Ancestors().Any(ancestor =>
-            (ancestor is IfStatementSyntax or ElseClauseSyntax or SwitchStatementSyntax or SwitchExpressionSyntax
-                or ConditionalExpressionSyntax or ConditionalAccessExpressionSyntax or ForStatementSyntax
-                or ForEachStatementSyntax or WhileStatementSyntax or DoStatementSyntax or TryStatementSyntax)
-            || (ancestor.Kind() is SyntaxKind.LogicalAndExpression or SyntaxKind.LogicalOrExpression
-                or SyntaxKind.CoalesceExpression));
+        private static bool IsConditional(SyntaxNode syntax) => syntax
+            .Ancestors()
+
+            // Everything outside the analyzed configuration lambda does not influence whether the
+            // assignment inside the lambda is executed conditionally.
+            .TakeWhile(ancestor => ancestor is not AnonymousFunctionExpressionSyntax)
+            .Any(ancestor =>
+                (ancestor is IfStatementSyntax or ElseClauseSyntax or SwitchStatementSyntax or SwitchExpressionSyntax
+                    or ConditionalExpressionSyntax or ConditionalAccessExpressionSyntax or ForStatementSyntax
+                    or ForEachStatementSyntax or WhileStatementSyntax or DoStatementSyntax or CatchClauseSyntax)
+                || (ancestor.Kind() is SyntaxKind.LogicalAndExpression or SyntaxKind.LogicalOrExpression
+                    or SyntaxKind.CoalesceExpression));
 
         private static bool IsSafeSettingsReference(IParameterReferenceOperation operation)
         {

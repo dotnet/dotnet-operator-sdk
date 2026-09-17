@@ -43,6 +43,7 @@ internal static class OperatorGenerator
                     Options.AccessibleDockerTag,
                     Options.NoAnsi,
                     Options.OperatorNamespace,
+                    Options.RbacScope,
                     Arguments.OperatorName,
                     Arguments.SolutionOrProjectFile,
                 };
@@ -64,6 +65,7 @@ internal static class OperatorGenerator
         var dockerImage = parseResult.GetValue(Options.AccessibleDockerImage)!;
         var dockerImageTag = parseResult.GetValue(Options.AccessibleDockerTag)!;
         var operatorNamespace = parseResult.GetValue(Options.OperatorNamespace);
+        var rbacScope = parseResult.GetValue(Options.RbacScope);
         var result = new ResultOutput(console, format);
         console.WriteLine("Generate operator resources.");
 
@@ -80,22 +82,28 @@ internal static class OperatorGenerator
             _ => throw new NotSupportedException("Only *.csproj, *.sln, and *.slnx files are supported."),
         };
 
-        var watchScope = parser.GetOperatorWatchScope();
-        foreach (var diagnostic in watchScope.Diagnostics ?? [])
+        var rbacTarget = OperatorRbacTargetResolver.Resolve(
+            rbacScope,
+            parser.GetOperatorWatchScope(),
+            operatorNamespace,
+            name);
+        var watchScope = rbacTarget.Scope;
+        var effectiveNamespace = rbacTarget.Namespace;
+
+        var diagnostics = rbacTarget.ReportDiagnostics
+            ? parser.GetOperatorWatchScope().Diagnostics ?? []
+            : [];
+        foreach (var diagnostic in diagnostics)
         {
             console.MarkupLineInterpolated($"[yellow]Warning:[/] {diagnostic}");
         }
 
-        var effectiveNamespace = watchScope.Kind switch
+        if (diagnostics.Count > 0)
         {
-            OperatorWatchScopeKind.Namespaced when operatorNamespace is null => watchScope.Namespace!,
-            OperatorWatchScopeKind.Namespaced when operatorNamespace != watchScope.Namespace =>
-                throw new InvalidOperationException(
-                    $"The deployment namespace '{operatorNamespace}' differs from the statically configured " +
-                    $"operator watch namespace '{watchScope.Namespace}'. Separate deployment and watch namespaces " +
-                    "are not supported by generated manifests."),
-            _ => operatorNamespace ?? $"{name}-system",
-        };
+            console.MarkupLine(
+                "[yellow]Warning:[/] Falling back to cluster wide RBAC. Use '--rbac-scope namespaced' to " +
+                "generate a Role and RoleBinding explicitly.");
+        }
 
         if (watchScope.Kind == OperatorWatchScopeKind.Namespaced
             && parser.GetRbacAttributes().Any(attribute =>
@@ -147,7 +155,7 @@ internal static class OperatorGenerator
             new CrdGenerator(parser, [], format).Generate(result);
         }
 
-        if (operatorNamespace is null && watchScope.Kind != OperatorWatchScopeKind.Namespaced)
+        if (rbacTarget.GenerateNamespace)
         {
             result.Add(
                 $"namespace.{format.GetFileExtension()}",
