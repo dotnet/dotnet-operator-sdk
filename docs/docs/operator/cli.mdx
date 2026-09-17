@@ -123,6 +123,14 @@ No additional CLI option is needed. Runtime-derived or indirect namespace values
 application code, so the CLI warns and falls back to cluster-wide RBAC. When using `--namespace` together with a
 statically configured watch namespace, both values must match.
 
+To decide the scope explicitly, use `--rbac-scope` with `auto` (default), `cluster`, or `namespaced`:
+
+```bash
+kubeops generate operator --rbac-scope namespaced --namespace tenant-a my-operator ./MyOperator.csproj
+```
+
+`namespaced` also works when the watch namespace is only known at runtime, and it suppresses the discovery warnings.
+
 ## Cluster Information
 
 The `version` command shows information about your current Kubernetes cluster:

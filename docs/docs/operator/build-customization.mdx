@@ -38,6 +38,12 @@ You can customize the build process by setting the following MSBuild properties 
 
     <!-- Custom Docker image tag -->
     <DockerImageTag>latest</DockerImageTag>
+
+    <!-- Namespace of the operator deployment (defaults to '<operator-name>-system') -->
+    <KubeOpsNamespace>tenant-a</KubeOpsNamespace>
+
+    <!-- RBAC scope: auto (default), cluster, or namespaced -->
+    <KubeOpsRbacScope>namespaced</KubeOpsRbacScope>
 </PropertyGroup>
 ```
 

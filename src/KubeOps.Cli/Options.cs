@@ -69,6 +69,15 @@ internal static class Options
         DefaultValueFactory = _ => false,
     };
 
+    public static readonly Option<RbacScope> RbacScope = new("--rbac-scope")
+    {
+        Description = "The scope of the generated RBAC resources. " +
+                      "'auto' derives the scope from the operator configuration in the source code, " +
+                      "'cluster' always generates a ClusterRole and ClusterRoleBinding, " +
+                      "'namespaced' always generates a Role and RoleBinding.",
+        DefaultValueFactory = _ => Cli.RbacScope.Auto,
+    };
+
     public static readonly Option<string?> OperatorNamespace = new("--namespace", "-n")
     {
         Description = "The Kubernetes namespace for the operator deployment. " +

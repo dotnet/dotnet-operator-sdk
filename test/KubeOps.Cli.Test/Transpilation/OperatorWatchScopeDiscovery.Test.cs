@@ -232,6 +232,63 @@ public sealed class OperatorWatchScopeDiscoveryTest
         scope.Namespace.Should().Be("tenant-a");
     }
 
+    [Fact]
+    public void Should_Detect_Namespace_Inside_Try_Finally()
+    {
+        var scope = Discover(
+            """
+            try
+            {
+                services.AddKubernetesOperator(settings => settings.Namespace = "tenant-a");
+            }
+            finally
+            {
+                System.Console.WriteLine("done");
+            }
+            """);
+
+        scope.Kind.Should().Be(OperatorWatchScopeKind.Namespaced);
+        scope.Namespace.Should().Be("tenant-a");
+    }
+
+    [Fact]
+    public void Should_Detect_Namespace_Inside_Conditional_Registration()
+    {
+        var scope = Discover(
+            """
+            if (args.Length == 0)
+            {
+                services.AddKubernetesOperator(settings => settings.Namespace = "tenant-a");
+            }
+            """);
+
+        scope.Kind.Should().Be(OperatorWatchScopeKind.Namespaced);
+        scope.Namespace.Should().Be("tenant-a");
+    }
+
+    [Fact]
+    public void Should_Report_Namespace_Assigned_In_Catch_Clause_As_Unknown()
+    {
+        var scope = Discover(
+            """
+            services.AddKubernetesOperator(settings =>
+            {
+                try
+                {
+                    System.Console.WriteLine("configure");
+                }
+                catch (System.Exception)
+                {
+                    settings.Namespace = "tenant-a";
+                }
+            });
+            """);
+
+        scope.Kind.Should().Be(OperatorWatchScopeKind.Unknown);
+        scope.Diagnostics.Should().ContainSingle()
+            .Which.Message.Should().Contain("conditionally");
+    }
+
     private static OperatorWatchScope Discover(string statements)
     {
         var source = $$"""
