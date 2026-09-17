@@ -151,6 +151,83 @@ public sealed partial class CrdsMlcTest
         spec.Properties.Should().BeNull();
     }
 
+    [Fact]
+    [Trait("Area", "CircularReferences")]
+    public void Should_Throw_On_Type_That_Is_A_Collection_Of_Itself()
+    {
+        // The ancestor set only grows in MapObjectType, so a type that *is* a collection of itself never
+        // passed through a guarded frame and recursed until the stack overflowed.
+        var act = () => _mlc.Transpile(typeof(SelfCollectionEntity));
+
+        act.Should().Throw<TranspilationFailedException>().WithMessage("*circular*");
+    }
+
+    [Fact]
+    [Trait("Area", "CircularReferences")]
+    public void Should_Throw_On_Type_That_Is_A_Dictionary_Of_Itself()
+    {
+        var act = () => _mlc.Transpile(typeof(SelfDictionaryEntity));
+
+        act.Should().Throw<TranspilationFailedException>().WithMessage("*circular*");
+    }
+
+    [Fact]
+    [Trait("Area", "CircularReferences")]
+    public void Should_Throw_On_Mutually_Recursive_Collection_Types()
+    {
+        var act = () => _mlc.Transpile(typeof(MutualCollectionEntity));
+
+        act.Should().Throw<TranspilationFailedException>().WithMessage("*circular*");
+    }
+
+    [Fact]
+    [Trait("Area", "CircularReferences")]
+    public void Should_Throw_On_Recursively_Constructed_Generic()
+    {
+        // Every expansion of Wrapper<Wrapper<T>> yields a previously unseen Type, so the identity-based
+        // ancestor check never matches. The depth limit terminates the walk instead.
+        var act = () => _mlc.Transpile(typeof(RecursiveGenericEntity));
+
+        act.Should().Throw<TranspilationFailedException>()
+            .WithMessage("*maximum nesting depth*")
+            .WithMessage($"*{nameof(RecursiveGenericEntity)}*");
+    }
+
+    [Fact]
+    [Trait("Area", "CircularReferences")]
+    public void Should_Not_Walk_Ignored_Property_When_Mapping_Printer_Columns()
+    {
+        // Printer-column discovery must respect [Ignore]: a column below an ignored property would point
+        // at a JSON path that does not exist in the schema.
+        var crd = _mlc.Transpile(typeof(IgnoredPrinterColumnEntity));
+
+        crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties.Should().NotContainKey("ignored");
+        (crd.Spec.Versions[0].AdditionalPrinterColumns ?? []).Should().NotContain(c => c.JsonPath == ".ignored.state");
+    }
+
+    [Fact]
+    [Trait("Area", "CircularReferences")]
+    public void Should_Transpile_Entity_Whose_Recursive_Generic_Is_Ignored()
+    {
+        // The schema walk skips ignored properties; before printer-column discovery did the same, this
+        // entity kept the work list growing forever instead of transpiling.
+        var act = () => _mlc.Transpile(typeof(IgnoredRecursiveGenericEntity));
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    [Trait("Area", "CircularReferences")]
+    public void Should_Not_Throw_For_Legitimately_Nested_Generics()
+    {
+        // Guards against a false positive of the depth limit: nested collections are finite and must map.
+        var crd = _mlc.Transpile(typeof(NestedGenericEntity));
+
+        var matrix = crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["matrix"];
+        matrix.Type.Should().Be("array");
+        matrix.Items.As<V1JSONSchemaProps>().Type.Should().Be("array");
+    }
+
     #region Test Entity Classes
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
@@ -304,6 +381,95 @@ public sealed partial class CrdsMlcTest
         public sealed class EntitySpec
         {
             public EntitySpec? Self { get; set; }
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class SelfCollectionEntity : CustomKubernetesEntity<SelfCollectionEntity.EntitySpec>
+    {
+        public sealed class EntitySpec
+        {
+            public Tree Root { get; set; } = null!;
+        }
+
+        public sealed class Tree : List<Tree>;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class SelfDictionaryEntity : CustomKubernetesEntity<SelfDictionaryEntity.EntitySpec>
+    {
+        public sealed class EntitySpec
+        {
+            public Config Root { get; set; } = null!;
+        }
+
+        public sealed class Config : Dictionary<string, Config>;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class MutualCollectionEntity : CustomKubernetesEntity<MutualCollectionEntity.EntitySpec>
+    {
+        public sealed class EntitySpec
+        {
+            public Left Root { get; set; } = null!;
+        }
+
+        public sealed class Left : List<Right>;
+
+        public sealed class Right : List<Left>;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class RecursiveGenericEntity : CustomKubernetesEntity<RecursiveGenericEntity.EntitySpec>
+    {
+        public sealed class EntitySpec
+        {
+            public Wrapper<string> Wrapped { get; set; } = null!;
+        }
+
+        public sealed class Wrapper<T>
+        {
+            public Wrapper<Wrapper<T>>? Inner { get; set; }
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class IgnoredRecursiveGenericEntity
+        : CustomKubernetesEntity<IgnoredRecursiveGenericEntity.EntitySpec>
+    {
+        public sealed class EntitySpec
+        {
+            public string Data { get; set; } = string.Empty;
+
+            [Ignore]
+            public Wrapper<string>? Wrapped { get; set; }
+        }
+
+        public sealed class Wrapper<T>
+        {
+            public Wrapper<Wrapper<T>>? Inner { get; set; }
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class IgnoredPrinterColumnEntity : CustomKubernetesEntity
+    {
+        [Ignore]
+        public Holder Ignored { get; set; } = null!;
+
+        public sealed class Holder
+        {
+            [AdditionalPrinterColumn]
+            public string State { get; set; } = string.Empty;
+        }
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class NestedGenericEntity : CustomKubernetesEntity<NestedGenericEntity.EntitySpec>
+    {
+        public sealed class EntitySpec
+        {
+            public List<List<string>> Matrix { get; set; } = null!;
         }
     }
 

@@ -173,6 +173,14 @@ public class EntitySpec
 
 :::note
 The CRD transpiler maps property types recursively. A **circular type reference** that is not opted out via `[PreserveUnknownFields]` or `[Ignore]` cannot be represented as a finite OpenAPI schema and raises a descriptive `TranspilationFailedException` during generation. Annotate the offending property or type with `[PreserveUnknownFields]` or `[Ignore]`, or restructure the type to remove the cycle.
+
+This includes cycles that run through a collection or dictionary type itself, such as `class Tree : List<Tree>` or `class Config : Dictionary<string, Config>`.
+
+A **recursively constructed generic** — for example `class Node<T> { public Node<Node<T>> Child { get; set; } }` — produces an endless chain of distinct types rather than a cycle, so it cannot be detected by name. The transpiler caps the nesting depth of a single path through the type graph at 100 and raises a `TranspilationFailedException` beyond that. Legitimately nested generics such as `List<List<string>>` are unaffected.
+:::
+
+:::note
+Properties annotated with `[Ignore]` are skipped for printer columns as well. An `[AdditionalPrinterColumn]` below an ignored property would reference a JSON path that does not exist in the generated schema, so no column is emitted for it.
 :::
 
 ## Example with Multiple Attributes
