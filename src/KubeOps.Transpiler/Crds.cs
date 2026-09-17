@@ -38,6 +38,16 @@ public static class Crds
     private const string DateTime = "date-time";
     private const string Uuid = "uuid";
 
+    /// <summary>
+    /// Upper bound for the length of a single path through the type graph. The ancestor-based cycle
+    /// detection only terminates while the reachable type set is finite, which recursively constructed
+    /// generics (<c>class Node&lt;T&gt; { Node&lt;Node&lt;T&gt;&gt; Child { get; set; } }</c>) violate: every
+    /// expansion yields a new, previously unseen <see cref="Type"/>. Such a graph would otherwise recurse
+    /// until the stack overflows (schema walk) or grow the work list forever (printer-column walk), so the
+    /// depth is capped far above anything a representable CRD needs.
+    /// </summary>
+    private const int MaxTypeGraphDepth = 100;
+
     private static readonly string[] IgnoredToplevelProperties = ["metadata", "apiversion", "kind"];
 
     private static readonly IReadOnlySet<Type> EmptyAncestors = new HashSet<Type>();
@@ -220,6 +230,7 @@ public static class Crds
         inheritedAttributeResolver ??= ReflectionInheritedAttributeResolver.Default;
 
         var props = type.GetProperties()
+            .Where(p => p.GetCustomAttributeData<IgnoreAttribute>() == null)
             .Select(p => (Prop: p, Path: string.Empty, Ancestors: (IReadOnlySet<Type>)new HashSet<Type> { type }))
             .ToList();
         while (props.Count > 0)
@@ -231,8 +242,14 @@ public static class Crds
             // same non-circular type reused under different properties still contributes its columns.
             if (prop.PropertyType.IsClass && !ancestors.Contains(prop.PropertyType))
             {
+                if (ancestors.Count >= MaxTypeGraphDepth)
+                {
+                    throw TypeGraphTooDeep(prop.PropertyType);
+                }
+
                 IReadOnlySet<Type> childAncestors = new HashSet<Type>(ancestors) { prop.PropertyType };
                 props.AddRange(prop.PropertyType.GetProperties()
+                    .Where(p => p.GetCustomAttributeData<IgnoreAttribute>() == null)
                     .Select(p => (Prop: p, Path: $"{path}.{prop.GetPropertyName(context)}", Ancestors: childAncestors)));
             }
 
@@ -494,6 +511,11 @@ public static class Crds
 
     private static V1JSONSchemaProps Map(this MetadataLoadContext context, Type type, IReadOnlySet<Type> ancestors)
     {
+        if (ancestors.Count >= MaxTypeGraphDepth)
+        {
+            throw TypeGraphTooDeep(type);
+        }
+
         if (type.FullName == "System.String")
         {
             return new() { Type = String };
@@ -526,7 +548,16 @@ public static class Crds
                 .First(i => i.IsGenericType
                             && i.GetGenericTypeDefinition().FullName == typeof(IDictionary<,>).FullName);
 
-            var additionalProperties = context.Map(dictionaryImpl.GenericTypeArguments[1], ancestors);
+            // The ancestor set is only extended by MapObjectType, so a type that *is* a dictionary of
+            // itself (class Config : Dictionary<string, Config>) never passes through a guarded frame.
+            // Record this type before descending into the value type to close that gap.
+            var valueType = dictionaryImpl.GenericTypeArguments[1];
+            if (ancestors.Contains(type))
+            {
+                throw CircularTypeReference(valueType);
+            }
+
+            var additionalProperties = context.Map(valueType, new HashSet<Type>(ancestors) { type });
             return new() { Type = Object, AdditionalProperties = additionalProperties };
         }
 
@@ -775,13 +806,25 @@ public static class Crds
         }
 
         Type listType = enumerableType.GenericTypeArguments[0];
+
+        // The ancestor set is only extended by MapObjectType, so a type that *is* a collection of itself
+        // (class Tree : List<Tree>) would recurse here without ever passing through a guarded frame.
+        // Record this type before descending into the item type to close that gap. The item type is
+        // reported, not the collection, so the message keeps naming the entity type that holds the cycle.
+        if (ancestors.Contains(type))
+        {
+            throw CircularTypeReference(listType);
+        }
+
+        IReadOnlySet<Type> nextAncestors = new HashSet<Type>(ancestors) { type };
+
         if (listType.IsGenericType && listType.GetGenericTypeDefinition().FullName == typeof(KeyValuePair<,>).FullName)
         {
-            var additionalProperties = context.Map(listType.GenericTypeArguments[1], ancestors);
+            var additionalProperties = context.Map(listType.GenericTypeArguments[1], nextAncestors);
             return new() { Type = Object, AdditionalProperties = additionalProperties };
         }
 
-        var items = context.Map(listType, ancestors);
+        var items = context.Map(listType, nextAncestors);
         return new() { Type = Array, Items = items };
     }
 
@@ -808,6 +851,18 @@ public static class Crds
 
     private static InvalidTypeException InvalidType(Type type) =>
         new($"The given type '{type.FullName ?? type.Name}' is not a valid Kubernetes entity.");
+
+    private static string GetDisplayName(this Type type) =>
+        type.IsGenericType && !type.IsGenericTypeDefinition
+            ? type.GetGenericTypeDefinition().FullName ?? type.Name
+            : type.FullName ?? type.Name;
+
+    private static CircularTypeReferenceException TypeGraphTooDeep(Type type) =>
+        new($"The type graph below '{type.GetDisplayName()}' exceeds the maximum nesting depth of " +
+            $"{MaxTypeGraphDepth} while transpiling the CRD schema. This usually means a generic type is " +
+            "constructed from itself (for example 'class Node<T> { Node<Node<T>> Child { get; set; } }'), " +
+            "which cannot be represented as a finite schema. Break the recursion, or annotate the property " +
+            "with [Ignore].");
 
     private static CircularTypeReferenceException CircularTypeReference(Type type) =>
         new($"A circular type reference was detected while transpiling the CRD schema for '{type.FullName ?? type.Name}'. " +
