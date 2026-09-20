@@ -8,6 +8,7 @@ using KubeOps.Operator.Constants;
 using Microsoft.Extensions.DependencyInjection;
 
 using ZiggyCreatures.Caching.Fusion;
+using ZiggyCreatures.Caching.Fusion.Locking.AsyncKeyed;
 
 namespace KubeOps.Operator.Builder;
 
@@ -29,7 +30,8 @@ internal static class CacheExtensions
     {
         var cacheName = CacheConstants.ResourceWatcherCacheNameFor(settings.ReconcileStrategy);
 
-        var builder = services.AddFusionCache(cacheName);
+        var builder = services.AddFusionCache(cacheName)
+            .WithMemoryLocker(new AsyncKeyedMemoryLocker());
 
         if (settings.ConfigureResourceWatcherEntityCache != null)
         {
