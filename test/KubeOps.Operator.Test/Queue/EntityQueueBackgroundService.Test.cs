@@ -527,6 +527,7 @@ public sealed class EntityQueueBackgroundServiceTest
             Times.Once);
     }
 
+    [Trait("Area", "EntityIdentity")]
     [Fact]
     public async Task Stale_Entry_Is_Skipped_When_Object_Was_Recreated_With_Same_Name()
     {

@@ -328,6 +328,7 @@ public sealed class TimedEntityQueueTest
         act.Should().NotThrow();
     }
 
+    [Trait("Area", "EntityIdentity")]
     [Fact]
     public async Task Enqueue_Should_Not_Merge_Added_Of_Recreated_Object_Into_Pending_Deleted()
     {
@@ -359,6 +360,7 @@ public sealed class TimedEntityQueueTest
             .Which.Entity.Uid().Should().Be("uid-new");
     }
 
+    [Trait("Area", "EntityIdentity")]
     [Fact]
     public async Task Enqueue_Should_Not_Merge_Deleted_Retry_Of_Previous_Object_Into_Pending_Added()
     {
@@ -390,6 +392,7 @@ public sealed class TimedEntityQueueTest
             .Which.Entity.Uid().Should().Be("uid-old");
     }
 
+    [Trait("Area", "EntityIdentity")]
     [Fact]
     public async Task Enqueue_Should_Merge_Entries_Of_Same_Uid()
     {
@@ -418,6 +421,7 @@ public sealed class TimedEntityQueueTest
             .Which.ReconciliationType.Should().Be(ReconciliationType.Deleted);
     }
 
+    [Trait("Area", "EntityIdentity")]
     [Fact]
     public void GetKey_Should_Use_Uid_And_Fall_Back_To_Namespace_And_Name()
     {
