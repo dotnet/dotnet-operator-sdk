@@ -110,6 +110,21 @@ public class EntityQueueBackgroundService<TEntity>(
             ? entry.Entity
             : await client.GetAsync<TEntity>(entry.Entity.Name(), entry.Entity.Namespace(), cancellationToken);
 
+        // The object loaded by name may be a different object than the one the entry was scheduled for, when
+        // the original was deleted and recreated under the same name (e.g. a pending requeue whose Deleted
+        // event was never observed). That object has its own queue entry, so the stale one is skipped.
+        if (entity is not null
+            && !string.IsNullOrEmpty(entry.Entity.Uid())
+            && entity.Uid() != entry.Entity.Uid())
+        {
+            logger
+                .LogDebug(
+                    """Queued entry for "{Identifier}" is stale; the object was recreated as "{Current}". Skipping.""",
+                    entry.Entity.ToIdentifierString(),
+                    entity.ToIdentifierString());
+            return ReconciliationResult<TEntity>.Success(entity);
+        }
+
         if (entity is not null)
         {
             // The gate runs on the entity that will actually be reconciled — the freshly loaded object for

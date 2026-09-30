@@ -328,6 +328,109 @@ public sealed class TimedEntityQueueTest
         act.Should().NotThrow();
     }
 
+    [Trait("Area", "EntityIdentity")]
+    [Fact]
+    public async Task Enqueue_Should_Not_Merge_Added_Of_Recreated_Object_Into_Pending_Deleted()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        var deleted = CreateSecret("ns", "secret", "uid-old");
+        var recreated = CreateSecret("ns", "secret", "uid-new");
+
+        await queue.Enqueue(
+            deleted,
+            ReconciliationType.Deleted,
+            ReconciliationTriggerSource.ApiServer,
+            TimeSpan.Zero,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+        await queue.Enqueue(
+            recreated,
+            ReconciliationType.Added,
+            ReconciliationTriggerSource.ApiServer,
+            TimeSpan.Zero,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+
+        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+
+        items.Should().HaveCount(2);
+        items.Should().ContainSingle(e => e.ReconciliationType == ReconciliationType.Deleted)
+            .Which.Entity.Uid().Should().Be("uid-old");
+        items.Should().ContainSingle(e => e.ReconciliationType == ReconciliationType.Added)
+            .Which.Entity.Uid().Should().Be("uid-new");
+    }
+
+    [Trait("Area", "EntityIdentity")]
+    [Fact]
+    public async Task Enqueue_Should_Not_Merge_Deleted_Retry_Of_Previous_Object_Into_Pending_Added()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        var recreated = CreateSecret("ns", "secret", "uid-new");
+        var deleted = CreateSecret("ns", "secret", "uid-old");
+
+        await queue.Enqueue(
+            recreated,
+            ReconciliationType.Added,
+            ReconciliationTriggerSource.ApiServer,
+            TimeSpan.Zero,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+        await queue.Enqueue(
+            deleted,
+            ReconciliationType.Deleted,
+            ReconciliationTriggerSource.ApiServer,
+            TimeSpan.FromMilliseconds(100),
+            retryCount: 1,
+            TestContext.Current.CancellationToken);
+
+        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+
+        items.Should().HaveCount(2);
+        items.Should().ContainSingle(e => e.ReconciliationType == ReconciliationType.Added)
+            .Which.Entity.Uid().Should().Be("uid-new");
+        items.Should().ContainSingle(e => e.ReconciliationType == ReconciliationType.Deleted)
+            .Which.Entity.Uid().Should().Be("uid-old");
+    }
+
+    [Trait("Area", "EntityIdentity")]
+    [Fact]
+    public async Task Enqueue_Should_Merge_Entries_Of_Same_Uid()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+
+        await queue.Enqueue(
+            CreateSecret("ns", "secret", "uid"),
+            ReconciliationType.Deleted,
+            ReconciliationTriggerSource.ApiServer,
+            TimeSpan.FromMilliseconds(100),
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+        await queue.Enqueue(
+            CreateSecret("ns", "secret", "uid"),
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.Operator,
+            TimeSpan.FromMilliseconds(100),
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+
+        queue.Count.Should().Be(1);
+
+        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+
+        items.Should().ContainSingle()
+            .Which.ReconciliationType.Should().Be(ReconciliationType.Deleted);
+    }
+
+    [Trait("Area", "EntityIdentity")]
+    [Fact]
+    public void GetKey_Should_Use_Uid_And_Fall_Back_To_Namespace_And_Name()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+
+        queue.GetKey(CreateSecret("ns", "secret", "uid")).Should().Be("uid");
+        queue.GetKey(CreateSecret("ns", "secret")).Should().Be("ns/secret");
+    }
+
     private static V1Secret CreateSecret(string secretNamespace, string secretName)
     {
         var secret = new V1Secret();
@@ -336,6 +439,13 @@ public sealed class TimedEntityQueueTest
         secret.Metadata.SetNamespace(secretNamespace);
         secret.Metadata.Name = secretName;
 
+        return secret;
+    }
+
+    private static V1Secret CreateSecret(string secretNamespace, string secretName, string uid)
+    {
+        var secret = CreateSecret(secretNamespace, secretName);
+        secret.Metadata.Uid = uid;
         return secret;
     }
 

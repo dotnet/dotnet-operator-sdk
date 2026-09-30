@@ -31,9 +31,15 @@ queue-consumer hosted service. Which consumer is started depends on the configur
 All scheduling state lives in the operator pod's heap.
 
 When the same entity is scheduled multiple times before it becomes ready, the in-memory queue keeps
-one entry per namespace/name key. The entry scheduled to run earliest is kept, and later enqueue calls
-can update the reconciliation metadata for that scheduled entry. Scheduled entries are not removed by
-the reconciler while processing an API-server event.
+one entry per object, keyed by the object's UID (entities without a UID fall back to namespace/name).
+The entry scheduled to run earliest is kept, and later enqueue calls can update the reconciliation
+metadata for that scheduled entry. Scheduled entries are not removed by the reconciler while processing
+an API-server event.
+
+Because the key is the UID, an object that is deleted and recreated under the same name yields two
+separate entries: `DeletedAsync` receives the deleted object and `ReconcileAsync` receives the new one.
+An entry for a non-deleted object whose name now resolves to a different (recreated) object is skipped
+when it is processed, since the new object is reconciled through its own entry.
 
 - **Advantages**: Zero configuration. Minimal latency between watch event and reconciliation call.
 - **Disadvantages**: Pending requeue timers are lost when the pod restarts. In practice this is
@@ -77,7 +83,7 @@ in-memory queue (see [Multiple Controllers per Entity](../building-blocks/contro
 :::
 
 Custom queues should follow the same de-duplication contract as the built-in implementation: keep at
-most one pending entry per namespace/name key and preserve the earliest scheduled execution time.
+most one pending entry per object UID (falling back to namespace/name when no UID is set) and preserve the earliest scheduled execution time.
 
 `Enqueue` returns `Task<bool>`: return `true` when the entry was scheduled and `false` when it was
 dropped (for example because the `cancellationToken` was already cancelled, or — for a queue that
@@ -99,7 +105,7 @@ public Task<bool> Enqueue(
         return Task.FromResult(false); // dropped
     }
 
-    // ... schedule the entry (de-duplicated by namespace/name) ...
+    // ... schedule the entry (de-duplicated by UID) ...
     return Task.FromResult(true); // scheduled
 }
 ```

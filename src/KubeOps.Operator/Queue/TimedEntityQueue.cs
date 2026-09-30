@@ -157,7 +157,8 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
                                     newQueueIn.TotalSeconds);
                         }
 
-                        // schedule deleted reconciliations must not be cancelled
+                        // schedule deleted reconciliations must not be cancelled; entries are keyed by UID, so
+                        // this only merges events of the same object, never those of a recreated namesake
                         var newReconciliationType = oldEntry.ReconciliationType == ReconciliationType.Deleted
                             ? oldEntry.ReconciliationType
                             : type;
