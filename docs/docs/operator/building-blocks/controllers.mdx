@@ -145,6 +145,11 @@ This method is called when a resource is deleted, but should only be used for:
 - Triggering non-critical cleanup tasks
 - Updating external systems about the deletion
 
+If an object is deleted and recreated under the same name, `DeletedAsync` for the old object and
+`ReconcileAsync` for the new one are independent reconciliations and may run in any order or in
+parallel. Do not clean up resources in `DeletedAsync` by a name derived from the entity alone — the
+recreated object may already own them. Use owner references or [finalizers](./finalizer) instead.
+
 ```csharp
 public async Task<ReconciliationResult<V1DemoEntity>> DeletedAsync(
     V1DemoEntity entity,

@@ -146,10 +146,17 @@ public sealed class ScopeAwareEntityQueueBackgroundServiceTest
             .Setup(s => s.IsResponsibleForAsync(entity, It.IsAny<CancellationToken>()))
             .ReturnsAsync(responsible);
 
-    private static V1OperatorIntegrationTestEntity CreateEntity(string uid) =>
+    // Snapshot and current are two states of the same object, so they share the UID and differ in version.
+    private static V1OperatorIntegrationTestEntity CreateEntity(string resourceVersion) =>
         new()
         {
-            Metadata = new V1ObjectMeta { Name = "test-entity", NamespaceProperty = "test-namespace", Uid = uid },
+            Metadata = new V1ObjectMeta
+            {
+                Name = "test-entity",
+                NamespaceProperty = "test-namespace",
+                Uid = "test-uid",
+                ResourceVersion = resourceVersion,
+            },
         };
 
     private static QueueEntry<V1OperatorIntegrationTestEntity> CreateEntry(

@@ -528,6 +528,32 @@ public sealed class EntityQueueBackgroundServiceTest
     }
 
     [Fact]
+    public async Task Stale_Entry_Is_Skipped_When_Object_Was_Recreated_With_Same_Name()
+    {
+        var queue = new ControllableQueue<V1ConfigMap>();
+        var reconcilerMock = new Mock<IReconciler<V1ConfigMap>>();
+        var clientMock = new Mock<IKubernetesClient>();
+        var stale = CreateEntity("uid-old");
+        var recreated = CreateEntity("uid-new");
+
+        await using var service = CreateService(queue, reconcilerMock, clientMock, recreated);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        queue.Push(stale, ReconciliationType.Modified, ReconciliationTriggerSource.Operator);
+        queue.Complete();
+
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        reconcilerMock.Verify(
+            r => r.Reconcile(
+                It.IsAny<ReconciliationContext<V1ConfigMap>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        queue.EnqueueCallCount.Should().Be(0);
+    }
+
+    [Fact]
     public async Task Discard_Strategy_Drops_Concurrent_Entry_For_Same_Uid()
     {
         var uid = Guid.NewGuid().ToString();

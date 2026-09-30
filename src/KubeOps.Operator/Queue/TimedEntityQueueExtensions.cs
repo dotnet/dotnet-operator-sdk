@@ -13,9 +13,10 @@ namespace KubeOps.Operator.Queue;
 public static class TimedEntityQueueExtensions
 {
     /// <summary>
-    /// Retrieves a unique key for the specified Kubernetes entity. The key is constructed
-    /// using the entity's namespace and name, if available. If the entity does not have
-    /// a valid name, the method returns null.
+    /// Retrieves a unique key for the specified Kubernetes entity. The key is the entity's UID, so that
+    /// a deleted object and a newly created object with the same namespace and name are never merged into
+    /// one queue entry. Entities without a UID (e.g. objects constructed locally) fall back to namespace
+    /// and name. If the entity does not have a valid name, the method returns null.
     /// </summary>
     /// <typeparam name="TEntity">
     /// The type of the Kubernetes entity. Must implement <see cref="IKubernetesObject{V1ObjectMeta}"/>.
@@ -36,6 +37,11 @@ public static class TimedEntityQueueExtensions
         if (string.IsNullOrWhiteSpace(entity.Name()))
         {
             return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(entity.Uid()))
+        {
+            return entity.Uid();
         }
 
         return string.IsNullOrWhiteSpace(entity.Namespace())
