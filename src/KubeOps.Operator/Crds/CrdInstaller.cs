@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Net;
 using System.Reflection;
 
 using k8s;
@@ -151,7 +150,7 @@ internal sealed class CrdInstaller
             {
                 return;
             }
-            catch (Exception exception) when (IsTransient(exception))
+            catch (Exception exception) when (KubernetesApiErrors.IsTransient(exception))
             {
                 installRetries++;
                 var delay = _retryDelayFactory(installRetries);
@@ -178,22 +177,6 @@ internal sealed class CrdInstaller
                     "Failed to install CRDs due to a non-transient error.");
                 return;
             }
-        }
-
-        return;
-
-        static bool IsTransient(Exception exception)
-        {
-            return exception switch
-            {
-                HttpRequestException or TimeoutException or TaskCanceledException => true,
-                KubernetesException { Status.Code: null } => true,
-                KubernetesException { Status.Code: (int)HttpStatusCode.RequestTimeout } => true,
-                KubernetesException { Status.Code: (int)HttpStatusCode.Conflict } => true,
-                KubernetesException { Status.Code: (int)HttpStatusCode.TooManyRequests } => true,
-                KubernetesException { Status.Code: >= 500 } => true,
-                _ => false,
-            };
         }
     }
 
