@@ -3,10 +3,12 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Diagnostics;
+using System.Net;
 
 using FluentAssertions;
 
 using k8s;
+using k8s.Autorest;
 using k8s.Models;
 
 using KubeOps.Abstractions.Builder;
@@ -17,7 +19,10 @@ using KubeOps.KubernetesClient;
 using KubeOps.Operator.Builder;
 using KubeOps.Operator.Constants;
 using KubeOps.Operator.Logging;
+using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
+using KubeOps.Operator.Test.Metrics;
+using KubeOps.Operator.Test.Retry;
 using KubeOps.Operator.Test.TestEntities;
 using KubeOps.Operator.Watcher;
 
@@ -36,6 +41,9 @@ public sealed class ScopeAwareResourceWatcherTest
     private readonly Mock<ILeadershipScope> _scope = new();
     private readonly Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>> _queue = new();
     private readonly Mock<IKubernetesClient> _client = new();
+    private int _listCalls;
+
+    private int ListCalls => Volatile.Read(ref _listCalls);
 
     public ScopeAwareResourceWatcherTest()
     {
@@ -406,6 +414,178 @@ public sealed class ScopeAwareResourceWatcherTest
             Times.Never);
     }
 
+    [Fact]
+    public async Task Should_Retry_Transient_Resync_Failure_Until_Success()
+    {
+        var entity = CreateEntity("acquired-namespace");
+        var enqueued = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _scope
+            .Setup(s => s.IsResponsibleForAsync(entity, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        SetupListFailures([entity], Transient());
+        _queue
+            .Setup(q => q.Enqueue(
+                It.IsAny<V1OperatorIntegrationTestEntity>(),
+                It.IsAny<ReconciliationType>(),
+                It.IsAny<ReconciliationTriggerSource>(),
+                It.IsAny<TimeSpan>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true)
+            .Callback(() => enqueued.TrySetResult());
+        using var watcher = CreateWatcher();
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+
+        _scope.Raise(s => s.ScopeChanged += null);
+
+        await enqueued.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        ListCalls.Should().Be(2);
+
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Not_Retry_Permanent_Resync_Failure()
+    {
+        SetupListFailures(
+            [],
+            ApiErrors.Http(HttpStatusCode.Forbidden));
+        using var watcher = CreateWatcher();
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+
+        _scope.Raise(s => s.ScopeChanged += null);
+
+        await WaitUntilAsync(() => ListCalls == 1, TimeSpan.FromSeconds(5));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        ListCalls.Should().Be(1);
+
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Stop_Retrying_On_Stop_During_Backoff_And_Resync_After_Restart()
+    {
+        SetupListFailures([], Transient());
+        using var watcher = CreateWatcher(backoff: TimeSpan.FromHours(1));
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+
+        _scope.Raise(s => s.ScopeChanged += null);
+        await WaitUntilAsync(() => ListCalls == 1, TimeSpan.FromSeconds(5));
+
+        await watcher.StopAsync(TestContext.Current.CancellationToken)
+            .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        ListCalls.Should().Be(1);
+
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+        _scope.Raise(s => s.ScopeChanged += null);
+
+        await WaitUntilAsync(() => ListCalls == 2, TimeSpan.FromSeconds(5));
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Supersede_Retry_With_Fresh_Pass_On_Scope_Change_During_Backoff()
+    {
+        var cache = new Mock<IFusionCache>();
+        SetupListFailures([], Transient());
+        using var watcher = CreateWatcher(cache: cache.Object, backoff: TimeSpan.FromMilliseconds(200));
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+
+        _scope.Raise(s => s.ScopeChanged += null);
+        await WaitUntilAsync(() => ListCalls == 1, TimeSpan.FromSeconds(5));
+        _scope.Raise(s => s.ScopeChanged += null);
+
+        // One fresh pass (with its own dedup drop) replaces the retry - not a retry plus a fresh pass.
+        await WaitUntilAsync(() => ListCalls == 2, TimeSpan.FromSeconds(5));
+        await Task.Delay(400, TestContext.Current.CancellationToken);
+        ListCalls.Should().Be(2);
+        VerifyDedupDrops(cache, Times.Exactly(2));
+
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Drop_Dedup_Tokens_Once_Per_Scope_Change_Across_Retries()
+    {
+        var cache = new Mock<IFusionCache>();
+        SetupListFailures([], Transient(), Transient());
+        using var watcher = CreateWatcher(cache: cache.Object);
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+
+        _scope.Raise(s => s.ScopeChanged += null);
+
+        await WaitUntilAsync(() => ListCalls == 3, TimeSpan.FromSeconds(5));
+        VerifyDedupDrops(cache, Times.Once());
+
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Wait_At_Least_Retry_After_Before_Retrying()
+    {
+        SetupListFailures(
+            [],
+            ApiErrors.Http(HttpStatusCode.TooManyRequests, retryAfterSeconds: 1));
+        using var watcher = CreateWatcher();
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+
+        _scope.Raise(s => s.ScopeChanged += null);
+        await WaitUntilAsync(() => ListCalls == 1, TimeSpan.FromSeconds(5));
+        var failedAt = Stopwatch.GetTimestamp();
+
+        await WaitUntilAsync(() => ListCalls == 2, TimeSpan.FromSeconds(5));
+        Stopwatch.GetElapsedTime(failedAt).Should().BeGreaterThan(TimeSpan.FromMilliseconds(900));
+
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    [Trait("Area", "Otel")]
+    public async Task Should_Record_Resync_Attempts_In_Metrics()
+    {
+        using var harness = new MetricHarness();
+        SetupListFailures([], Transient());
+        using var watcher = CreateWatcher(metrics: harness.Metrics);
+        await watcher.StartAsync(TestContext.Current.CancellationToken);
+
+        _scope.Raise(s => s.ScopeChanged += null);
+
+        var resyncs = () => harness.LongMeasurements.Where(m => m.Instrument == "kubeops.operator.watcher.resyncs");
+        await WaitUntilAsync(() => resyncs().Count() == 2, TimeSpan.FromSeconds(5));
+        resyncs()
+            .Select(m => (m.Tags["kubeops.resync.status"], m.Tags.GetValueOrDefault("error.type")))
+            .Should().Equal(("retry", "429"), ("success", null));
+
+        await watcher.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static HttpOperationException Transient()
+        => ApiErrors.Http(HttpStatusCode.TooManyRequests);
+
+    private static void VerifyDedupDrops(Mock<IFusionCache> cache, Times times)
+        => cache.Verify(
+            c => c.RemoveByTagAsync(
+                typeof(V1OperatorIntegrationTestEntity).FullName!,
+                It.IsAny<FusionCacheEntryOptions?>(),
+                It.IsAny<CancellationToken>()),
+            times);
+
+    // The first calls throw the given failures in order; every later call returns the entities.
+    private void SetupListFailures(IList<V1OperatorIntegrationTestEntity> entities, params Exception[] failures)
+        => _client
+            .Setup(c => c.ListAsync<V1OperatorIntegrationTestEntity>(
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                var call = Interlocked.Increment(ref _listCalls);
+                return call <= failures.Length
+                    ? Task.FromException<IList<V1OperatorIntegrationTestEntity>>(failures[call - 1])
+                    : Task.FromResult(entities);
+            });
+
     private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -426,7 +606,11 @@ public sealed class ScopeAwareResourceWatcherTest
             Metadata = new V1ObjectMeta { Name = "test-entity", NamespaceProperty = @namespace, Uid = "uid-1" },
         };
 
-    private TestableWatcher CreateWatcher(OperatorSettings? settings = null, IFusionCache? cache = null)
+    private TestableWatcher CreateWatcher(
+        OperatorSettings? settings = null,
+        IFusionCache? cache = null,
+        TimeSpan? backoff = null,
+        OperatorMetrics? metrics = null)
     {
         var cacheProvider = Mock.Of<IFusionCacheProvider>();
         Mock.Get(cacheProvider)
@@ -449,7 +633,11 @@ public sealed class ScopeAwareResourceWatcherTest
             labelSelector.Object,
             fieldSelector.Object,
             _client.Object,
-            _scope.Object);
+            _scope.Object,
+            metrics)
+        {
+            ResyncRetryBackoff = _ => backoff ?? TimeSpan.Zero,
+        };
     }
 
     private sealed class TestableWatcher(
@@ -459,7 +647,8 @@ public sealed class ScopeAwareResourceWatcherTest
         IEntityLabelSelector<V1OperatorIntegrationTestEntity> labelSelector,
         IEntityFieldSelector<V1OperatorIntegrationTestEntity> fieldSelector,
         IKubernetesClient client,
-        ILeadershipScope leadershipScope)
+        ILeadershipScope leadershipScope,
+        OperatorMetrics? metrics)
         : ScopeAwareResourceWatcher<V1OperatorIntegrationTestEntity>(
             new ActivitySource("test"),
             Mock.Of<ILogger<ScopeAwareResourceWatcher<V1OperatorIntegrationTestEntity>>>(),
@@ -470,7 +659,8 @@ public sealed class ScopeAwareResourceWatcherTest
             fieldSelector,
             client,
             leadershipScope,
-            Mock.Of<IEntityLoggingScopeFactory<V1OperatorIntegrationTestEntity>>())
+            Mock.Of<IEntityLoggingScopeFactory<V1OperatorIntegrationTestEntity>>(),
+            metrics: metrics)
     {
         public Task InvokeOnEventAsync(
             WatchEventType eventType,

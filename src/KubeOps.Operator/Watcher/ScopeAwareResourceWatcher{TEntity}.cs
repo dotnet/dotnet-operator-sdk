@@ -14,6 +14,7 @@ using KubeOps.KubernetesClient;
 using KubeOps.Operator.Logging;
 using KubeOps.Operator.Metrics;
 using KubeOps.Operator.Queue;
+using KubeOps.Operator.Retry;
 
 using Microsoft.Extensions.Logging;
 
@@ -58,6 +59,8 @@ public class ScopeAwareResourceWatcher<TEntity>(
     private readonly IEntityFieldSelector<TEntity> _fieldSelector = fieldSelector;
     private readonly IEntityLabelSelector<TEntity> _labelSelector = labelSelector;
     private readonly IKubernetesClient _client = client;
+    private readonly ActivitySource _activitySource = activitySource;
+    private readonly OperatorMetrics? _metrics = metrics;
 
     // Serializes all event processing: the watch loop and the scope resync both funnel through
     // OnEventAsync, and downstream consumers (in particular the shared pipeline dispatcher)
@@ -71,6 +74,8 @@ public class ScopeAwareResourceWatcher<TEntity>(
     private bool _resyncRunning;
     private bool _resyncRequested;
     private bool _resyncStopped;
+
+    internal Func<uint, TimeSpan> ResyncRetryBackoff { get; set; } = ExponentialRetryBackoff.GetDelayWithJitter;
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
@@ -234,62 +239,121 @@ public class ScopeAwareResourceWatcher<TEntity>(
 
     private async Task ResyncAsync(CancellationToken cancellationToken)
     {
+        var entityType = typeof(TEntity).Name;
+        logger.LogInformation(
+            "Leadership scope changed, re-listing {ResourceType} to pick up newly acquired entities.",
+            entityType);
+
+        // An entity handed back to this instance at an unchanged generation still carries the
+        // dedup token of its earlier ownership term and would be suppressed. Mirrors
+        // LeaderAwareResourceWatcher.StoppedLeading. Dropped once per scope change (not per retry
+        // attempt) and best-effort: a cache with tagging disabled throws, which must not abort the
+        // resync.
         try
         {
-            logger.LogInformation(
-                "Leadership scope changed, re-listing {ResourceType} to pick up newly acquired entities.",
-                typeof(TEntity).Name);
-
-            // A scope change can hand an entity back to this instance that it previously owned and
-            // reconciled. That entity's deduplication token still reflects the earlier ownership term,
-            // so the generation/resourceVersion check in the re-list below would suppress it and the
-            // takeover reconcile would never run (an entity reacquired at an unchanged generation is
-            // the concrete case). Drop this entity type's dedup tokens so every currently in-scope
-            // entity is reconciled fresh. Mirrors LeaderAwareResourceWatcher.StoppedLeading, which
-            // clears the cache on leadership loss for the same reason. Best-effort and guarded: a
-            // cache with tagging disabled (custom configuration) would throw, and that must not abort
-            // the resync — the re-list still delivers events, only the redundant-suppression guard is
-            // lost for this pass.
-            try
-            {
-                await EntityCache.RemoveByTagAsync(EntityCacheTag, token: cancellationToken);
-            }
-            catch (Exception e)
-            {
-                logger.LogWarning(
-                    e,
-                    "Failed to drop deduplication cache entries for {ResourceType} before a scope " +
-                    "resync. Entities reacquired at an unchanged generation may not be reconciled " +
-                    "until their next change.",
-                    typeof(TEntity).Name);
-            }
-
-            var entities = await _client.ListAsync<TEntity>(
-                _settings.Namespace,
-                await _labelSelector.GetLabelSelectorAsync(cancellationToken),
-                await _fieldSelector.GetFieldSelectorAsync(cancellationToken),
-                cancellationToken);
-
-            foreach (var entity in entities)
-            {
-                // Runs through the regular event path (responsibility check + deduplication). The
-                // dedup tokens for this entity type were dropped above, so every in-scope entity is
-                // reconciled once for the takeover; the cache then re-guards against duplicate watch
-                // events for the remainder of this ownership term.
-                await OnEventAsync(WatchEventType.Modified, entity, cancellationToken);
-            }
+            await EntityCache.RemoveByTagAsync(EntityCacheTag, token: cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // Stop during the resync; the re-list is abandoned on purpose.
+            return;
         }
         catch (Exception e)
         {
-            logger.LogError(
+            logger.LogWarning(
                 e,
-                "Failed to re-list {ResourceType} after a leadership scope change. Changes made " +
-                "while not responsible are picked up with the next watch re-list.",
-                typeof(TEntity).Name);
+                "Failed to drop deduplication cache entries for {ResourceType} before a scope " +
+                "resync. Entities reacquired at an unchanged generation may not be reconciled " +
+                "until their next change.",
+                entityType);
+        }
+
+        uint attempt = 0;
+        while (true)
+        {
+            attempt++;
+            TimeSpan delay;
+            using (var activity = _activitySource.StartActivity("scope resync"))
+            {
+                activity?.SetTag(OperatorMetrics.EntityTypeTag, entityType);
+                activity?.SetTag("kubeops.resync.attempt", attempt);
+
+                try
+                {
+                    await RelistAsync(cancellationToken);
+                    _metrics?.RecordWatcherResync(entityType, "success");
+                    return;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+                catch (Exception e)
+                {
+                    var transient = KubernetesApiErrors.IsTransient(e);
+                    var errorType = KubernetesApiErrors.GetErrorType(e);
+                    activity?.SetStatus(ActivityStatusCode.Error, e.Message);
+                    activity?.SetTag(OperatorMetrics.ErrorTypeTag, errorType);
+                    _metrics?.RecordWatcherResync(entityType, transient ? "retry" : "failure", errorType);
+
+                    if (!transient)
+                    {
+                        logger.LogError(
+                            e,
+                            "Re-list of {ResourceType} after a leadership scope change failed permanently " +
+                            "(error {ErrorType}). Entities acquired with this scope change are not reconciled " +
+                            "until they change, a 410 Gone forces a full watch re-list, or the operator restarts.",
+                            entityType,
+                            errorType);
+                        return;
+                    }
+
+                    delay = ResyncRetryBackoff(attempt);
+                    if (KubernetesApiErrors.GetRetryAfter(e) is { } retryAfter && retryAfter > delay)
+                    {
+                        delay = retryAfter;
+                    }
+
+                    logger.LogWarning(
+                        e,
+                        "Re-list of {ResourceType} after a leadership scope change failed (attempt {Attempt}, " +
+                        "error {ErrorType}). Retry in {Seconds}s.",
+                        entityType,
+                        attempt,
+                        errorType,
+                        delay.TotalSeconds);
+                }
+            }
+
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            lock (_resyncGate)
+            {
+                // A scope change during the back-off supersedes this retry: the resync loop runs a
+                // fresh pass for it, including the dedup token drop.
+                if (_resyncRequested)
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    private async Task RelistAsync(CancellationToken cancellationToken)
+    {
+        var entities = await _client.ListAsync<TEntity>(
+            _settings.Namespace,
+            await _labelSelector.GetLabelSelectorAsync(cancellationToken),
+            await _fieldSelector.GetFieldSelectorAsync(cancellationToken),
+            cancellationToken);
+
+        foreach (var entity in entities)
+        {
+            // Regular event path: responsibility check + deduplication.
+            await OnEventAsync(WatchEventType.Modified, entity, cancellationToken);
         }
     }
 }

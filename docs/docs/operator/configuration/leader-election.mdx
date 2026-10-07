@@ -125,6 +125,14 @@ entity; no elector, custom watcher, or custom queue consumer is required.
   `generation`/`resourceVersion` is unchanged since the previous ownership term — the takeover
   reconcile would otherwise be suppressed as a duplicate. Reconcilers must therefore be idempotent,
   since every in-scope entity is reconciled once per scope change.
+- A resync whose re-list fails **transiently** (`429 TooManyRequests` - e.g. `storage is
+  (re)initializing` right after a CRD update -, `5xx`, timeouts, network errors) is retried with the
+  watcher's exponential back-off (capped at 32 s plus jitter), never shorter than the server's
+  `Retry-After`. The deduplication cache is dropped only once per scope change, not per attempt. A
+  **permanent** failure (`400`, `401`, `403`, `404`, ...) ends the resync with an error log. Stop,
+  disposal, and leadership loss cancel a pending retry; a new scope change during the back-off
+  replaces it with a fresh resync. Every attempt is counted in `kubeops.operator.watcher.resyncs`
+  (see [Metrics](../observability/metrics)) and traced as a `scope resync` activity.
 - **Deletions are not recovered by the resync.** The resync is a `List` of objects that still
   exist; it cannot reconstruct a tombstone. If an object **without a blocking finalizer** is deleted
   during a window in which no instance was responsible (or before the acquiring instance's watch

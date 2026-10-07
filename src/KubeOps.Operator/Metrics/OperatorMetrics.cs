@@ -26,7 +26,8 @@ namespace KubeOps.Operator.Metrics;
 /// </remarks>
 public sealed class OperatorMetrics
 {
-    private const string EntityTypeTag = "kubeops.entity.type";
+    internal const string EntityTypeTag = "kubeops.entity.type";
+    internal const string ErrorTypeTag = "error.type";
 
     private readonly Counter<long> _queueEnqueued;
     private readonly Counter<long> _queueRequeued;
@@ -35,6 +36,7 @@ public sealed class OperatorMetrics
     private readonly Histogram<double> _reconciliationDuration;
     private readonly Counter<long> _watcherEvents;
     private readonly Counter<long> _watcherReconnections;
+    private readonly Counter<long> _watcherResyncs;
 
     // Depth providers per entity type, observed by a single shared gauge. Using one instrument for
     // all entity types (rather than one per closed generic queue) avoids duplicate-instrument
@@ -97,6 +99,10 @@ public sealed class OperatorMetrics
             "kubeops.operator.watcher.reconnections",
             "{reconnections}",
             "Total number of watcher reconnection attempts after an error.");
+        _watcherResyncs = meter.CreateCounter<long>(
+            "kubeops.operator.watcher.resyncs",
+            "{resyncs}",
+            "Total number of re-list attempts after a leadership scope change.");
     }
 
     /// <summary>Records that an entity was enqueued.</summary>
@@ -140,11 +146,7 @@ public sealed class OperatorMetrics
             { "kubeops.reconciliation.status", status },
         };
 
-        if (errorType is not null)
-        {
-            tags.Add("error.type", errorType);
-        }
-
+        AddErrorType(ref tags, errorType);
         _reconciliationTotal.Add(1, tags);
         _reconciliationDuration.Record(durationSeconds, tags);
     }
@@ -162,6 +164,23 @@ public sealed class OperatorMetrics
     public void RecordWatcherReconnection(string entityType)
         => _watcherReconnections.Add(1, new TagList { { EntityTypeTag, entityType } });
 
+    /// <summary>Records a re-list attempt after a leadership scope change.</summary>
+    /// <param name="entityType">The watched entity type name.</param>
+    /// <param name="status">
+    /// The outcome (<c>success</c>, <c>retry</c> for a transient failure that is retried, or <c>failure</c>
+    /// for a permanent failure that ends the resync).
+    /// </param>
+    /// <param name="errorType">
+    /// For failed attempts, a low-cardinality classification of the error following the OpenTelemetry
+    /// <c>error.type</c> convention (the HTTP status code or the exception type's full name).
+    /// </param>
+    public void RecordWatcherResync(string entityType, string status, string? errorType = null)
+    {
+        var tags = new TagList { { EntityTypeTag, entityType }, { "kubeops.resync.status", status } };
+        AddErrorType(ref tags, errorType);
+        _watcherResyncs.Add(1, tags);
+    }
+
     /// <summary>
     /// Registers a depth provider for the given entity type. All providers are observed by a single
     /// shared <c>kubeops.operator.queue.depth</c> gauge that emits one measurement per entity type and
@@ -174,6 +193,14 @@ public sealed class OperatorMetrics
         => _queueDepthProviders
             .GetOrAdd(entityType, _ => new ConcurrentQueue<QueueDepthProvider>())
             .Enqueue(new QueueDepthProvider(scheduledDepth, readyDepth));
+
+    private static void AddErrorType(ref TagList tags, string? errorType)
+    {
+        if (errorType is not null)
+        {
+            tags.Add(ErrorTypeTag, errorType);
+        }
+    }
 
     private IEnumerable<Measurement<int>> ObserveQueueDepth()
     {

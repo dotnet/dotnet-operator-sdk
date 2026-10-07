@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Diagnostics.Metrics;
-
 using FluentAssertions;
 
 using KubeOps.Operator.Metrics;
@@ -13,8 +11,6 @@ namespace KubeOps.Operator.Test.Metrics;
 [Trait("Area", "Otel")]
 public sealed class OperatorMetricsTest
 {
-    private const string MeterName = "test-operator";
-
     [Fact]
     public void RecordEnqueue_increments_counter_with_tags()
     {
@@ -147,6 +143,34 @@ public sealed class OperatorMetricsTest
             .BeEquivalentTo("kubeops.operator.watcher.events", "kubeops.operator.watcher.reconnections");
     }
 
+    [Theory]
+    [InlineData("retry", "429")]
+    [InlineData("failure", "403")]
+    public void RecordWatcherResync_failure_adds_error_type_tag(string status, string errorType)
+    {
+        using var harness = new MetricHarness();
+
+        harness.Metrics.RecordWatcherResync("V1Secret", status, errorType);
+
+        var measurement = harness.LongMeasurements.Should().ContainSingle().Subject;
+        measurement.Instrument.Should().Be("kubeops.operator.watcher.resyncs");
+        measurement.Tags.Should().Contain("kubeops.entity.type", "V1Secret");
+        measurement.Tags.Should().Contain("kubeops.resync.status", status);
+        measurement.Tags.Should().Contain("error.type", errorType);
+    }
+
+    [Fact]
+    public void RecordWatcherResync_success_omits_error_type_tag()
+    {
+        using var harness = new MetricHarness();
+
+        harness.Metrics.RecordWatcherResync("V1Secret", "success");
+
+        var measurement = harness.LongMeasurements.Should().ContainSingle().Subject;
+        measurement.Tags.Should().Contain("kubeops.resync.status", "success");
+        measurement.Tags.Should().NotContainKey("error.type");
+    }
+
     [Fact]
     public void QueueDepthGauge_reports_scheduled_and_ready()
     {
@@ -164,86 +188,5 @@ public sealed class OperatorMetricsTest
             m.Value == 3 && (string?)m.Tags["kubeops.queue.state"] == "scheduled");
         depthMeasurements.Should().ContainSingle(m =>
             m.Value == 5 && (string?)m.Tags["kubeops.queue.state"] == "ready");
-    }
-
-    private sealed record CapturedMeasurement<T>(string Instrument, T Value, IReadOnlyDictionary<string, object?> Tags);
-
-    private sealed class TestMeterFactory : IMeterFactory
-    {
-        private readonly List<Meter> _meters = [];
-
-        public Meter Create(MeterOptions options)
-        {
-            var meter = new Meter(options);
-            _meters.Add(meter);
-            return meter;
-        }
-
-        public void Dispose()
-        {
-            foreach (var meter in _meters)
-            {
-                meter.Dispose();
-            }
-
-            _meters.Clear();
-        }
-    }
-
-    private sealed class MetricHarness : IDisposable
-    {
-        private readonly TestMeterFactory _factory = new();
-
-        public MetricHarness()
-        {
-            Listener = new MeterListener
-            {
-                InstrumentPublished = (instrument, listener) =>
-                {
-                    if (instrument.Meter.Name == MeterName)
-                    {
-                        listener.EnableMeasurementEvents(instrument);
-                    }
-                },
-            };
-
-            Listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
-                LongMeasurements.Add(new(instrument.Name, value, ToDictionary(tags))));
-            Listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
-                DoubleMeasurements.Add(new(instrument.Name, value, ToDictionary(tags))));
-            Listener.SetMeasurementEventCallback<int>((instrument, value, tags, _) =>
-                IntMeasurements.Add(new(instrument.Name, value, ToDictionary(tags))));
-
-            Listener.Start();
-
-            Metrics = new OperatorMetrics(_factory, MeterName);
-        }
-
-        public OperatorMetrics Metrics { get; }
-
-        public MeterListener Listener { get; }
-
-        public List<CapturedMeasurement<long>> LongMeasurements { get; } = [];
-
-        public List<CapturedMeasurement<double>> DoubleMeasurements { get; } = [];
-
-        public List<CapturedMeasurement<int>> IntMeasurements { get; } = [];
-
-        public void Dispose()
-        {
-            Listener.Dispose();
-            _factory.Dispose();
-        }
-
-        private static IReadOnlyDictionary<string, object?> ToDictionary(ReadOnlySpan<KeyValuePair<string, object?>> tags)
-        {
-            var dictionary = new Dictionary<string, object?>(tags.Length);
-            foreach (var tag in tags)
-            {
-                dictionary[tag.Key] = tag.Value;
-            }
-
-            return dictionary;
-        }
     }
 }

@@ -40,6 +40,7 @@ All instruments carry a `kubeops.entity.type` tag (the watched entity's type nam
 | `kubeops.operator.reconciliation.duration` | Histogram | `s` | `kubeops.reconciliation.type`, `kubeops.reconciliation.status`, `error.type` (on failure) |
 | `kubeops.operator.watcher.events` | Counter | `{events}` | `kubeops.watcher.event.type` (`added` \| `modified` \| `deleted` \| `bookmark`) |
 | `kubeops.operator.watcher.reconnections` | Counter | `{reconnections}` | — |
+| `kubeops.operator.watcher.resyncs` | Counter | `{resyncs}` | `kubeops.resync.status` (`success` \| `retry` \| `failure`), `error.type` (on `retry` / `failure`) |
 
 The `kubeops.operator.queue.depth` gauge reports two series: `scheduled` (entries waiting for a delayed
 requeue) and `ready` (entries waiting to be picked up by the reconciliation loop).
@@ -65,6 +66,12 @@ exception's full type name (or `_OTHER` when a reconciliation reports failure wi
 It follows the OpenTelemetry `error.type` convention and is bounded by the set of exception types your
 controllers throw.
 
+`kubeops.operator.watcher.resyncs` is only emitted with [`LeaderElectionType.Scoped`](../configuration/leader-election):
+it counts every re-list attempt after a leadership scope change. `retry` marks a transient failure that
+is retried, `failure` a permanent one that ends the resync - the entities acquired with that scope
+change then stay unreconciled until they change, so alert on it. Here `error.type` carries the HTTP
+status code of the API server's answer (e.g. `429`) or, without one, the exception's full type name.
+
 The `kubeops.operator.reconciliation.duration` histogram uses second-scale bucket boundaries
 (`5ms … 60s`) tuned for typical reconcile latencies, so `histogram_quantile()` over
 `kubeops_operator_reconciliation_duration_seconds_bucket` yields meaningful percentiles out of the box.
@@ -85,6 +92,7 @@ units such as `{items}` dropped). The scrape endpoint therefore exposes:
 | `kubeops.operator.reconciliation.duration` | `kubeops_operator_reconciliation_duration_seconds` (`_bucket` / `_sum` / `_count`) |
 | `kubeops.operator.watcher.events` | `kubeops_operator_watcher_events_total` |
 | `kubeops.operator.watcher.reconnections` | `kubeops_operator_watcher_reconnections_total` |
+| `kubeops.operator.watcher.resyncs` | `kubeops_operator_watcher_resyncs_total` |
 
 ## Exposing a Prometheus endpoint (KubeOps.Operator.Web)
 
