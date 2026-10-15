@@ -35,6 +35,11 @@ and targets the .NET versions that are currently supported by Microsoft:
 | `KubeOps.Generator`, `KubeOps.Templates`  | `netstandard2.0`                 |
 | Projects created from `KubeOps.Templates` | `net10.0`                        |
 
+The `net11.0` assets are compiled with [Runtime Async](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-11/runtime#runtime-async)
+enabled: the .NET 11 runtime executes their async methods natively instead of through compiler-generated
+state machines, which reduces `await` overhead and produces cleaner stack traces. No configuration is
+required in your operator project.
+
 Support for .NET 8 and .NET 9 was dropped because both reached end of support on November 10, 2026.
 Operators that still target `net8.0` or `net9.0` must stay on the previous major version of KubeOps
 or upgrade to .NET 10 or later.

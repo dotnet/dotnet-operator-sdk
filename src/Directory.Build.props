@@ -26,6 +26,15 @@
         <TreatWarningsAsErrors Condition="'$(Configuration)' == 'Release'">true</TreatWarningsAsErrors>
     </PropertyGroup>
 
+    <!--
+        Runtime Async: the .NET 11 runtime executes async methods natively instead of through
+        compiler-generated state machines (lower await overhead, smaller assemblies, cleaner stack traces).
+        net10.0 does not support it, so it is only enabled for net11.0.
+    -->
+    <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
+        <Features>$(Features);runtime-async=on</Features>
+    </PropertyGroup>
+
     <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
         <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     </PropertyGroup>
