@@ -19,7 +19,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.x
+          dotnet-version: |
+            10.x
+            11.0.100-rc.2.26504.105
 
       - name: Linting
         run: dotnet format --verify-no-changes
@@ -27,5 +29,7 @@ jobs:
       - name: Create Kubernetes Cluster
         uses: helm/kind-action@v1.15.1
 
+      # Test projects target net10.0 and net11.0. Both test modules install the same cluster-scoped CRDs,
+      # so they must not run in parallel against the shared kind cluster.
       - name: Execute Tests
-        run: dotnet test --configuration ${{ runner.debug == '1' && 'Debug' || 'Release' }}
+        run: dotnet test --configuration ${{ runner.debug == '1' && 'Debug' || 'Release' }} --max-parallel-test-modules 1

@@ -680,7 +680,6 @@ public static class Crds
 
     private static IList<object> GetEnumNames(this MetadataLoadContext context, Type type)
     {
-#if NET9_0_OR_GREATER
         var attributeNameByFieldName = new Dictionary<string, string>();
 
         foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Static))
@@ -697,9 +696,6 @@ public static class Crds
             .Select(value => attributeNameByFieldName.GetValueOrDefault(value, value))
             .Cast<object>()
             .ToList();
-#else
-        return Enum.GetNames(type);
-#endif
     }
 
     private static V1JSONSchemaProps MapObjectType(

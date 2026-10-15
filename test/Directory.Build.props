@@ -1,6 +1,6 @@
 <Project>
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
@@ -35,11 +35,16 @@
     <!--
         Microsoft.Build.Locator fails the build (MSBL001) when MSBuild assemblies are copied to the output,
         so projects that load MSBuild reference them without runtime assets. 18.9.x is the last line that
-        still ships net10.0 assets.
+        still ships net10.0 assets; 18.10.0 and later target net11.0.
     -->
-    <ItemGroup Condition="'$(UsesMSBuildLocator)' == 'true'">
+    <ItemGroup Condition="'$(UsesMSBuildLocator)' == 'true' And '$(TargetFramework)' == 'net10.0'">
         <PackageReference Include="Microsoft.Build.Framework" Version="18.9.6" ExcludeAssets="runtime" PrivateAssets="all" />
         <PackageReference Include="Microsoft.NET.StringTools" Version="18.9.6" ExcludeAssets="runtime" PrivateAssets="all" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(UsesMSBuildLocator)' == 'true' And '$(TargetFramework)' == 'net11.0'">
+        <PackageReference Include="Microsoft.Build.Framework" Version="18.11.0" ExcludeAssets="runtime" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.NET.StringTools" Version="18.11.0" ExcludeAssets="runtime" PrivateAssets="all" />
     </ItemGroup>
 
 </Project>
