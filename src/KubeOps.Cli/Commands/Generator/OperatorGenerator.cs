@@ -70,17 +70,7 @@ internal static class OperatorGenerator
         console.WriteLine("Generate operator resources.");
 
         console.MarkupLine("[green]Load Project/Solution file.[/]");
-        var parser = file switch
-        {
-            { Extension: ".csproj", Exists: true } => await AssemblyLoader.ForProject(console, file),
-            { Extension: ".sln" or ".slnx", Exists: true } => await AssemblyLoader.ForSolution(
-                console,
-                file,
-                parseResult.GetValue(Options.SolutionProjectRegex),
-                parseResult.GetValue(Options.TargetFramework)),
-            { Exists: false } => throw new FileNotFoundException($"The file {file.Name} does not exist."),
-            _ => throw new NotSupportedException("Only *.csproj, *.sln, and *.slnx files are supported."),
-        };
+        var parser = await AssemblyLoader.ForProjectOrSolution(console, file, parseResult);
 
         var rbacTarget = OperatorRbacTargetResolver.Resolve(
             rbacScope,

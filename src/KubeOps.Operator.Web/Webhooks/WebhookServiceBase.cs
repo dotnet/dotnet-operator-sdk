@@ -77,13 +77,7 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
 
     internal async Task RegisterConverters()
     {
-        var conversionWebhooks = loader.ConversionWebhooks.ToList();
-        if (conversionWebhooks.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var wh in conversionWebhooks)
+        foreach (var wh in loader.ConversionWebhooks)
         {
             var metadata = Entities.ToEntityMetadata(wh.BaseType!.GenericTypeArguments[0]).Metadata;
             var crdName = $"{metadata.PluralName}.{metadata.Group}";

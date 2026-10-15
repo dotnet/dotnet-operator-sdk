@@ -99,10 +99,11 @@ internal sealed class Reconciler<TEntity>(
         {
             var finalizers = scope.ServiceProvider.GetKeyedServices<IEntityFinalizer<TEntity>>(KeyedService.AnyKey);
 
-            var anyFinalizerAdded = finalizers
-                .Aggregate(
-                    false,
-                    (changed, finalizer) => entity.AddFinalizer(finalizer.GetIdentifierName(entity)) || changed);
+            var anyFinalizerAdded = false;
+            foreach (var finalizer in finalizers)
+            {
+                anyFinalizerAdded = entity.AddFinalizer(finalizer.GetIdentifierName(entity)) || anyFinalizerAdded;
+            }
 
             if (anyFinalizerAdded)
             {

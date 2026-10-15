@@ -213,7 +213,9 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         // LeaderElectionType.Custom all pipelines share one user-owned queue and a single unkeyed
         // IReconciler<TEntity> with no per-pipeline identity, so a second controller would silently never
         // fire (issue #909). Reject it explicitly instead. LeaderElectionType.Single is unaffected.
-        if ((Settings.LeaderElectionType == LeaderElectionType.Custom || Settings.QueueStrategy == QueueStrategy.Custom) &&
+        var userOwnsQueueConsumer =
+            Settings.LeaderElectionType == LeaderElectionType.Custom || Settings.QueueStrategy == QueueStrategy.Custom;
+        if (userOwnsQueueConsumer &&
             Services.Any(d => d.ImplementationInstance is ControllerPipeline<TEntity>))
         {
             throw new InvalidOperationException(
@@ -260,7 +262,7 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         // owned by the pipeline, so this registration is never resolved there (ITimedEntityQueue<TEntity>
         // is intentionally not registered in that path). This manual wiring supports a single controller
         // per entity type.
-        if (Settings.LeaderElectionType == LeaderElectionType.Custom || Settings.QueueStrategy == QueueStrategy.Custom)
+        if (userOwnsQueueConsumer)
         {
             if (Settings.QueueStrategy == QueueStrategy.InMemory)
             {

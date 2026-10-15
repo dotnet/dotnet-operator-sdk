@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.CommandLine;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -65,6 +66,22 @@ internal static partial class AssemblyLoader
         OperatorWatchScopes.TryGetValue(context, out var scope)
             ? scope
             : OperatorWatchScope.ClusterWide;
+
+    public static Task<MetadataLoadContext> ForProjectOrSolution(
+        IAnsiConsole console,
+        [NotNull] FileInfo? file,
+        ParseResult parseResult)
+        => file switch
+        {
+            { Extension: ".csproj", Exists: true } => ForProject(console, file),
+            { Extension: ".sln" or ".slnx", Exists: true } => ForSolution(
+                console,
+                file,
+                parseResult.GetValue(Options.SolutionProjectRegex),
+                parseResult.GetValue(Options.TargetFramework)),
+            { Exists: false } => throw new FileNotFoundException($"The file {file.Name} does not exist."),
+            _ => throw new NotSupportedException("Only *.csproj, *.sln, and *.slnx files are supported."),
+        };
 
     public static Task<MetadataLoadContext> ForProject(
         IAnsiConsole console,
@@ -210,25 +227,25 @@ internal static partial class AssemblyLoader
             .Concat(t.GetInheritedCustomAttributesData<EntityRbacAttribute>()));
 
     public static IEnumerable<ValidationWebhook> GetValidatedEntities(this MetadataLoadContext context) => context
-        .GetTypesToInspect()
-        .Where(t => t.BaseType?.Name == typeof(ValidationWebhook<>).Name &&
-                    t.BaseType?.Namespace == typeof(ValidationWebhook<>).Namespace)
-        .Distinct()
-        .Select(t => new ValidationWebhook(t, context.ToEntityMetadata(t.BaseType!.GenericTypeArguments[0]).Metadata));
+        .GetTypesDerivingFrom(typeof(ValidationWebhook<>))
+        .Select(t => new ValidationWebhook(t.Type, context.ToEntityMetadata(t.Entity).Metadata));
 
     public static IEnumerable<MutationWebhook> GetMutatedEntities(this MetadataLoadContext context) => context
-        .GetTypesToInspect()
-        .Where(t => t.BaseType?.Name == typeof(MutationWebhook<>).Name &&
-                    t.BaseType?.Namespace == typeof(MutationWebhook<>).Namespace)
-        .Distinct()
-        .Select(t => new MutationWebhook(t, context.ToEntityMetadata(t.BaseType!.GenericTypeArguments[0]).Metadata));
+        .GetTypesDerivingFrom(typeof(MutationWebhook<>))
+        .Select(t => new MutationWebhook(t.Type, context.ToEntityMetadata(t.Entity).Metadata));
 
     public static IEnumerable<EntityMetadata> GetConvertedEntities(this MetadataLoadContext context) => context
+        .GetTypesDerivingFrom(typeof(ConversionWebhook<>))
+        .Select(t => context.ToEntityMetadata(t.Entity).Metadata);
+
+    private static IEnumerable<(TypeInfo Type, Type Entity)> GetTypesDerivingFrom(
+        this MetadataLoadContext context,
+        Type openGenericBase) => context
         .GetTypesToInspect()
-        .Where(t => t.BaseType?.Name == typeof(ConversionWebhook<>).Name &&
-                    t.BaseType?.Namespace == typeof(ConversionWebhook<>).Namespace)
+        .Where(t => t.BaseType?.Name == openGenericBase.Name &&
+                    t.BaseType?.Namespace == openGenericBase.Namespace)
         .Distinct()
-        .Select(t => context.ToEntityMetadata(t.BaseType!.GenericTypeArguments[0]).Metadata);
+        .Select(t => (t, t.BaseType!.GenericTypeArguments[0]));
 
     private static IEnumerable<TypeInfo> GetTypesToInspect(this MetadataLoadContext context) => context
         .GetAssemblies()

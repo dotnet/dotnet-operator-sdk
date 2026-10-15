@@ -181,7 +181,9 @@ public class ResourceWatcher<TEntity>(
                                    allowWatchBookmarks: true,
                                    cancellationToken: cancellationToken))
                 {
-                    using var activity = activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer);
+                    using var activity = activitySource.HasListeners()
+                        ? activitySource.StartActivity($"""processing "{type}" event""", ActivityKind.Consumer)
+                        : null;
                     using var scope = logger.BeginScope(scopeFactory.CreateFor(type, entity));
 
                     metrics?.RecordWatchEvent(typeof(TEntity).Name, type.ToMetricString());
@@ -281,6 +283,11 @@ public class ResourceWatcher<TEntity>(
 
     private string GetDeletionCacheKey(TEntity entity) => $"{GetCacheKey(entity)}:deletion";
 
+    private DeletionTrackingEntry? GetDeletionTrackingEntry(TEntity entity)
+        => entity.Metadata.DeletionTimestamp is not null
+            ? new DeletionTrackingEntry(GetDeletionCacheKey(entity), GetDeletionFingerprint(entity))
+            : null;
+
     private async Task<bool> IsDuplicateAsync(WatchEventType eventType, TEntity entity, CancellationToken cancellationToken)
     {
         if (eventType == WatchEventType.Deleted)
@@ -288,9 +295,7 @@ public class ResourceWatcher<TEntity>(
             return false;
         }
 
-        var deletionTrackingEntry = entity.Metadata.DeletionTimestamp is not null
-            ? new DeletionTrackingEntry(GetDeletionCacheKey(entity), GetDeletionFingerprint(entity))
-            : null;
+        var deletionTrackingEntry = GetDeletionTrackingEntry(entity);
 
         switch (settings.ReconcileStrategy)
         {
@@ -351,9 +356,7 @@ public class ResourceWatcher<TEntity>(
 
     private async Task RecordDedupTokenAsync(TEntity entity, CancellationToken cancellationToken)
     {
-        var deletionTrackingEntry = entity.Metadata.DeletionTimestamp is not null
-            ? new DeletionTrackingEntry(GetDeletionCacheKey(entity), GetDeletionFingerprint(entity))
-            : null;
+        var deletionTrackingEntry = GetDeletionTrackingEntry(entity);
 
         switch (settings.ReconcileStrategy)
         {

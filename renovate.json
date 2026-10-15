@@ -62,6 +62,13 @@
       "allowedVersions": "<18.0.0"
     },
     {
+      "description": ["Keep MSBuild packages on the latest net10.0-compatible 18.9 line for net10.0 TFMs; 18.10 targets net11.0."],
+      "matchManagers": ["nuget"],
+      "matchPackageNames": ["Microsoft.Build.Framework", "Microsoft.NET.StringTools"],
+      "matchCurrentValue": "/^18\\.[0-9]\\./",
+      "allowedVersions": "<18.10.0"
+    },
+    {
       "description": ["Keep Roslyn packages at or below the latest version supported by net8.0 and net9.0."],
       "matchManagers": ["nuget"],
       "matchFileNames": ["**/KubeOps.Cli.csproj"],

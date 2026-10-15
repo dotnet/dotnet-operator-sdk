@@ -111,11 +111,11 @@ public static class Utilities
     /// <typeparam name="T">What target type the argument has.</typeparam>
     /// <returns>The argument value if found.</returns>
     /// <exception cref="InvalidCastException">Thrown if the data did not match the target type.</exception>
-    public static T?
-        GetCustomAttributeNamedArg<T>(this CustomAttributeData attr, MetadataLoadContext ctx, string name) =>
-        attr.NamedArguments.FirstOrDefault(a => a.MemberName == name).TypedValue.ArgumentType == ctx.GetContextType<T>()
-            ? (T)attr.NamedArguments.FirstOrDefault(a => a.MemberName == name).TypedValue.Value!
-            : default;
+    public static T? GetCustomAttributeNamedArg<T>(this CustomAttributeData attr, MetadataLoadContext ctx, string name)
+    {
+        var value = attr.NamedArguments.FirstOrDefault(a => a.MemberName == name).TypedValue;
+        return value.ArgumentType == ctx.GetContextType<T>() ? (T)value.Value! : default;
+    }
 
     /// <summary>
     /// Load a specific named argument from a custom attribute.
@@ -128,11 +128,11 @@ public static class Utilities
     /// <typeparam name="T">What target type the argument has.</typeparam>
     /// <returns>The argument value if found.</returns>
     /// <exception cref="InvalidCastException">Thrown if the data did not match the target type.</exception>
-    public static T?
-        GetCustomAttributeNamedArg<T>(this CustomAttributeData attr, string name) =>
-        attr.NamedArguments.FirstOrDefault(a => a.MemberName == name).TypedValue.ArgumentType == typeof(T)
-            ? (T)attr.NamedArguments.FirstOrDefault(a => a.MemberName == name).TypedValue.Value!
-            : default;
+    public static T? GetCustomAttributeNamedArg<T>(this CustomAttributeData attr, string name)
+    {
+        var value = attr.NamedArguments.FirstOrDefault(a => a.MemberName == name).TypedValue;
+        return value.ArgumentType == typeof(T) ? (T)value.Value! : default;
+    }
 
     /// <summary>
     /// Load a specific named argument array from a custom attribute.

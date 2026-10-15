@@ -117,22 +117,10 @@ internal sealed class CrdInstaller
         _disposed = true;
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        await CastAndDispose(_cts);
-        _disposed = true;
-
-        static async ValueTask CastAndDispose(IDisposable resource)
-        {
-            if (resource is IAsyncDisposable resourceAsyncDisposable)
-            {
-                await resourceAsyncDisposable.DisposeAsync();
-            }
-            else
-            {
-                resource.Dispose();
-            }
-        }
+        Dispose();
+        return ValueTask.CompletedTask;
     }
 
     private async Task RunInstallerWithRetriesAsync()

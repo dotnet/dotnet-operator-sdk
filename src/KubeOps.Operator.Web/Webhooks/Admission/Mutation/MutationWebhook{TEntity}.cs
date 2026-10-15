@@ -38,10 +38,6 @@ namespace KubeOps.Operator.Web.Webhooks.Admission.Mutation;
 public abstract class MutationWebhook<TEntity> : ControllerBase
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private const string CreateOperation = "CREATE";
-    private const string UpdateOperation = "UPDATE";
-    private const string DeleteOperation = "DELETE";
-
     /// <summary>
     /// Mutation callback for entities that are created.
     /// </summary>
@@ -113,20 +109,26 @@ public abstract class MutationWebhook<TEntity> : ControllerBase
 #pragma warning disable CA2252 // TODO: remove this once the patch is stable.
         var original = request.Request.Operation switch
         {
-            CreateOperation or UpdateOperation => request.Request.Object!.ToNode(),
+            AdmissionOperation.Create or AdmissionOperation.Update => request.Request.Object!.ToNode(),
             _ => request.Request.OldObject!.ToNode(),
         };
 #pragma warning restore CA2252
 
         var result = request.Request.Operation switch
         {
-            CreateOperation => await CreateAsync(request.Request.Object!, request.Request.DryRun, cancellationToken),
-            UpdateOperation => await UpdateAsync(
+            AdmissionOperation.Create => await CreateAsync(
+                request.Request.Object!,
+                request.Request.DryRun,
+                cancellationToken),
+            AdmissionOperation.Update => await UpdateAsync(
                 request.Request.OldObject!,
                 request.Request.Object!,
                 request.Request.DryRun,
                 cancellationToken),
-            DeleteOperation => await DeleteAsync(request.Request.OldObject!, request.Request.DryRun, cancellationToken),
+            AdmissionOperation.Delete => await DeleteAsync(
+                request.Request.OldObject!,
+                request.Request.DryRun,
+                cancellationToken),
             _ => Fail(
                 $"Operation {request.Request.Operation} is not supported.",
                 StatusCodes.Status422UnprocessableEntity),

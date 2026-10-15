@@ -29,6 +29,17 @@
     <ItemGroup Condition="'$(IsTestProject)' == 'true'">
         <ProjectReference Include="$(MSBuildThisFileDirectory)\..\src\KubeOps.Abstractions\KubeOps.Abstractions.csproj" />
         <Using Include="Xunit"/>
+        <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+    </ItemGroup>
+
+    <!--
+        Microsoft.Build.Locator fails the build (MSBL001) when MSBuild assemblies are copied to the output,
+        so projects that load MSBuild reference them without runtime assets. 18.9.x is the last line that
+        still ships net10.0 assets.
+    -->
+    <ItemGroup Condition="'$(UsesMSBuildLocator)' == 'true'">
+        <PackageReference Include="Microsoft.Build.Framework" Version="18.9.6" ExcludeAssets="runtime" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.NET.StringTools" Version="18.9.6" ExcludeAssets="runtime" PrivateAssets="all" />
     </ItemGroup>
 
 </Project>
