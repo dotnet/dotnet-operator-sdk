@@ -8,6 +8,7 @@ using FluentAssertions;
 
 namespace KubeOps.Aspire.Hosting.Test;
 
+[Trait("Area", "Publishing")]
 public sealed class KubeOpsHostingGeneratorTest
 {
     // Larger than the OS pipe buffer (64 KiB on Linux and macOS), so the CLI blocks while
