@@ -48,17 +48,7 @@ internal static class Uninstall
         var file = parseResult.GetValue(Arguments.SolutionOrProjectFile);
         var force = parseResult.GetValue(Options.Force);
 
-        var parser = file switch
-        {
-            { Extension: ".csproj", Exists: true } => await AssemblyLoader.ForProject(console, file),
-            { Extension: ".sln" or ".slnx", Exists: true } => await AssemblyLoader.ForSolution(
-                console,
-                file,
-                parseResult.GetValue(Options.SolutionProjectRegex),
-                parseResult.GetValue(Options.TargetFramework)),
-            { Exists: false } => throw new FileNotFoundException($"The file {file.Name} does not exist."),
-            _ => throw new NotSupportedException("Only *.csproj, *.sln, and *.slnx files are supported."),
-        };
+        var parser = await AssemblyLoader.ForProjectOrSolution(console, file, parseResult);
 
         console.WriteLine($"Uninstall CRDs from {file.Name}.");
         var crds = parser.Transpile(parser.GetEntities(), parser.GetInheritedAttributeResolver()).ToList();

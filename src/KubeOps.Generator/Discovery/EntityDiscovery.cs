@@ -213,12 +213,11 @@ internal static class EntityDiscovery
 
     private static ControllerRegistration? GetController(GeneratorSyntaxContext context)
     {
-        var entity = GetImplementedEntity(context, IEntityControllerMetadataName, out var classSymbol);
-        return entity is null
+        return GetImplementedEntity(context, IEntityControllerMetadataName) is not { } implementation
             ? null
             : new ControllerRegistration(
-                classSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                entity,
+                implementation.Class.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                implementation.Entity,
                 GetSelectorAttributeType(context, LabelSelectorSyntaxName),
                 GetSelectorAttributeType(context, FieldSelectorSyntaxName),
                 LocationInfo.CreateFrom(context.Node));
@@ -252,23 +251,19 @@ internal static class EntityDiscovery
 
     private static FinalizerRegistration? GetFinalizer(GeneratorSyntaxContext context)
     {
-        var entity = GetImplementedEntity(context, IEntityFinalizerMetadataName, out var classSymbol);
-        return entity is null
+        return GetImplementedEntity(context, IEntityFinalizerMetadataName) is not { } implementation
             ? null
             : new FinalizerRegistration(
-                classSymbol!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                classSymbol.Name,
-                entity,
+                implementation.Class.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                implementation.Class.Name,
+                implementation.Entity,
                 LocationInfo.CreateFrom(context.Node));
     }
 
-    private static string? GetImplementedEntity(
+    private static (INamedTypeSymbol Class, string Entity)? GetImplementedEntity(
         GeneratorSyntaxContext context,
-        string interfaceMetadataName,
-        out INamedTypeSymbol? classSymbol)
+        string interfaceMetadataName)
     {
-        classSymbol = null;
-
         if (context.Node is not ClassDeclarationSyntax classDeclarationSyntax ||
             context.SemanticModel.GetDeclaredSymbol(classDeclarationSyntax) is not { } symbol ||
             symbol.IsAbstract)
@@ -290,8 +285,7 @@ internal static class EntityDiscovery
             return null;
         }
 
-        classSymbol = symbol;
-        return entityTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return (symbol, entityTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
     }
 
     private static string? GetAttributeValue(AttributeData attr, string argName)

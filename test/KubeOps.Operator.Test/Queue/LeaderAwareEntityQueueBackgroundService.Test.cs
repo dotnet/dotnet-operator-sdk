@@ -135,7 +135,7 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
             l => l.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((@object, _) => @object.ToString()!.Contains(nameof(ISuspendableEntityQueue))),
+                It.Is<It.IsAnyType>((@object, _) => $"{@object}".Contains(nameof(ISuspendableEntityQueue))),
                 It.IsAny<Exception?>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

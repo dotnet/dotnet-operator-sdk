@@ -267,7 +267,7 @@ public sealed class ResourceWatcherTest
         mockLogger.Verify(logger => logger.Log(
                 It.Is<LogLevel>(logLevel => logLevel == LogLevel.Debug),
                 It.Is<EventId>(eventId => eventId.Id == 0),
-                It.Is<It.IsAnyType>((@object, type) => @object.ToString() == $"""Entity "{entity.ToIdentifierString()}" modification did not modify generation. Skip event.""" && type.Name == "FormattedLogValues"),
+                It.Is<It.IsAnyType>((@object, type) => $"{@object}" == $"""Entity "{entity.ToIdentifierString()}" modification did not modify generation. Skip event.""" && type.Name == "FormattedLogValues"),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception, string>>()!),
             Times.Once);
@@ -473,7 +473,7 @@ public sealed class ResourceWatcherTest
                 It.Is<LogLevel>(l => l == LogLevel.Debug),
                 It.Is<EventId>(e => e.Id == 0),
                 It.Is<It.IsAnyType>((@object, type) =>
-                    @object.ToString() == $"""Entity "{entity.ToIdentifierString()}" resourceVersion unchanged. Skip event."""
+                    $"{@object}" == $"""Entity "{entity.ToIdentifierString()}" resourceVersion unchanged. Skip event."""
                     && type.Name == "FormattedLogValues"),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception, string>>()!),

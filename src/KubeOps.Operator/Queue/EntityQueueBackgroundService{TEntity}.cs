@@ -110,12 +110,19 @@ public class EntityQueueBackgroundService<TEntity>(
             ? entry.Entity
             : await client.GetAsync<TEntity>(entry.Entity.Name(), entry.Entity.Namespace(), cancellationToken);
 
+        if (entity is null)
+        {
+            logger
+                .LogWarning(
+                    """Queued entity "{Identifier}" was not found. Skipping reconciliation.""",
+                    entry.Entity.ToIdentifierString());
+            return ReconciliationResult<TEntity>.Failure(entry.Entity, "Entity was not found.");
+        }
+
         // The object loaded by name may be a different object than the one the entry was scheduled for, when
         // the original was deleted and recreated under the same name (e.g. a pending requeue whose Deleted
         // event was never observed). That object has its own queue entry, so the stale one is skipped.
-        if (entity is not null
-            && !string.IsNullOrEmpty(entry.Entity.Uid())
-            && entity.Uid() != entry.Entity.Uid())
+        if (!string.IsNullOrEmpty(entry.Entity.Uid()) && entity.Uid() != entry.Entity.Uid())
         {
             logger
                 .LogDebug(
@@ -125,33 +132,24 @@ public class EntityQueueBackgroundService<TEntity>(
             return ReconciliationResult<TEntity>.Success(entity);
         }
 
-        if (entity is not null)
+        // The gate runs on the entity that will actually be reconciled — the freshly loaded object for
+        // Added/Modified, the delete snapshot for Deleted — so a decision that depends on entity state
+        // (e.g. a scope partitioned by labels or annotations) is made on current, not stale, data.
+        if (!await ShouldReconcileAsync(entity, entry, cancellationToken))
         {
-            // The gate runs on the entity that will actually be reconciled — the freshly loaded object for
-            // Added/Modified, the delete snapshot for Deleted — so a decision that depends on entity state
-            // (e.g. a scope partitioned by labels or annotations) is made on current, not stale, data.
-            if (!await ShouldReconcileAsync(entity, entry, cancellationToken))
-            {
-                logger
-                    .LogDebug(
-                        """Reconciliation of "{Identifier}" was vetoed before dispatch; skipping.""",
-                        entity.ToIdentifierString());
-                return ReconciliationResult<TEntity>.Success(entity);
-            }
-
-            return await reconciler.Reconcile(
-                ReconciliationContext<TEntity>.CreateFor(
-                    entity,
-                    entry.ReconciliationType,
-                    entry.ReconciliationTriggerSource),
-                cancellationToken);
+            logger
+                .LogDebug(
+                    """Reconciliation of "{Identifier}" was vetoed before dispatch; skipping.""",
+                    entity.ToIdentifierString());
+            return ReconciliationResult<TEntity>.Success(entity);
         }
 
-        logger
-            .LogWarning(
-                """Queued entity "{Identifier}" was not found. Skipping reconciliation.""",
-                entry.Entity.ToIdentifierString());
-        return ReconciliationResult<TEntity>.Failure(entry.Entity, "Entity was not found.");
+        return await reconciler.Reconcile(
+            ReconciliationContext<TEntity>.CreateFor(
+                entity,
+                entry.ReconciliationType,
+                entry.ReconciliationTriggerSource),
+            cancellationToken);
     }
 
     /// <summary>
@@ -231,7 +229,11 @@ public class EntityQueueBackgroundService<TEntity>(
 
     private async Task ProcessEntryAsync(QueueEntry<TEntity> entry, CancellationToken cancellationToken)
     {
-        using var activity = activitySource.StartActivity($"""Processing queued "{entry.ReconciliationType}" event for "{entry.Entity.ToIdentifierString()}".""", ActivityKind.Consumer);
+        using var activity = activitySource.HasListeners()
+            ? activitySource.StartActivity(
+                $"""Processing queued "{entry.ReconciliationType}" event for "{entry.Entity.ToIdentifierString()}".""",
+                ActivityKind.Consumer)
+            : null;
         using var scope = logger.BeginScope(
             scopeFactory.CreateFor(
                 entry.ReconciliationType,

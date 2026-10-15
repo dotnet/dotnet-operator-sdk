@@ -78,14 +78,9 @@ public class KubernetesClient : IKubernetesClient
         CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        if (_clientConfig.Namespace is { } configValue)
+        if (GetConfiguredNamespace(downwardApiEnvName) is { } configuredNamespace)
         {
-            return configValue;
-        }
-
-        if (Environment.GetEnvironmentVariable(downwardApiEnvName) is { } envValue)
-        {
-            return envValue;
+            return configuredNamespace;
         }
 
         if (File.Exists(DownwardApiNamespaceFile))
@@ -102,14 +97,9 @@ public class KubernetesClient : IKubernetesClient
     {
         ThrowIfDisposed();
 
-        if (_clientConfig.Namespace is { } configValue)
+        if (GetConfiguredNamespace(downwardApiEnvName) is { } configuredNamespace)
         {
-            return configValue;
-        }
-
-        if (Environment.GetEnvironmentVariable(downwardApiEnvName) is { } envValue)
-        {
-            return envValue;
+            return configuredNamespace;
         }
 
         if (File.Exists(DownwardApiNamespaceFile))
@@ -419,11 +409,7 @@ public class KubernetesClient : IKubernetesClient
                 fieldSelector: fieldSelector,
                 labelSelector: labelSelector,
                 resourceVersion: resourceVersion,
-                timeoutSeconds: timeout switch
-                {
-                    null => null,
-                    _ => (int?)timeout.Value.TotalSeconds,
-                },
+                timeoutSeconds: (int?)timeout?.TotalSeconds,
                 watch: true,
                 cancellationToken: cancellationToken),
             _ => ApiClient.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(
@@ -434,11 +420,7 @@ public class KubernetesClient : IKubernetesClient
                 fieldSelector: fieldSelector,
                 labelSelector: labelSelector,
                 resourceVersion: resourceVersion,
-                timeoutSeconds: timeout switch
-                {
-                    null => null,
-                    _ => (int?)timeout.Value.TotalSeconds,
-                },
+                timeoutSeconds: (int?)timeout?.TotalSeconds,
                 watch: true,
                 cancellationToken: cancellationToken),
         }).Watch(onEvent, onError, onClose);
@@ -530,6 +512,9 @@ public class KubernetesClient : IKubernetesClient
 
         throw new ObjectDisposedException(nameof(KubernetesClient));
     }
+
+    private string? GetConfiguredNamespace(string downwardApiEnvName)
+        => _clientConfig.Namespace ?? Environment.GetEnvironmentVariable(downwardApiEnvName);
 
     private GenericClient CreateGenericClient<TEntity>()
     {

@@ -9,6 +9,8 @@ using System.Text.Json;
 using k8s;
 using k8s.Models;
 
+using KubeOps.Operator.Serialization;
+
 using Microsoft.AspNetCore.Mvc;
 
 namespace KubeOps.Operator.Web.Webhooks.Conversion;
@@ -25,13 +27,6 @@ namespace KubeOps.Operator.Web.Webhooks.Conversion;
 public abstract class ConversionWebhook<TEntity> : ControllerBase
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private JsonSerializerOptions _serializerOptions = null!;
-
-    protected ConversionWebhook()
-    {
-        KubernetesJson.AddJsonOptions(c => _serializerOptions = c);
-    }
-
     /// <summary>
     /// The list of converters that are available for this webhook.
     /// </summary>
@@ -88,7 +83,7 @@ public abstract class ConversionWebhook<TEntity> : ControllerBase
                     paths[sourceApiVersion] = path;
                 }
 
-                var converted = obj.Deserialize(path.SourceType, _serializerOptions)
+                var converted = obj.Deserialize(path.SourceType, KubernetesJsonSerializer.SerializerOptions)
                     ?? throw new InvalidOperationException(
                         $"Object at index {index} could not be deserialized as '{path.SourceType}'.");
                 foreach (var step in path.Steps)

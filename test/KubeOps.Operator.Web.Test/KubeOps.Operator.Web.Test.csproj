@@ -1,4 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <UsesMSBuildLocator>true</UsesMSBuildLocator>
+        <NoWarn>CS0618</NoWarn>
+    </PropertyGroup>
+
     <ItemGroup>
         <PackageReference Include="KubernetesClient" Version="21.0.8" />
         <PackageReference Include="Microsoft.Build.Locator" Version="1.11.2" />
@@ -7,15 +12,8 @@
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
-        <PackageReference Include="Microsoft.Build.Framework" Version="18.11.0" ExcludeAssets="runtime" PrivateAssets="all" />
-        <PackageReference Include="Microsoft.NET.StringTools" Version="18.11.0" ExcludeAssets="runtime" PrivateAssets="all" />
         <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.19.1" />
         <PackageReference Include="OpenTelemetry.Exporter.InMemory" Version="1.19.1" />
-    </ItemGroup>
-    <ItemGroup Condition="'$(TargetFramework)'=='net8.0' Or '$(TargetFramework)'=='net9.0'">
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13"/>
-    </ItemGroup>
-    <ItemGroup Condition="'$(TargetFramework)'=='net10.0'">
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
     </ItemGroup>
 
@@ -26,8 +24,4 @@
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App"/>
     </ItemGroup>
-
-    <PropertyGroup>
-        <NoWarn>CS0618</NoWarn>
-    </PropertyGroup>
 </Project>
