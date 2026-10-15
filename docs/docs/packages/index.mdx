@@ -24,6 +24,21 @@ As a rule of thumb: most operators only reference `KubeOps.Operator` (which pull
 `KubeOps.Abstractions` and `KubeOps.KubernetesClient`), add `KubeOps.Operator.Web` for webhooks,
 and use `KubeOps.Cli` as a tool — everything else is opt-in.
 
+## Supported Target Frameworks
+
+KubeOps follows the [.NET support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core)
+and targets the .NET versions that are currently supported by Microsoft:
+
+| Package type                              | Target frameworks                |
+| ----------------------------------------- | -------------------------------- |
+| Runtime libraries and `KubeOps.Cli`       | `net10.0` (LTS), `net11.0` (STS) |
+| `KubeOps.Generator`, `KubeOps.Templates`  | `netstandard2.0`                 |
+| Projects created from `KubeOps.Templates` | `net10.0`                        |
+
+Support for .NET 8 and .NET 9 was dropped because both reached end of support on November 10, 2026.
+Operators that still target `net8.0` or `net9.0` must stay on the previous major version of KubeOps
+or upgrade to .NET 10 or later.
+
 ## Core Packages
 
 - [KubeOps.Abstractions](./abstractions) - Core interfaces and attributes

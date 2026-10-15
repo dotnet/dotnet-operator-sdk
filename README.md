@@ -107,7 +107,7 @@ For further details, see the [Aspire documentation](https://dotnet.github.io/dot
 
 ## Packages
 
-The runtime libraries target [.NET 8.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-8/overview), [.NET 9.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-9/overview), and [.NET 10.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-10/overview), leveraging modern C# features. The build-time packages (`KubeOps.Generator` and `KubeOps.Templates`) target [.NET Standard 2.0](https://learn.microsoft.com/en-us/dotnet/standard/net-standard) for broad tooling compatibility. The underlying Kubernetes client library (`KubernetesClient`) is referenced for interacting with the Kubernetes API.
+The runtime libraries target [.NET 10.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-10/overview) (LTS) and [.NET 11.0](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-11/overview) (STS), leveraging modern C# features. The build-time packages (`KubeOps.Generator` and `KubeOps.Templates`) target [.NET Standard 2.0](https://learn.microsoft.com/en-us/dotnet/standard/net-standard) for broad tooling compatibility. The underlying Kubernetes client library (`KubernetesClient`) is referenced for interacting with the Kubernetes API.
 
 The SDK is designed to be modular. You can include only the packages you need:
 
