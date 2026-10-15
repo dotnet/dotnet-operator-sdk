@@ -233,21 +233,23 @@ public static class Utilities
     }
 
     /// <summary>
-    /// Check if a type is nullable.
+    /// Check if a type is a nullable value type (<see cref="Nullable{T}"/>).
+    /// The generic type definition is compared by name, because types loaded through a
+    /// <see cref="MetadataLoadContext"/> are not identical to <c>typeof(Nullable&lt;&gt;)</c>.
     /// </summary>
     /// <param name="type">The type.</param>
-    /// <returns>True if the type is nullable (i.e. contains "nullable" in its name).</returns>
+    /// <returns>True if the type is a constructed <see cref="Nullable{T}"/>.</returns>
     public static bool IsNullable(this Type type)
-        => type.FullName?.Contains("Nullable") == true;
+        => type.IsGenericType && type.GetGenericTypeDefinition().FullName == "System.Nullable`1";
 
     /// <summary>
-    /// Check if a property is nullable.
+    /// Check if a property is nullable, either as nullable reference type or as <see cref="Nullable{T}"/>.
     /// </summary>
     /// <param name="prop">The property.</param>
-    /// <returns>True if the type is nullable (i.e. contains "nullable" in its name).</returns>
+    /// <returns>True if the property is annotated as nullable or its type is a <see cref="Nullable{T}"/>.</returns>
     public static bool IsNullable(this PropertyInfo prop)
         => new NullabilityInfoContext().Create(prop).ReadState == NullabilityState.Nullable ||
-           prop.PropertyType.FullName?.Contains("Nullable") == true;
+           prop.PropertyType.IsNullable();
 
     /// <summary>
     /// Returns <see langword="true"/> if <paramref name="attributeType"/> is, or inherits from, an

@@ -46,6 +46,8 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     [InlineData(typeof(StringArrayEntity), "array", null, null)]
     [InlineData(typeof(NullableStringArrayEntity), "array", null, true)]
     [InlineData(typeof(EnumerableIntEntity), "array", null, null)]
+    [InlineData(typeof(EnumerableNullableIntEntity), "array", null, null)]
+    [InlineData(typeof(NullableNamedTypeEntity), "object", null, null)]
     [InlineData(typeof(HashSetIntEntity), "array", null, null)]
     [InlineData(typeof(SetIntEntity), "array", null, null)]
     [InlineData(typeof(InheritedEnumerableEntity), "array", null, null)]
@@ -1084,6 +1086,17 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
     private sealed class EnumerableNullableIntEntity : CustomKubernetesEntity
     {
         public IEnumerable<int?> Property { get; set; } = null!;
+    }
+
+    [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
+    private sealed class NullableNamedTypeEntity : CustomKubernetesEntity
+    {
+        public NonNullableSettings Property { get; set; } = new();
+
+        public sealed class NonNullableSettings
+        {
+            public string Value { get; set; } = string.Empty;
+        }
     }
 
     [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "TestEntity")]
