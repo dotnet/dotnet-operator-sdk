@@ -206,6 +206,80 @@ public static class KubeOpsHostingExtensions
         return builder;
     }
 
+    internal static void RunKubeOpsGenerator(
+        string projectPath,
+        string outputPath,
+        KubeOpsKubernetesManifestOptions options,
+        string format)
+    {
+        var arguments = new List<string>(options.KubeOpsCliArguments)
+        {
+            "generate",
+            "operator",
+            "--format",
+            format,
+            "--out",
+            outputPath,
+            "--clear-out",
+            "--no-ansi",
+            "--namespace",
+            options.Namespace ?? $"{options.OperatorName}-system",
+            "--docker-image",
+            options.DockerImage,
+            "--docker-image-tag",
+            options.DockerImageTag,
+        };
+
+        if (!string.IsNullOrWhiteSpace(options.RbacScope))
+        {
+            arguments.Add("--rbac-scope");
+            arguments.Add(options.RbacScope);
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.TargetFramework))
+        {
+            arguments.Add("--target-framework");
+            arguments.Add(options.TargetFramework);
+        }
+
+        arguments.Add(options.OperatorName ?? "operator");
+        arguments.Add(projectPath);
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = options.KubeOpsCliExecutable,
+            WorkingDirectory = Path.GetDirectoryName(projectPath) ?? Environment.CurrentDirectory,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = StartProcess(
+            startInfo,
+            options.KubeOpsCliExecutable,
+            $"Install the KubeOps CLI or configure {nameof(KubeOpsKubernetesManifestOptions)}." +
+            $"{nameof(KubeOpsKubernetesManifestOptions.KubeOpsCliExecutable)}.");
+
+        // Drain stderr concurrently: reading both streams one after the other blocks as soon as the CLI
+        // fills the pipe buffer of the stream that is not being read.
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        var stdout = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        var stderr = stderrTask.GetAwaiter().GetResult();
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"KubeOps CLI failed with exit code {process.ExitCode}.{Environment.NewLine}" +
+                $"{stdout}{Environment.NewLine}{stderr}");
+        }
+    }
+
     private static KubeOpsKubernetesManifestOptions CreateDefaultManifestOptions(string name)
         => new()
         {
@@ -534,77 +608,6 @@ public static class KubeOpsHostingExtensions
             {
                 // The generator did not create an output directory.
             }
-        }
-    }
-
-    private static void RunKubeOpsGenerator(
-        string projectPath,
-        string outputPath,
-        KubeOpsKubernetesManifestOptions options,
-        string format)
-    {
-        var arguments = new List<string>(options.KubeOpsCliArguments)
-        {
-            "generate",
-            "operator",
-            "--format",
-            format,
-            "--out",
-            outputPath,
-            "--clear-out",
-            "--no-ansi",
-            "--namespace",
-            options.Namespace ?? $"{options.OperatorName}-system",
-            "--docker-image",
-            options.DockerImage,
-            "--docker-image-tag",
-            options.DockerImageTag,
-        };
-
-        if (!string.IsNullOrWhiteSpace(options.RbacScope))
-        {
-            arguments.Add("--rbac-scope");
-            arguments.Add(options.RbacScope);
-        }
-
-        if (!string.IsNullOrWhiteSpace(options.TargetFramework))
-        {
-            arguments.Add("--target-framework");
-            arguments.Add(options.TargetFramework);
-        }
-
-        arguments.Add(options.OperatorName ?? "operator");
-        arguments.Add(projectPath);
-
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = options.KubeOpsCliExecutable,
-            WorkingDirectory = Path.GetDirectoryName(projectPath) ?? Environment.CurrentDirectory,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-        };
-
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = StartProcess(
-            startInfo,
-            options.KubeOpsCliExecutable,
-            $"Install the KubeOps CLI or configure {nameof(KubeOpsKubernetesManifestOptions)}." +
-            $"{nameof(KubeOpsKubernetesManifestOptions.KubeOpsCliExecutable)}.");
-
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"KubeOps CLI failed with exit code {process.ExitCode}.{Environment.NewLine}" +
-                $"{stdout}{Environment.NewLine}{stderr}");
         }
     }
 
