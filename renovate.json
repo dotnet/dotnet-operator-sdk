@@ -48,20 +48,6 @@
       "semanticCommitScope": "docs"
     },
     {
-      "description": ["Keep MSBuild packages on the latest net8.0-compatible 17.11 line for net8.0 TFMs."],
-      "matchManagers": ["nuget"],
-      "matchPackageNames": ["Microsoft.Build.Framework", "Microsoft.NET.StringTools"],
-      "matchCurrentValue": "/^17\\.11\\./",
-      "allowedVersions": "<17.12.0"
-    },
-    {
-      "description": ["Keep MSBuild packages on the latest net9.0-compatible 17.14 line for net9.0 TFMs."],
-      "matchManagers": ["nuget"],
-      "matchPackageNames": ["Microsoft.Build.Framework", "Microsoft.NET.StringTools"],
-      "matchCurrentValue": "/^17\\.14\\./",
-      "allowedVersions": "<18.0.0"
-    },
-    {
       "description": ["Keep MSBuild packages on the latest net10.0-compatible 18.9 line for net10.0 TFMs; 18.10 targets net11.0."],
       "matchManagers": ["nuget"],
       "matchPackageNames": ["Microsoft.Build.Framework", "Microsoft.NET.StringTools"],
@@ -69,18 +55,17 @@
       "allowedVersions": "<18.10.0"
     },
     {
-      "description": ["Keep Roslyn packages at or below the latest version supported by net8.0 and net9.0."],
+      "description": ["Keep .NET runtime packages on the 10.0 line for net10.0 TFMs; the 11.0 line targets net11.0."],
       "matchManagers": ["nuget"],
-      "matchFileNames": ["**/KubeOps.Cli.csproj"],
       "matchPackageNames": [
-        "Microsoft.CodeAnalysis",
-        "Microsoft.CodeAnalysis.Common",
-        "Microsoft.CodeAnalysis.CSharp",
-        "Microsoft.CodeAnalysis.CSharp.Workspaces",
-        "Microsoft.CodeAnalysis.Workspaces.MSBuild"
+        "Microsoft.AspNetCore.Mvc.Testing",
+        "Microsoft.Extensions.Diagnostics.HealthChecks",
+        "Microsoft.Extensions.Hosting",
+        "Microsoft.Extensions.Hosting.Abstractions",
+        "System.Reflection.MetadataLoadContext"
       ],
-      "matchCurrentValue": "/^5\\.6\\./",
-      "allowedVersions": "<=5.6.0"
+      "matchCurrentValue": "/^10\\./",
+      "allowedVersions": "<11.0.0"
     },
     {
       "matchPackageNames": ["JsonPatch.Net"],
