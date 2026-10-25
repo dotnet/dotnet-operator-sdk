@@ -12,8 +12,8 @@
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
         <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
-        <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
-        <PackageReference Include="OpenTelemetry.Exporter.InMemory" Version="1.20.0" />
+        <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
+        <PackageReference Include="OpenTelemetry.Exporter.InMemory" Version="1.20.1" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
