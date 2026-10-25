@@ -14,7 +14,14 @@
         <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
         <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
         <PackageReference Include="OpenTelemetry.Exporter.InMemory" Version="1.20.1" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
         <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="11.0.0-rc.2.26504.105" />
     </ItemGroup>
 
     <ItemGroup>
