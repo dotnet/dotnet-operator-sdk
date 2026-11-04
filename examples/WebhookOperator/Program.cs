@@ -48,7 +48,6 @@ builder.Services
 var app = builder.Build();
 
 app.UseRouting();
-app.UseDeveloperExceptionPage();
 app.MapControllers();
 
 await app.RunAsync();
