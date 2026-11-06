@@ -21,7 +21,7 @@ jobs:
         with:
           dotnet-version: |
             10.x
-            11.0.100-rc.2.26504.105
+            11.0.100-rc.3.26522.148
 
       - name: Linting
         run: dotnet format --verify-no-changes
