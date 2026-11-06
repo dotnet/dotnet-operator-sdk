@@ -4,6 +4,7 @@
 
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.DevTunnels;
 using Aspire.Hosting.Testing;
 
 using FluentAssertions;
@@ -168,6 +169,78 @@ public class KubeOpsHostingTest
 
         resourceBuilder.Resource.GetComputeEnvironment()
             .Should().BeSameAs(kubernetes.Resource);
+    }
+
+    [Fact]
+    public void WithWebhookDevTunnel_Adds_Anonymous_Dev_Tunnel_For_Webhook_Endpoint()
+    {
+        var builder = CreateBuilder();
+
+        builder.AddKubeOps<TestProjectMetadata>("operator-test")
+            .WithHttpEndpoint(name: "http")
+            .WithWebhookDevTunnel();
+
+        builder.Resources.OfType<DevTunnelResource>()
+            .Should().ContainSingle(tunnel => tunnel.Name == "operator-test-webhooks");
+        builder.Resources.OfType<DevTunnelPortResource>()
+            .Should().ContainSingle()
+            .Which.Should().Match<DevTunnelPortResource>(port =>
+                port.Name == "operator-test-webhooks-operator-test-http" && port.Options.AllowAnonymous == true);
+    }
+
+    [Fact]
+    public async Task WithWebhookDevTunnel_Passes_Tunnel_Url_To_Operator_And_Waits_For_Tunnel()
+    {
+        var builder = CreateBuilder();
+
+        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+            .WithHttpEndpoint(name: "http")
+            .WithWebhookDevTunnel();
+
+        var tunnel = builder.Resources.OfType<DevTunnelResource>().Single();
+        var port = builder.Resources.OfType<DevTunnelPortResource>().Single();
+        resourceBuilder.Resource.Annotations.OfType<WaitAnnotation>()
+            .Should().Contain(annotation => annotation.Resource == tunnel);
+
+        var context = new EnvironmentCallbackContext(builder.ExecutionContext, resourceBuilder.Resource);
+        foreach (var callback in resourceBuilder.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
+        {
+            await callback.Callback(context);
+        }
+
+        context.EnvironmentVariables.Should().ContainKey("KubeOps__Webhooks__ExternalUrl")
+            .WhoseValue.Should().BeOfType<EndpointReference>()
+            .Which.EndpointAnnotation.Should().BeSameAs(port.Annotations.OfType<EndpointAnnotation>().Single());
+    }
+
+    [Fact]
+    public void WithWebhookDevTunnel_Uses_Configured_Endpoint_And_Tunnel_Options()
+    {
+        var builder = CreateBuilder();
+
+        builder.AddKubeOps<TestProjectMetadata>("operator-test")
+            .WithHttpsEndpoint(name: "webhooks")
+            .WithWebhookDevTunnel("webhooks", tunnel => tunnel.WithExpiration(24));
+
+        builder.Resources.OfType<DevTunnelResource>()
+            .Should().ContainSingle()
+            .Which.Options.ExpirationHours.Should().Be(24);
+        builder.Resources.OfType<DevTunnelPortResource>()
+            .Should().ContainSingle(port => port.Name == "operator-test-webhooks-operator-test-webhooks");
+    }
+
+    [Fact]
+    public void WithWebhookDevTunnel_Adds_Nothing_In_Publish_Mode()
+    {
+        var builder = DistributedApplication.CreateBuilder(["--operation", "publish", "--publisher", "manifest"]);
+
+        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+            .WithHttpEndpoint(name: "http")
+            .WithWebhookDevTunnel();
+
+        builder.ExecutionContext.IsPublishMode.Should().BeTrue();
+        builder.Resources.OfType<DevTunnelResource>().Should().BeEmpty();
+        resourceBuilder.Resource.Annotations.OfType<WaitAnnotation>().Should().BeEmpty();
     }
 
     private static IDistributedApplicationTestingBuilder CreateBuilder()

@@ -137,6 +137,16 @@ builder.AddKubeOps<Projects.AspireOperator>("operator")
 
 The operator process runs locally and authenticates through the selected Kubernetes environment. The dashboard shows structured logs, the reconciliation traces emitted from the operator's `ActivitySource`, and runtime/HTTP metrics.
 
+If the operator has webhooks and the cluster cannot reach your machine, add `WithWebhookDevTunnel()`. It starts a Microsoft Dev Tunnel for the operator's `http` endpoint and passes the public URL to the operator, which registers its webhooks with `UseExternalWebhookEndpoint()`:
+
+```csharp
+builder.AddKubeOps<Projects.WebhookOperator>("operator")
+    .RunWithKubernetes(dev)
+    .WithWebhookDevTunnel();
+```
+
+See [Webhooks — Local Development Considerations](../building-blocks/webhooks#local-development-considerations) for the requirements and security notes.
+
 ## Health endpoints
 
 `KubeOps.Aspire` is usable from a plain console operator and therefore does **not** force an ASP.NET Core dependency. The default health checks are registered in the service collection, but exposing them over HTTP requires an HTTP server.

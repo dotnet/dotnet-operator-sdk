@@ -74,6 +74,7 @@ Default run behavior:
 - Remove only the CRDs that this run created when the AppHost shuts down.
 - Leave pre-existing CRDs alone.
 - Configure the operator process with the target namespace and Kubernetes client hints.
+- `WithWebhookDevTunnel()` optionally exposes the operator's webhook endpoint through a Microsoft Dev Tunnel and passes the public URL as `KubeOps__Webhooks__ExternalUrl`; it adds nothing in publish mode.
 
 Run mode exposes explicit CRD lifecycle choices:
 

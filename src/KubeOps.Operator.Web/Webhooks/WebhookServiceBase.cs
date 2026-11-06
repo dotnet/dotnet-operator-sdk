@@ -14,12 +14,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace KubeOps.Operator.Web.Webhooks;
 
-internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoader loader, WebhookConfig config, IWebhookConfigurationFactory webhookConfigurationFactory)
+internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoader loader, Uri uri, IWebhookConfigurationFactory webhookConfigurationFactory)
 {
     /// <summary>
     /// The URI the webhooks will use to connect to the operator.
     /// </summary>
-    private protected virtual Uri Uri { get; set; } = new($"https://{config.Hostname}:{config.Port}");
+    private protected Uri Uri { get; } = uri;
 
     private protected IKubernetesClient Client { get; } = client;
 

@@ -80,7 +80,7 @@ builder.Services.AddKubernetesOperator();
 
 KubeOps uses `IWebhookConfigurationFactory` to build the `V1MutatingWebhookConfiguration` and `V1ValidatingWebhookConfiguration` resources that are registered with the Kubernetes API server. The default implementation (`KubeOpsWebhookConfigurationFactory`) produces standard configurations, but you can replace or extend this behavior.
 
-All factory interfaces are registered with `TryAddSingleton`, so registering your own implementation **before** calling `UseCertificateProvider()` or `AddDevelopmentTunnel()` takes precedence over the default.
+All factory interfaces are registered with `TryAddSingleton`, so registering your own implementation **before** calling `UseCertificateProvider()` or `UseExternalWebhookEndpoint()` takes precedence over the default.
 
 ### Replacing the Factory
 
