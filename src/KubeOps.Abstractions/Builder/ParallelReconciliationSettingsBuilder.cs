@@ -21,11 +21,7 @@ public sealed class ParallelReconciliationSettingsBuilder
     /// <exception cref="ArgumentOutOfRangeException">The value is less than or equal to 0.</exception>
     public int MaxParallelReconciliations
     {
-        get
-        {
-            return _maxParallelReconciliations;
-        }
-
+        get => _maxParallelReconciliations;
         set
         {
             ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(value, 0);
