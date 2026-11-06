@@ -66,7 +66,7 @@
         <PackageReference Include="Roslynator.Analyzers"
                           Version="5.0.1"
                           PrivateAssets="All"/>
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.404" PrivateAssets="All"/>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="11.0.100" PrivateAssets="All"/>
     </ItemGroup>
 
     <ItemGroup>
