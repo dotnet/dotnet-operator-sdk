@@ -1,0 +1,80 @@
+# Temporary workflow for #1305: runs the test step repeatedly with diagnostics until `dotnet test`
+# exits with a non-zero code, then uploads the logs of the failing iteration. Not meant to be merged.
+name: Diagnose Test Exit Code
+
+on:
+  pull_request:
+    branches:
+      - "**"
+    paths:
+      - .github/workflows/diagnose-test-exit-code.yml
+
+concurrency:
+  group: diagnose-test-exit-code-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Diagnose (slot ${{ matrix.slot }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.x
+
+      - name: Create Kubernetes Cluster
+        uses: helm/kind-action@v1.15.2
+
+      - name: Execute Tests Until Failure
+        env:
+          ITERATIONS: "15"
+        run: |
+          set +e
+          root="$RUNNER_TEMP/test-diagnostics"
+          echo "| Iteration | Exit code |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+
+          for i in $(seq 1 "$ITERATIONS"); do
+            dir="$root/iteration-$i"
+            mkdir -p "$dir"
+            echo "::group::Iteration $i"
+            DOTNET_CLI_TEST_TRACEFILE="$dir/dotnet-test-trace.log" \
+              dotnet test --configuration Release \
+                --output Detailed \
+                --results-directory "$dir/results" \
+                --report-xunit-trx \
+                --diagnostic \
+                --diagnostic-verbosity Trace \
+                --diagnostic-output-directory "$dir/diag" \
+                2>&1 | tee "$dir/console.log"
+            code=${PIPESTATUS[0]}
+            echo "::endgroup::"
+            echo "| $i | $code |" >> "$GITHUB_STEP_SUMMARY"
+
+            if [ "$code" -ne 0 ]; then
+              echo "::error::Iteration $i: dotnet test exited with code $code"
+              exit "$code"
+            fi
+
+            echo "Iteration $i: exit code 0"
+            rm -rf "$dir"
+          done
+
+      - name: Upload Diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-diagnostics-slot-${{ matrix.slot }}
+          path: ${{ runner.temp }}/test-diagnostics
+          retention-days: 14
