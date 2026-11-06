@@ -27,7 +27,7 @@ jobs:
         run: dotnet format --verify-no-changes
 
       - name: Create Kubernetes Cluster
-        uses: helm/kind-action@v1.15.1
+        uses: helm/kind-action@v1.15.2
 
       # Test projects target net10.0 and net11.0. Both test modules install the same cluster-scoped CRDs,
       # so they must not run in parallel against the shared kind cluster.
