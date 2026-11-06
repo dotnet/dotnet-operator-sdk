@@ -7,6 +7,7 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Defines the factor that a numeric value must adhere to.
 /// </summary>
+/// <param name="value">The value the property must be a multiple of.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class MultipleOfAttribute(double value) : Attribute
 {

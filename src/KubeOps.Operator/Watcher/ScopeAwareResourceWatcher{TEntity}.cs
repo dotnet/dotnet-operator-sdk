@@ -28,6 +28,18 @@ namespace KubeOps.Operator.Watcher;
 /// <see cref="ILeadershipScope"/> declares this instance responsible for.
 /// </summary>
 /// <typeparam name="TEntity">The type of the Kubernetes entity being watched.</typeparam>
+/// <param name="activitySource">The activity source used to trace watch events.</param>
+/// <param name="logger">The logger.</param>
+/// <param name="cacheProvider">The FusionCache provider for the event deduplication cache.</param>
+/// <param name="entityQueue">The queue that receives the watched entities for reconciliation.</param>
+/// <param name="settings">The operator settings.</param>
+/// <param name="labelSelector">The label selector that restricts the watched entities.</param>
+/// <param name="fieldSelector">The field selector that restricts the watched entities.</param>
+/// <param name="client">The Kubernetes client.</param>
+/// <param name="leadershipScope">The scope that decides which entities this instance is responsible for.</param>
+/// <param name="scopeFactory">The factory for the logging scopes of watched entities.</param>
+/// <param name="cachePartition">The key prefix that separates this watcher's deduplication cache entries.</param>
+/// <param name="metrics">The operator metrics, or <c>null</c> when metrics are disabled.</param>
 public class ScopeAwareResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<ScopeAwareResourceWatcher<TEntity>> logger,

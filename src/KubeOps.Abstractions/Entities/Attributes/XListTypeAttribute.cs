@@ -30,6 +30,7 @@ public enum XListType
 /// <summary>
 /// Annotates an array to further describe its topology.
 /// </summary>
+/// <param name="listType">The topology type of the array.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class XListTypeAttribute(XListType listType) : Attribute
 {

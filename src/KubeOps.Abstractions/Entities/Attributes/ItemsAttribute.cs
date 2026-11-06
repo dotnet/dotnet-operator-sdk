@@ -7,6 +7,8 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Define minimum and maximum items count for an array property.
 /// </summary>
+/// <param name="minItems">The minimal item count, or <c>-1</c> for none.</param>
+/// <param name="maxItems">The maximal item count, or <c>-1</c> for none.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class ItemsAttribute(long minItems = -1, long maxItems = -1) : Attribute
 {

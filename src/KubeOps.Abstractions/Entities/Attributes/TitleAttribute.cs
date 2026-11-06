@@ -7,6 +7,7 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Defines a title for a property.
 /// </summary>
+/// <param name="title">The title for the property.</param>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Class)]
 public class TitleAttribute(string title) : Attribute
 {

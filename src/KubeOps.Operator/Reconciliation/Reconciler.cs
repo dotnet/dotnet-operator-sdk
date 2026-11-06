@@ -33,6 +33,13 @@ namespace KubeOps.Operator.Reconciliation;
 /// Kubernetes objects effectively. It also uses internal queuing capabilities for entity
 /// processing and requeuing.
 /// </remarks>
+/// <param name="logger">The logger.</param>
+/// <param name="serviceProvider">The service provider used to resolve the controller and finalizers.</param>
+/// <param name="operatorSettings">The operator settings.</param>
+/// <param name="entityQueue">The queue used to requeue entities.</param>
+/// <param name="controllerType">The type of the controller that reconciles the entities.</param>
+/// <param name="client">The Kubernetes client.</param>
+/// <param name="metrics">The operator metrics, or <c>null</c> when metrics are disabled.</param>
 internal sealed class Reconciler<TEntity>(
     ILogger<Reconciler<TEntity>> logger,
     IServiceProvider serviceProvider,

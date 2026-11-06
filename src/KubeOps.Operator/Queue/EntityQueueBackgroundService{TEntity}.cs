@@ -58,6 +58,15 @@ namespace KubeOps.Operator.Queue;
 /// unbounded task accumulation.
 /// </para>
 /// </remarks>
+/// <param name="activitySource">The activity source used to trace reconciliations.</param>
+/// <param name="client">The Kubernetes client.</param>
+/// <param name="operatorSettings">The operator settings.</param>
+/// <param name="queue">The queue to consume.</param>
+/// <param name="reconciler">The reconciler that processes the dequeued entities.</param>
+/// <param name="coordinator">The coordinator that enforces the parallelism limit and the per-entity lock.</param>
+/// <param name="logger">The logger.</param>
+/// <param name="scopeFactory">The factory for the logging scopes of reconciled entities.</param>
+/// <param name="metrics">The operator metrics, or <c>null</c> when metrics are disabled.</param>
 public class EntityQueueBackgroundService<TEntity>(
     ActivitySource activitySource,
     IKubernetesClient client,

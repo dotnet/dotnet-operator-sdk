@@ -16,6 +16,8 @@ namespace KubeOps.Operator.Logging;
 /// individual failures so logging-scope enrichment cannot take down a watch or reconciliation.
 /// </summary>
 /// <typeparam name="TEntity">The entity type this pipeline enriches scopes for.</typeparam>
+/// <param name="entityEnrichers">The registered enrichers, applied in registration order.</param>
+/// <param name="logger">The logger used to report failing enrichers.</param>
 internal sealed partial class EntityLoggingScopeEnricherPipeline<TEntity>(
     IEnumerable<IEntityLoggingScopeEnricher<TEntity>> entityEnrichers,
     ILogger<EntityLoggingScopeEnricherPipeline<TEntity>> logger)

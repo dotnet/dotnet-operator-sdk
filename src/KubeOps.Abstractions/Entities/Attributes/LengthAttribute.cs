@@ -7,6 +7,8 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Defines length limits for properties.
 /// </summary>
+/// <param name="minLength">The minimum length, or <c>-1</c> for none.</param>
+/// <param name="maxLength">The maximum length, or <c>-1</c> for none.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class LengthAttribute(long minLength = -1, long maxLength = -1) : Attribute
 {

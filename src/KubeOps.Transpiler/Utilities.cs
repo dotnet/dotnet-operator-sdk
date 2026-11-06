@@ -145,10 +145,11 @@ public static class Utilities
     /// <returns>The list of arguments if found.</returns>
     /// <exception cref="InvalidCastException">Thrown if the data did not match the target type.</exception>
     public static IList<T> GetCustomAttributeNamedArrayArg<T>(this CustomAttributeData attr, string name) =>
-        attr.NamedArguments.FirstOrDefault(a => a.MemberName == name).TypedValue.Value is
-            ReadOnlyCollection<CustomAttributeTypedArgument> value
-            ? value.Select(v => (T)v.Value!).ToList()
-            : [];
+        attr.NamedArguments.FirstOrDefault(a => a.MemberName == name).TypedValue.Value switch
+        {
+            ReadOnlyCollection<CustomAttributeTypedArgument> value => value.Select(v => (T)v.Value!).ToList(),
+            _ => [],
+        };
 
     /// <summary>
     /// Load a specific constructor argument from a custom attribute.
@@ -198,8 +199,7 @@ public static class Utilities
         this CustomAttributeData attr,
         int index) =>
         attr.ConstructorArguments.Count >= index + 1 &&
-        attr.ConstructorArguments[index].Value is
-            ReadOnlyCollection<CustomAttributeTypedArgument> value
+        attr.ConstructorArguments[index].Value is ReadOnlyCollection<CustomAttributeTypedArgument> value
             ? value.Select(v => (T)v.Value!).ToList()
             : [];
 

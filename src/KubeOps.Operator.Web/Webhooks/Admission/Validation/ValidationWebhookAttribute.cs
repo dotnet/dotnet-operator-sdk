@@ -11,6 +11,7 @@ namespace KubeOps.Operator.Web.Webhooks.Admission.Validation;
 /// <c>/validate/[lower-case-name-of-the-type]</c>.
 /// This must be used in conjunction with the <see cref="ValidationWebhook{TEntity}"/> class.
 /// </summary>
+/// <param name="entityType">The type of the entity the webhook validates; its lower-case name forms the route.</param>
 [AttributeUsage(AttributeTargets.Class)]
 public class ValidationWebhookAttribute(Type entityType)
     : RouteAttribute($"/validate/{entityType.Name.ToLowerInvariant()}"), IWebhookAttribute

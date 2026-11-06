@@ -7,6 +7,7 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Annotates an array with x-kubernetes-list-type "map" by specifying the keys used as the index of the map.
 /// </summary>
+/// <param name="keys">The keys used as the index of the map.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class XListMapKeysAttribute(params string[] keys) : Attribute
 {

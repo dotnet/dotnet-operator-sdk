@@ -32,6 +32,7 @@ namespace KubeOps.Generator.Discovery;
 /// </para>
 /// </remarks>
 /// <typeparam name="T">The type of the elements stored in the array.</typeparam>
+/// <param name="array">The array to wrap.</param>
 internal readonly struct EquatableArray<T>(ImmutableArray<T> array) : IEquatable<EquatableArray<T>>, IEnumerable<T>
 {
     public static readonly EquatableArray<T> Empty = new(ImmutableArray<T>.Empty);
