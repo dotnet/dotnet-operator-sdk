@@ -198,9 +198,10 @@ public static class Utilities
         this CustomAttributeData attr,
         int index) =>
         attr.ConstructorArguments.Count >= index + 1 &&
-        attr.ConstructorArguments[index].Value is ReadOnlyCollection<CustomAttributeTypedArgument> value
-            ? value.Select(v => (T)v.Value!).ToList()
-            : [];
+        attr.ConstructorArguments[index].Value is
+            ReadOnlyCollection<CustomAttributeTypedArgument> value
+                ? value.Select(v => (T)v.Value!).ToList()
+                : [];
 
     /// <summary>
     /// Load a type from a metadata load context.
