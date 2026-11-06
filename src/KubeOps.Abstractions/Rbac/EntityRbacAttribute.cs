@@ -15,6 +15,7 @@ namespace KubeOps.Abstractions.Rbac;
 /// [EntityRbac(typeof(V1TestEntity), Verbs = RbacVerb.All)]
 /// </code>
 /// </example>
+/// <param name="entities">The entity types the RBAC verbs apply to.</param>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class EntityRbacAttribute(params Type[] entities) : RbacAttribute
 {

@@ -11,6 +11,7 @@ namespace KubeOps.Operator.Web.Webhooks.Admission.Mutation;
 /// <c>/mutate/[lower-case-name-of-the-type]</c>.
 /// This must be used in conjunction with the <see cref="MutationWebhook{TEntity}"/> class.
 /// </summary>
+/// <param name="entityType">The type of the entity the webhook mutates; its lower-case name forms the route.</param>
 [AttributeUsage(AttributeTargets.Class)]
 public class MutationWebhookAttribute(Type entityType)
     : RouteAttribute($"/mutate/{entityType.Name.ToLowerInvariant()}"), IWebhookAttribute

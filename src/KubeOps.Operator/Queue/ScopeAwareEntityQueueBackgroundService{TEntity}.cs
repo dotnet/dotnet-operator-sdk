@@ -24,6 +24,16 @@ namespace KubeOps.Operator.Queue;
 /// the <see cref="ILeadershipScope"/> declares this instance responsible for.
 /// </summary>
 /// <typeparam name="TEntity">The type of the Kubernetes entity being managed.</typeparam>
+/// <param name="activitySource">The activity source used to trace reconciliations.</param>
+/// <param name="client">The Kubernetes client.</param>
+/// <param name="operatorSettings">The operator settings.</param>
+/// <param name="queue">The queue to consume.</param>
+/// <param name="reconciler">The reconciler that processes the dequeued entities.</param>
+/// <param name="coordinator">The coordinator that enforces the parallelism limit and the per-entity lock.</param>
+/// <param name="logger">The logger.</param>
+/// <param name="leadershipScope">The scope that decides which entities this instance is responsible for.</param>
+/// <param name="scopeFactory">The factory for the logging scopes of reconciled entities.</param>
+/// <param name="metrics">The operator metrics, or <c>null</c> when metrics are disabled.</param>
 public class ScopeAwareEntityQueueBackgroundService<TEntity>(
     ActivitySource activitySource,
     IKubernetesClient client,

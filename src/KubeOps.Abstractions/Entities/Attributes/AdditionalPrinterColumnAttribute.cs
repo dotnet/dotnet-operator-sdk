@@ -7,6 +7,8 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Defines a property as an additional printer column.
 /// </summary>
+/// <param name="priority">The priority of the column.</param>
+/// <param name="name">The name of the column. Defaults to the property name.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class AdditionalPrinterColumnAttribute(PrinterColumnPriority priority = default, string? name = null)
     : Attribute

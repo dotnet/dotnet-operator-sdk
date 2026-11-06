@@ -7,6 +7,8 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Defines that the property has an external documentation.
 /// </summary>
+/// <param name="url">The URL of the documentation.</param>
+/// <param name="description">An optional additional description.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class ExternalDocsAttribute(string url, string? description = null) : Attribute
 {

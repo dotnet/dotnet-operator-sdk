@@ -217,10 +217,10 @@ internal static partial class AssemblyLoader
 
     public static IEnumerable<Type> GetEntities(this MetadataLoadContext context) => context
         .GetTypesToInspect()
-        .Select(t => (t, attrs: CustomAttributeData.GetCustomAttributes(t)))
-        .Where(e => e.attrs.Any(a => a.AttributeType.Name == nameof(KubernetesEntityAttribute)) &&
-                    e.attrs.All(a => a.AttributeType.Name != nameof(IgnoreAttribute)))
-        .Select(e => e.t);
+        .Select(t => (Type: t, Attributes: CustomAttributeData.GetCustomAttributes(t)))
+        .Where(e => e.Attributes.Any(a => a.AttributeType.Name == nameof(KubernetesEntityAttribute)) &&
+                    e.Attributes.All(a => a.AttributeType.Name != nameof(IgnoreAttribute)))
+        .Select(e => e.Type);
 
     public static IEnumerable<CustomAttributeData> GetRbacAttributes(this MetadataLoadContext context) => context
         .GetTypesToInspect().SelectMany(t => t.GetInheritedCustomAttributesData<GenericRbacAttribute>()

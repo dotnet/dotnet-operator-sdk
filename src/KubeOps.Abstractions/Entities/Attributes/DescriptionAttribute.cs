@@ -7,6 +7,7 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Defines a description for a property.
 /// </summary>
+/// <param name="description">The description for the property.</param>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Class)]
 public class DescriptionAttribute(string description) : Attribute
 {

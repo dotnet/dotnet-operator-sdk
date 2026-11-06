@@ -28,6 +28,9 @@ namespace KubeOps.Operator.Builder;
 /// per entity type coexist.
 /// </summary>
 /// <typeparam name="TEntity">The Kubernetes entity type this pipeline reconciles.</typeparam>
+/// <param name="controllerType">The type of the controller of this pipeline.</param>
+/// <param name="labelSelectorType">The type of the pipeline's label selector, or <c>null</c> for none.</param>
+/// <param name="fieldSelectorType">The type of the pipeline's field selector, or <c>null</c> for none.</param>
 internal sealed class ControllerPipeline<TEntity>(Type controllerType, Type? labelSelectorType, Type? fieldSelectorType)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {

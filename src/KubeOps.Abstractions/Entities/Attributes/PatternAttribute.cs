@@ -7,6 +7,7 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Define a regex validator for the property.
 /// </summary>
+/// <param name="regexPattern">The regex pattern the property must match.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class PatternAttribute(string regexPattern) : Attribute
 {

@@ -114,6 +114,13 @@
       "respectLatest": false
     },
     {
+      "description": ["StyleCop.Analyzers only ships prerelease versions for current Roslyn and C# versions, so allow unstable updates for it."],
+      "matchManagers": ["nuget"],
+      "matchPackageNames": ["StyleCop.Analyzers"],
+      "ignoreUnstable": false,
+      "respectLatest": false
+    },
+    {
       "description": [
         "The .release/ semantic-release toolchain is version-pinned and tested as a set; semantic-release additionally carries a version-pinned patch (.release/patches/). Never automerge these bumps: they must be reviewed, and when semantic-release changes the patch must be regenerated (`npx patch-package semantic-release`)."
       ],

@@ -17,6 +17,8 @@ namespace KubeOps.Operator.Events;
 /// Default implementation of <see cref="IEventResourceFactory"/> that constructs
 /// <see cref="Corev1Event"/> instances using the operator settings.
 /// </summary>
+/// <param name="settings">The operator settings used to describe the event source.</param>
+/// <param name="logger">An optional logger.</param>
 public class KubeOpsEventResourceFactory(OperatorSettings settings, ILogger<EventPublisher>? logger = null)
     : IEventResourceFactory
 {

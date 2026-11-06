@@ -7,6 +7,7 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Overrides the OpenAPI format generated for a property.
 /// </summary>
+/// <param name="format">The OpenAPI format.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public sealed class FormatAttribute(string? format) : Attribute
 {
