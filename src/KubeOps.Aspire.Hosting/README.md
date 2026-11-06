@@ -76,6 +76,14 @@ builder.AddKubeOps<Projects.AspireOperator>("operator")
     });
 ```
 
+For operators with webhooks, `WithWebhookDevTunnel()` exposes the operator's `http` endpoint through a [Microsoft Dev Tunnel](https://learn.microsoft.com/azure/developer/dev-tunnels/) and passes the public URL to the operator as `KubeOps__Webhooks__ExternalUrl`. The operator registers its webhooks against that URL with `UseExternalWebhookEndpoint()` from `KubeOps.Operator.Web`, so a cluster that cannot reach your machine can still call them. The operator starts once the tunnel is running; nothing is added in publish mode. It requires the `devtunnel` CLI, and the tunnel allows anonymous access because the API server cannot authenticate against it.
+
+```csharp
+builder.AddKubeOps<Projects.WebhookOperator>("operator")
+    .RunWithKubernetes(k8s)
+    .WithWebhookDevTunnel();
+```
+
 Use Azure and local targets independently when the development loop and deployment target are different:
 
 ```csharp

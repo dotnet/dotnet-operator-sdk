@@ -13,7 +13,11 @@ using Microsoft.Extensions.Logging;
 namespace KubeOps.Operator.Web.Certificates;
 
 internal sealed class CertificateWebhookService(ILogger<CertificateWebhookService> logger, IKubernetesClient client, WebhookLoader loader, WebhookConfig config, ICertificateProvider provider, IWebhookConfigurationFactory webhookConfigurationFactory)
-    : WebhookServiceBase(client, loader, config, webhookConfigurationFactory), IHostedService
+    : WebhookServiceBase(
+        client,
+        loader,
+        new Uri($"https://{config.Hostname}:{config.Port}"),
+        webhookConfigurationFactory), IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {

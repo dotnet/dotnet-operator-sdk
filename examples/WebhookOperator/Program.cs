@@ -26,20 +26,33 @@ var opBuilder = builder.Services
 #endif
 
 #if DEBUG
+// With a tunnel (Dev Tunnels, cloudflared, ngrok) that forwards to http://localhost:5000, set
+// KubeOps:Webhooks:ExternalUrl to its public https URL. Otherwise the cluster has to reach this machine
+// directly and the webhooks are served via https with a generated certificate.
 const string ip = "192.168.1.100";
 const ushort port = 443;
-using var generator = new CertificateGenerator(ip);
-var cert = generator.Server.CopyServerCertWithPrivateKey();
+using var generator = string.IsNullOrWhiteSpace(builder.Configuration["KubeOps:Webhooks:ExternalUrl"])
+    ? new CertificateGenerator(ip)
+    : null;
 
-builder.WebHost.ConfigureKestrel(serverOptions =>
+if (generator is null)
 {
-    serverOptions.Listen(IPAddress.Any, port, listenOptions =>
-    {
-        listenOptions.UseHttps(cert);
-    });
-});
+    opBuilder.UseExternalWebhookEndpoint();
+}
+else
+{
+    var cert = generator.Server.CopyServerCertWithPrivateKey();
 
-opBuilder.UseCertificateProvider(port, ip, generator);
+    builder.WebHost.ConfigureKestrel(serverOptions =>
+    {
+        serverOptions.Listen(IPAddress.Any, port, listenOptions =>
+        {
+            listenOptions.UseHttps(cert);
+        });
+    });
+
+    opBuilder.UseCertificateProvider(port, ip, generator);
+}
 #endif
 
 builder.Services

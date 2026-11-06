@@ -4,7 +4,6 @@
 
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
 
 using k8s;
 using k8s.Models;
@@ -117,18 +116,36 @@ public sealed class MlcProvider : IAsyncLifetime
     }
 }
 
-[RequiresPreviewFeatures]
+/// <summary>
+/// Admission webhook integration tests need the API server to reach the test app on port 5000.
+/// They only run when <c>KubeOps__Webhooks__ExternalUrl</c> holds the public https URL of a tunnel
+/// to that port (for example <c>devtunnel host -p 5000 --allow-anonymous</c>).
+/// </summary>
+public static class ExternalWebhookTestEndpoint
+{
+    public const string SkipReason =
+        "Requires a tunnel to the test app on port 5000; set KubeOps__Webhooks__ExternalUrl to its public https URL.";
+
+    public static bool IsConfigured =>
+        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("KubeOps__Webhooks__ExternalUrl"));
+}
+
 public sealed class ApplicationProvider : IAsyncLifetime
 {
     private WebApplication? _app;
 
     public async ValueTask InitializeAsync()
     {
+        if (!ExternalWebhookTestEndpoint.IsConfigured)
+        {
+            return;
+        }
+
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.ConfigureKestrel(c => c.ListenAnyIP(5000));
         builder.Services
             .AddKubernetesOperator()
-            .AddDevelopmentTunnel(5000);
+            .UseExternalWebhookEndpoint();
 
         builder.Services.AddControllers().AddApplicationPart(typeof(ApplicationProvider).Assembly);
         builder.Services.AddHealthChecks();
@@ -157,6 +174,9 @@ public sealed class ApplicationProvider : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        await _app!.DisposeAsync();
+        if (_app is not null)
+        {
+            await _app.DisposeAsync();
+        }
     }
 }
