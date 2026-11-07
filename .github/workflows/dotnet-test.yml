@@ -29,6 +29,15 @@ jobs:
       - name: Create Kubernetes Cluster
         uses: helm/kind-action@v1.15.2
 
+      # The admission webhook integration tests serve HTTPS on the runner. The kind API server reaches
+      # the runner through the IPv4 gateway of the kind Docker network.
+      - name: Configure Webhook Test Host
+        run: |
+          gateway=$(docker network inspect kind \
+            --format '{{range .IPAM.Config}}{{println .Gateway}}{{end}}' | grep -m1 -E '^[0-9]+(\.[0-9]+){3}$')
+          test -n "$gateway"
+          echo "KUBEOPS_TEST_WEBHOOK_HOST=$gateway" >> "$GITHUB_ENV"
+
       # Test projects target net10.0 and net11.0. Both test modules install the same cluster-scoped CRDs,
       # so they must not run in parallel against the shared kind cluster.
       - name: Execute Tests
