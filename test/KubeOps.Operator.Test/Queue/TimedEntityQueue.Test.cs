@@ -321,6 +321,59 @@ public sealed class TimedEntityQueueTest
         act.Should().NotThrow();
     }
 
+    // Regression guard for #1308: waiting for entries must not block the consumer's thread. The consumer and a
+    // probe share a scheduler that runs one task at a time, in order. The probe yields repeatedly, so each of
+    // its continuations is queued behind the consumer's. A consumer that blocks its thread while the queue is
+    // empty keeps the scheduler occupied and the probe never completes; an asynchronous consumer releases the
+    // scheduler while it waits, so the probe completes right away.
+    [Fact]
+    [Trait("Area", "ThreadPool")]
+    public async Task Waiting_For_Entries_Should_Not_Block_The_Consumer_Thread()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        using var consumerCancellation =
+            CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var scheduler = new ConcurrentExclusiveSchedulerPair(TaskScheduler.Default, maxConcurrencyLevel: 1)
+            .ConcurrentScheduler;
+        var factory = new TaskFactory(scheduler);
+
+        var consumer = factory.StartNew(
+                async () =>
+                {
+                    var enumerator = queue.GetAsyncEnumerator(consumerCancellation.Token);
+                    try
+                    {
+                        await enumerator.MoveNextAsync();
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Expected: the consumer is cancelled at the end of the test.
+                    }
+                },
+                TestContext.Current.CancellationToken)
+            .Unwrap();
+
+        var probe = factory.StartNew(
+                async () =>
+                {
+                    for (var i = 0; i < 10; i++)
+                    {
+                        await Task.Yield();
+                    }
+                },
+                TestContext.Current.CancellationToken)
+            .Unwrap();
+
+        var completed = await Task.WhenAny(
+            probe,
+            Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+
+        await consumerCancellation.CancelAsync();
+        await consumer;
+
+        completed.Should().Be(probe, "the consumer must not block its thread while it waits for entries");
+    }
+
     [Trait("Area", "EntityIdentity")]
     [Fact]
     public async Task Enqueue_Should_Not_Merge_Added_Of_Recreated_Object_Into_Pending_Deleted()

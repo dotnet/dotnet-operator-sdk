@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Concurrent;
+using System.Threading.Channels;
 
 using k8s;
 using k8s.Models;
@@ -47,8 +48,11 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
     // Used for managing all scheduled entries that should be added to the queue in the future.
     private readonly ConcurrentDictionary<string, TimedQueueEntry<TEntity>> _management = new();
 
-    // The actual queue containing all the entries that have to be reconciled.
-    private readonly BlockingCollection<QueueEntry<TEntity>> _queue = new(new ConcurrentQueue<QueueEntry<TEntity>>());
+    // The actual queue containing all the entries that have to be reconciled. A channel lets consumers wait
+    // asynchronously; a blocking collection would block a thread pool thread per consumer for its whole
+    // lifetime. Several readers are allowed because a leadership flap can briefly overlap two consumer loops.
+    private readonly Channel<QueueEntry<TEntity>> _queue = Channel.CreateUnbounded<QueueEntry<TEntity>>(
+        new UnboundedChannelOptions { SingleReader = false, SingleWriter = false });
 
     // Periodic timer that checks for ready entries.
     private readonly PeriodicTimer _timer = new(TimeSpan.FromMilliseconds(TimerIntervalMilliseconds));
@@ -80,18 +84,17 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
         _timerTask = Task.Run(ProcessScheduledEntriesAsync, CancellationToken.None);
 
         // The gauge callbacks are invoked by the (long-lived) meter for its whole lifetime, which
-        // outlives this queue. After Dispose() the BlockingCollection would throw
-        // ObjectDisposedException on Count, so the callbacks short-circuit once disposed.
+        // outlives this queue, so they report 0 once the queue is disposed.
         _metrics?.RegisterQueueDepthGauge(
             typeof(TEntity).Name,
             () => _disposed ? 0 : _management.Count,
-            () => _disposed ? 0 : _queue.Count);
+            () => _disposed ? 0 : _queue.Reader.Count);
     }
 
     internal int Count => _management.Count;
 
     // Number of entries already promoted to the ready queue.
-    internal int ReadyCount => _queue.Count;
+    internal int ReadyCount => _queue.Reader.Count;
 
     /// <inheritdoc cref="ITimedEntityQueue{TEntity}.Enqueue"/>
     public Task<bool> Enqueue(TEntity entity, ReconciliationType type, ReconciliationTriggerSource reconciliationTriggerSource, TimeSpan queueIn, int retryCount, CancellationToken cancellationToken)
@@ -176,17 +179,17 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
     /// <inheritdoc cref="ISuspendableEntityQueue.Clear"/>
     public void Clear()
     {
-        // Drain both collections atomically with the intake gate, but never CompleteAdding() the
-        // BlockingCollection — the queue must stay usable after ResumeIntake() once leadership is regained.
+        // Drain both collections atomically with the intake gate, but never complete the channel — the
+        // queue must stay usable after ResumeIntake() once leadership is regained.
         lock (_gateLock)
         {
             var scheduled = _management.Count;
             _management.Clear();
 
             var ready = 0;
-            while (_queue.TryTake(out _))
+            while (_queue.Reader.TryRead(out _))
             {
-                // Discard the ready entry; draining only, never CompleteAdding().
+                // Discard the ready entry; draining only, never complete the channel.
                 ready++;
             }
 
@@ -243,22 +246,16 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
         // Wait for timer task to complete (with timeout)
         _timerTask.Wait(TimeSpan.FromSeconds(5), CancellationToken.None);
 
-        // Dispose resources
+        // Dispose resources; completing the channel ends all running consumers.
         _timer.Dispose();
         _timerCts.Dispose();
-        _queue.Dispose();
+        _queue.Writer.TryComplete();
         _management.Clear();
     }
 
     /// <inheritdoc cref="IAsyncEnumerable{T}.GetAsyncEnumerator"/>
-    public async IAsyncEnumerator<QueueEntry<TEntity>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
-    {
-        await Task.Yield();
-        foreach (var entry in _queue.GetConsumingEnumerable(cancellationToken))
-        {
-            yield return entry;
-        }
-    }
+    public IAsyncEnumerator<QueueEntry<TEntity>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+        => _queue.Reader.ReadAllAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
 
     /// <summary>
     /// Continuously processes scheduled entries, adding ready entries to the queue.
@@ -319,7 +316,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
                                 continue;
                             }
 
-                            _queue.TryAdd(entry.ToQueueEntry());
+                            _queue.Writer.TryWrite(entry.ToQueueEntry());
                         }
 
                         _logger
