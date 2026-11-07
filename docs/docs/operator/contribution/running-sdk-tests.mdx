@@ -54,8 +54,8 @@ KUBEOPS_TEST_WEBHOOK_HOST=$(docker network inspect kind \
   dotnet test --project test/KubeOps.Operator.Web.Test/KubeOps.Operator.Web.Test.csproj
 ```
 
-Port `5443` must be free. The tests remove the `dev-validators` and `dev-mutators` webhook configurations
-when they finish.
+Port `5443` must be free. The test app removes the `dev-validators` and `dev-mutators` webhook configurations
+when it stops.
 
 ## Test Conventions
 

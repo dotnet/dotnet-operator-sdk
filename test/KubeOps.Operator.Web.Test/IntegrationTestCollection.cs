@@ -8,7 +8,6 @@ using System.Runtime.InteropServices;
 using k8s;
 using k8s.Models;
 
-using KubeOps.KubernetesClient;
 using KubeOps.Operator.Web.Builder;
 using KubeOps.Operator.Web.Certificates;
 using KubeOps.Operator.Web.Test.TestApp;
@@ -196,14 +195,9 @@ public sealed class ApplicationProvider : IAsyncLifetime
             return;
         }
 
+        // Stopping the app removes the webhook configurations it registered; disposing alone does not stop it.
+        await _app.StopAsync();
         await _app.DisposeAsync();
         _certificates?.Dispose();
-
-        // The webhook configurations fail closed; remove them so they do not outlive the test app.
-        using var client = new KubernetesClient.KubernetesClient() as IKubernetesClient;
-        await client.DeleteAsync<V1ValidatingWebhookConfiguration>(
-            KubeOpsWebhookConfigurationFactory.ValidatingConfigurationName);
-        await client.DeleteAsync<V1MutatingWebhookConfiguration>(
-            KubeOpsWebhookConfigurationFactory.MutatingConfigurationName);
     }
 }

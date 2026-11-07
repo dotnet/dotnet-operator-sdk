@@ -21,6 +21,16 @@ internal sealed class CapturingKubernetesClient : IKubernetesClient
     /// </summary>
     public List<IKubernetesObject<V1ObjectMeta>> Updated { get; } = [];
 
+    /// <summary>
+    /// Gets the names passed to <see cref="DeleteAsync{TEntity}(string,string,CancellationToken)"/>.
+    /// </summary>
+    public List<string> Deleted { get; } = [];
+
+    /// <summary>
+    /// Gets or sets the exception that <see cref="DeleteAsync{TEntity}(string,string,CancellationToken)"/> throws.
+    /// </summary>
+    public Exception? DeleteException { get; set; }
+
     public IKubernetes ApiClient => throw new NotSupportedException();
 
     public Uri BaseUri => new("https://localhost");
@@ -68,7 +78,10 @@ internal sealed class CapturingKubernetesClient : IKubernetesClient
         TEntity entity,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => Task.FromResult(entity);
+    {
+        Existing[entity.Name()] = entity;
+        return Task.FromResult(entity);
+    }
 
     public Task<TEntity> UpdateAsync<TEntity>(
         TEntity entity,
@@ -76,6 +89,7 @@ internal sealed class CapturingKubernetesClient : IKubernetesClient
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
         Updated.Add(entity);
+        Existing[entity.Name()] = entity;
         return Task.FromResult(entity);
     }
 
@@ -105,7 +119,16 @@ internal sealed class CapturingKubernetesClient : IKubernetesClient
         string? @namespace = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => Task.CompletedTask;
+    {
+        if (DeleteException is not null)
+        {
+            throw DeleteException;
+        }
+
+        Deleted.Add(name);
+        Existing.Remove(name);
+        return Task.CompletedTask;
+    }
 
     public Watcher<TEntity> Watch<TEntity>(
         Action<WatchEventType, TEntity> onEvent,

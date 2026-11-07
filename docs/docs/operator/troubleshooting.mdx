@@ -126,8 +126,9 @@ local development, where you typically run with an admin kubeconfig.
   [webhook configuration factory](./configuration/generation-customization#customizing-webhook-configuration-generation).
 - Check that the webhook `Service`/URL in the generated configuration actually points at your
   operator and that the CA bundle matches the serving certificate.
-- After local development, the `dev-validators` and `dev-mutators` configurations still point to
-  your machine or tunnel. Delete them once the local operator is stopped.
+- After local development, the `dev-validators` and `dev-mutators` configurations can still point to
+  your machine or tunnel: with `UseCertificateProvider`, or when the operator was killed instead of
+  stopped. Delete them once the local operator is stopped.
 
 ## Watcher keeps reconnecting / `410 Gone` in logs
 

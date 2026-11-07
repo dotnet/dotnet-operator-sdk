@@ -4,6 +4,7 @@
 
 using FluentAssertions;
 
+using KubeOps.Abstractions.Webhooks;
 using KubeOps.Operator.Web.Test.TestApp;
 using KubeOps.Operator.Web.Webhooks;
 
@@ -42,12 +43,57 @@ public sealed class ExternalWebhookServiceTest
         factory.MutatingRegistrations.Should().NotBeEmpty().And.OnlyContain(r => r.CaBundle == caBundle);
     }
 
+    [Fact]
+    public async Task StopAsync_Removes_The_Registered_Webhook_Configurations()
+    {
+        var client = new CapturingKubernetesClient();
+        var service = CreateService(new(TunnelUri, null), new KubeOpsWebhookConfigurationFactory(), client);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        client.Deleted.Should().BeEquivalentTo(
+            KubeOpsWebhookConfigurationFactory.ValidatingConfigurationName,
+            KubeOpsWebhookConfigurationFactory.MutatingConfigurationName);
+    }
+
+    [Fact]
+    public async Task StopAsync_Keeps_Webhook_Configurations_Taken_Over_By_Another_Endpoint()
+    {
+        var client = new CapturingKubernetesClient();
+        var service = CreateService(new(TunnelUri, null), new KubeOpsWebhookConfigurationFactory(), client);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        // Another operator instance registered the same configurations against its own tunnel in the meantime.
+        var otherTunnel = new Uri("https://my-tunnel-5000-other.euw.devtunnels.ms");
+        await CreateService(new(otherTunnel, null), new KubeOpsWebhookConfigurationFactory(), client)
+            .StartAsync(TestContext.Current.CancellationToken);
+
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        client.Deleted.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task StopAsync_Completes_When_The_Removal_Fails()
+    {
+        var client = new CapturingKubernetesClient();
+        var service = CreateService(new(TunnelUri, null), new KubeOpsWebhookConfigurationFactory(), client);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        client.DeleteException = new HttpRequestException("The API server is not reachable.");
+
+        var stop = () => service.StopAsync(TestContext.Current.CancellationToken);
+
+        await stop.Should().NotThrowAsync();
+    }
+
     private static ExternalWebhookService CreateService(
         ExternalWebhookEndpoint endpoint,
-        CapturingWebhookConfigurationFactory factory)
+        IWebhookConfigurationFactory factory,
+        CapturingKubernetesClient? client = null)
         => new(
             NullLogger<ExternalWebhookService>.Instance,
-            new CapturingKubernetesClient(),
+            client ?? new CapturingKubernetesClient(),
             TestWebhooks.Loader,
             endpoint,
             factory);
