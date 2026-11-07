@@ -17,6 +17,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Web.Test.Builder;
 
+[Trait("Area", "WebhookRegistration")]
 public sealed class OperatorBuilderExtensionsTest : IDisposable
 {
     private const string TunnelUrl = "https://my-tunnel-5000.euw.devtunnels.ms";

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace KubeOps.Operator.Web.Test.Webhooks;
 
+[Trait("Area", "ExternalWebhookEndpoint")]
 public sealed class ExternalWebhookEndpointTest
 {
     [Fact]
