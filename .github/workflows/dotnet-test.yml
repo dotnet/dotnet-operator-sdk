@@ -28,4 +28,22 @@ jobs:
         uses: helm/kind-action@v1.15.2
 
       - name: Execute Tests
-        run: dotnet test --configuration ${{ runner.debug == '1' && 'Debug' || 'Release' }}
+        env:
+          # A crashing test host (e.g. exit code 139, see #1311) leaves no failed test behind. Capture a
+          # heap dump and a crash report with the native and managed stacks of all threads instead.
+          DOTNET_DbgEnableMiniDump: "1"
+          DOTNET_DbgMiniDumpType: "2"
+          DOTNET_DbgMiniDumpName: ${{ runner.temp }}/crash-dumps/%e.%p.dmp
+          DOTNET_EnableCrashReport: "1"
+        run: |
+          mkdir -p "$RUNNER_TEMP/crash-dumps"
+          dotnet test --configuration ${{ runner.debug == '1' && 'Debug' || 'Release' }}
+
+      - name: Upload Crash Dumps
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: crash-dumps
+          path: ${{ runner.temp }}/crash-dumps
+          if-no-files-found: ignore
+          retention-days: 7
