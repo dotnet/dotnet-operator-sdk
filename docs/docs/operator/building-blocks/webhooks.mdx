@@ -215,7 +215,8 @@ registers the route `/convert/webhook.dev/testentities`.
 ### Webhook classes
 
 A webhook class may derive from its webhook base class directly or through an intermediate class of your own,
-for example an abstract generic base that adds logging. Abstract classes are not registered.
+for example an abstract generic base that adds logging. Abstract classes are not registered. This applies to
+the registration at runtime and to the manifests that the CLI generates.
 
 Each entity kind, group and version can have only one validation and one mutation webhook, because the webhook
 names in the API server are derived from the entity. With a second one the operator fails to start and names the

@@ -228,11 +228,11 @@ internal static partial class AssemblyLoader
 
     public static IEnumerable<ValidationWebhook> GetValidatedEntities(this MetadataLoadContext context) => context
         .GetTypesDerivingFrom(typeof(ValidationWebhook<>))
-        .Select(t => new ValidationWebhook(t.Type, context.ToEntityMetadata(t.Entity).Metadata));
+        .Select(t => new ValidationWebhook(t.Type, t.Entity, context.ToEntityMetadata(t.Entity).Metadata));
 
     public static IEnumerable<MutationWebhook> GetMutatedEntities(this MetadataLoadContext context) => context
         .GetTypesDerivingFrom(typeof(MutationWebhook<>))
-        .Select(t => new MutationWebhook(t.Type, context.ToEntityMetadata(t.Entity).Metadata));
+        .Select(t => new MutationWebhook(t.Type, t.Entity, context.ToEntityMetadata(t.Entity).Metadata));
 
     public static IEnumerable<EntityMetadata> GetConvertedEntities(this MetadataLoadContext context) => context
         .GetTypesDerivingFrom(typeof(ConversionWebhook<>))
@@ -240,12 +240,29 @@ internal static partial class AssemblyLoader
 
     private static IEnumerable<(TypeInfo Type, Type Entity)> GetTypesDerivingFrom(
         this MetadataLoadContext context,
-        Type openGenericBase) => context
-        .GetTypesToInspect()
-        .Where(t => t.BaseType?.Name == openGenericBase.Name &&
-                    t.BaseType?.Namespace == openGenericBase.Namespace)
-        .Distinct()
-        .Select(t => (t, t.BaseType!.GenericTypeArguments[0]));
+        Type openGenericBase) =>
+        from type in context.GetTypesToInspect().Distinct()
+        let entity = GetEntityType(type, openGenericBase)
+        where entity is not null
+        select (type, entity);
+
+    /// <summary>
+    /// Returns the entity type of the closest base class built from <paramref name="openGenericBase"/>, so webhooks
+    /// derived from an intermediate base class are found as well. Types of the <see cref="MetadataLoadContext"/>
+    /// differ from the runtime types, so the base classes are compared by name and namespace.
+    /// </summary>
+    private static Type? GetEntityType(Type type, Type openGenericBase)
+    {
+        for (var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            if (baseType.Name == openGenericBase.Name && baseType.Namespace == openGenericBase.Namespace)
+            {
+                return baseType.GenericTypeArguments[0];
+            }
+        }
+
+        return null;
+    }
 
     private static IEnumerable<TypeInfo> GetTypesToInspect(this MetadataLoadContext context) => context
         .GetAssemblies()
