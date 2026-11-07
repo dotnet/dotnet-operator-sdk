@@ -57,7 +57,7 @@ public sealed class ExternalWebhookServiceTest
         => new(
             NullLogger<ExternalWebhookService>.Instance,
             new CapturingKubernetesClient(),
-            new(typeof(V1OperatorWebIntegrationTestEntity).Assembly),
+            TestWebhooks.Loader,
             endpoint,
             factory);
 }

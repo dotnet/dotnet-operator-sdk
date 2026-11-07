@@ -25,7 +25,7 @@ public sealed class CertificateWebhookServiceTest : IDisposable
         var service = new CertificateWebhookService(
             NullLogger<CertificateWebhookService>.Instance,
             client,
-            new(typeof(V1OperatorWebIntegrationTestEntity).Assembly),
+            TestWebhooks.Loader,
             new(Environment.MachineName, 443),
             _certificateProvider,
             factory);

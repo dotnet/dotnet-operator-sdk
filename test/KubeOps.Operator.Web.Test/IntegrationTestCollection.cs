@@ -179,7 +179,7 @@ public sealed class ApplicationProvider : IAsyncLifetime
         });
 
         builder.Services.RemoveAll<WebhookLoader>();
-        builder.Services.AddSingleton(new WebhookLoader(typeof(ApplicationProvider).Assembly));
+        builder.Services.AddSingleton(TestWebhooks.Loader);
 
         _app = builder.Build();
 

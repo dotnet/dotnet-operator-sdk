@@ -100,6 +100,8 @@ builder.Services
 
 To keep the URL out of the code, call `UseExternalWebhookEndpoint()` without arguments. It reads the URL from the configuration key `KubeOps:Webhooks:ExternalUrl` (environment variable `KubeOps__Webhooks__ExternalUrl`, e.g. in `launchSettings.json` or `appsettings.Development.json`) and fails the start if the value is missing. If your endpoint uses a certificate that is not publicly trusted, pass its CA as `caBundle`: `UseExternalWebhookEndpoint(uri, caBundle)`.
 
+If the URL contains a path, the webhook routes are appended to it: `https://proxy.example.com/my-operator` registers `https://proxy.example.com/my-operator/validate/v1demoentity`. The operator serves the routes at the root, so the proxy must strip the path prefix before it forwards a request.
+
 The following examples forward to an operator listening on `http://localhost:5000`. A persistent URL saves you from updating the configuration on every run.
 
 **Microsoft Dev Tunnels**
@@ -209,6 +211,15 @@ For **conversion** webhooks, the route uses the entity's Kubernetes metadata ins
 A conversion webhook for an entity annotated with
 `[KubernetesEntity(Group = "webhook.dev", ApiVersion = "v2", Kind = "TestEntity")]`
 registers the route `/convert/webhook.dev/testentities`.
+
+### Webhook classes
+
+A webhook class may derive from its webhook base class directly or through an intermediate class of your own,
+for example an abstract generic base that adds logging. Abstract classes are not registered.
+
+Each entity kind, group and version can have only one validation and one mutation webhook, because the webhook
+names in the API server are derived from the entity. With a second one the operator fails to start and names the
+duplicate webhook.
 
 ## Validation Webhooks
 
