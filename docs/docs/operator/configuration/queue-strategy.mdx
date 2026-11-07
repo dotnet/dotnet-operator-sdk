@@ -85,6 +85,11 @@ in-memory queue (see [Multiple Controllers per Entity](../building-blocks/contro
 Custom queues should follow the same de-duplication contract as the built-in implementation: keep at
 most one pending entry per object UID (falling back to namespace/name when no UID is set) and preserve the earliest scheduled execution time.
 
+The enumerator returned by `GetAsyncEnumerator` should wait for new entries asynchronously, for example by
+reading from a `System.Threading.Channels.Channel<T>` like the built-in queue does. A blocking wait (such as
+`BlockingCollection<T>.GetConsumingEnumerable`) occupies a thread pool thread for as long as the consumer
+runs, once per entity type, and can starve the rest of the operator.
+
 `Enqueue` returns `Task<bool>`: return `true` when the entry was scheduled and `false` when it was
 dropped (for example because the `cancellationToken` was already cancelled, or — for a queue that
 implements `ISuspendableEntityQueue` — because intake is currently suspended). The reconciler and the
