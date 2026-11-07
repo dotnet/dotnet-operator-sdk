@@ -8,13 +8,13 @@ using KubeOps.Abstractions.Entities;
 
 namespace KubeOps.Operator.Web.Test.TestApp;
 
-[KubernetesEntity(Group = "test.kubeops.dev", ApiVersion = "v1", Kind = "TestEntity")]
+[KubernetesEntity(Group = "test.kubeops.dev", ApiVersion = "v1", Kind = "TestEntityWithIsoDuration")]
 public sealed class TestEntityWithISODurationTimeSpan : CustomKubernetesEntity<TestEntityWithISODurationTimeSpan.EntitySpec>
 {
     public TestEntityWithISODurationTimeSpan()
     {
         ApiVersion = "test.kubeops.dev/v1";
-        Kind = "TestEntity";
+        Kind = "TestEntityWithIsoDuration";
     }
 
     public sealed class EntitySpec

@@ -2,13 +2,16 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
 using k8s;
+using k8s.Autorest;
 using k8s.Models;
 
 using KubeOps.Operator.Web.Builder;
+using KubeOps.Operator.Web.Certificates;
 using KubeOps.Operator.Web.Test.TestApp;
 using KubeOps.Operator.Web.Webhooks;
 using KubeOps.Transpiler;
@@ -117,21 +120,31 @@ public sealed class MlcProvider : IAsyncLifetime
 }
 
 /// <summary>
-/// Admission webhook integration tests need the API server to reach the test app on port 5000.
-/// They only run when <c>KubeOps__Webhooks__ExternalUrl</c> holds the public https URL of a tunnel
-/// to that port (for example <c>devtunnel host -p 5000 --allow-anonymous</c>).
+/// Admission webhook integration tests need the Kubernetes API server to call the test app.
+/// They only run when <c>KUBEOPS_TEST_WEBHOOK_HOST</c> holds a host name or IP address under which the
+/// API server reaches this machine, for example the gateway of the <c>kind</c> Docker network or
+/// <c>host.docker.internal</c>. The test app then serves HTTPS on <see cref="Port"/> with a generated
+/// certificate and registers the webhooks with its CA bundle.
 /// </summary>
 public static class ExternalWebhookTestEndpoint
 {
-    public const string SkipReason =
-        "Requires a tunnel to the test app on port 5000; set KubeOps__Webhooks__ExternalUrl to its public https URL.";
+    public const string HostVariable = "KUBEOPS_TEST_WEBHOOK_HOST";
 
-    public static bool IsConfigured =>
-        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("KubeOps__Webhooks__ExternalUrl"));
+    public const int Port = 5443;
+
+    public const string SkipReason =
+        $"Requires the API server to reach the test app; set {HostVariable} to a host name or IP of this machine.";
+
+    public static bool IsConfigured => !string.IsNullOrWhiteSpace(Host);
+
+    public static Uri BaseUri => new UriBuilder(Uri.UriSchemeHttps, Host, Port).Uri;
+
+    private static string? Host => Environment.GetEnvironmentVariable(HostVariable)?.Trim();
 }
 
 public sealed class ApplicationProvider : IAsyncLifetime
 {
+    private CertificateGenerator? _certificates;
     private WebApplication? _app;
 
     public async ValueTask InitializeAsync()
@@ -141,11 +154,16 @@ public sealed class ApplicationProvider : IAsyncLifetime
             return;
         }
 
+        var baseUri = ExternalWebhookTestEndpoint.BaseUri;
+        _certificates = new CertificateGenerator(baseUri.Host);
+        var serverCertificate = _certificates.Server.CopyServerCertWithPrivateKey();
+
         var builder = WebApplication.CreateBuilder();
-        builder.WebHost.ConfigureKestrel(c => c.ListenAnyIP(5000));
+        builder.WebHost.ConfigureKestrel(c =>
+            c.ListenAnyIP(baseUri.Port, listen => listen.UseHttps(serverCertificate)));
         builder.Services
             .AddKubernetesOperator()
-            .UseExternalWebhookEndpoint();
+            .UseExternalWebhookEndpoint(baseUri, _certificates.Root.Certificate.EncodeToPemBytes());
 
         builder.Services.AddControllers().AddApplicationPart(typeof(ApplicationProvider).Assembly);
         builder.Services.AddHealthChecks();
@@ -174,9 +192,30 @@ public sealed class ApplicationProvider : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        if (_app is not null)
+        if (_app is null)
         {
-            await _app.DisposeAsync();
+            return;
+        }
+
+        await _app.DisposeAsync();
+        _certificates?.Dispose();
+
+        // The webhook configurations fail closed; remove them so they do not outlive the test app.
+        using var client = new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig());
+        var admission = client.AdmissionregistrationV1;
+        await IgnoreNotFound(() => admission.DeleteValidatingWebhookConfigurationAsync("dev-validators"));
+        await IgnoreNotFound(() => admission.DeleteMutatingWebhookConfigurationAsync("dev-mutators"));
+    }
+
+    private static async Task IgnoreNotFound(Func<Task> delete)
+    {
+        try
+        {
+            await delete();
+        }
+        catch (HttpOperationException e) when (e.Response.StatusCode == HttpStatusCode.NotFound)
+        {
+            // Already gone.
         }
     }
 }

@@ -36,6 +36,27 @@ dotnet test --project test/KubeOps.Operator.Test/KubeOps.Operator.Test.csproj \
 dotnet test --filter "FullyQualifiedName~MyTestClass.MyTestMethod"
 ```
 
+## Webhook Integration Tests
+
+The admission webhook integration tests in `KubeOps.Operator.Web.Test` need the Kubernetes API server to
+call the test app on your machine. They are skipped unless `KUBEOPS_TEST_WEBHOOK_HOST` holds a host name or
+IP address under which the API server reaches your machine. The test app then serves HTTPS on port `5443`
+with a generated certificate and registers the webhooks with its CA bundle, so no tunnel is needed.
+
+```bash
+# Docker Desktop or OrbStack
+KUBEOPS_TEST_WEBHOOK_HOST=host.docker.internal \
+  dotnet test --project test/KubeOps.Operator.Web.Test/KubeOps.Operator.Web.Test.csproj
+
+# kind on Linux: the gateway of the kind Docker network (this is what the CI uses)
+KUBEOPS_TEST_WEBHOOK_HOST=$(docker network inspect kind \
+  --format '{{range .IPAM.Config}}{{println .Gateway}}{{end}}' | grep -m1 -E '^[0-9]+(\.[0-9]+){3}$') \
+  dotnet test --project test/KubeOps.Operator.Web.Test/KubeOps.Operator.Web.Test.csproj
+```
+
+Port `5443` must be free. The tests remove the `dev-validators` and `dev-mutators` webhook configurations
+when they finish.
+
 ## Test Conventions
 
 - Tests use **xUnit v3** and **FluentAssertions** (`.Should().Be(...)` style).

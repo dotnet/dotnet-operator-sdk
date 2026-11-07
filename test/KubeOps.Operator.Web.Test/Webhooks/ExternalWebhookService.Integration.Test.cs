@@ -49,5 +49,5 @@ public sealed class ExternalWebhookServiceIntegrationTest : IntegrationTestBase
     }
 
     private static string ExternalUrl =>
-        new Uri(Environment.GetEnvironmentVariable("KubeOps__Webhooks__ExternalUrl")!).GetLeftPart(UriPartial.Authority);
+        ExternalWebhookTestEndpoint.BaseUri.GetLeftPart(UriPartial.Authority);
 }
