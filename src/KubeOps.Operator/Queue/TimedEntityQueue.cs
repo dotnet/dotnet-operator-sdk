@@ -257,6 +257,67 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
     public IAsyncEnumerator<QueueEntry<TEntity>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
         => _queue.Reader.ReadAllAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
 
+    internal TimedQueueEntry<TEntity>? GetScheduledEntry(string key) => _management.GetValueOrDefault(key);
+
+    /// <summary>
+    /// Handles one entry of the timer loop's pass over the scheduled entries: removes it if it was cancelled and
+    /// moves it to the ready queue once it is due.
+    /// </summary>
+    /// <remarks>
+    /// The pass reads the entries without a lock, so <see cref="Enqueue"/> may replace an entry after it was read.
+    /// Only the entry that was read is removed or promoted, never its replacement.
+    /// </remarks>
+    /// <param name="key">The key the entry was read under.</param>
+    /// <param name="entry">The entry as the timer loop read it.</param>
+    /// <param name="now">The time of the current timer tick.</param>
+    internal void ProcessScheduledEntry(string key, TimedQueueEntry<TEntity> entry, DateTimeOffset now)
+    {
+        if (!entry.IsCancelled && entry.EnqueueAt > now)
+        {
+            return;
+        }
+
+        // Enqueue replaces entries under the same lock, so the entry cannot change between the check and the
+        // removal. Promoting atomically with the intake gate also means nothing is promoted while intake is
+        // suspended, and a Clear() on leadership loss cannot be raced by a promotion after the clear.
+        lock (_gateLock)
+        {
+            if (!_management.TryGetValue(key, out var current) || !ReferenceEquals(current, entry))
+            {
+                // Replaced or removed since it was read; the replacement is handled on its own.
+                return;
+            }
+
+            if (entry.IsCancelled)
+            {
+                _management.TryRemove(key, out _);
+                _logger
+                    .LogTrace(
+                        """Removed cancelled scheduled entry for entity "{Identifier}".""",
+                        entry.GetEntityIdentifierString());
+                return;
+            }
+
+            if (_intakeSuspended)
+            {
+                _logger
+                    .LogTrace(
+                        """Intake suspended for {Entity}; skipping promotion of scheduled entry "{Identifier}".""",
+                        typeof(TEntity).Name,
+                        entry.GetEntityIdentifierString());
+                return;
+            }
+
+            _management.TryRemove(key, out _);
+            _queue.Writer.TryWrite(entry.ToQueueEntry());
+        }
+
+        _logger
+            .LogTrace(
+                """Moved scheduled entry for entity "{Identifier}" to ready queue.""",
+                entry.GetEntityIdentifierString());
+    }
+
     /// <summary>
     /// Continuously processes scheduled entries, adding ready entries to the queue.
     /// </summary>
@@ -280,49 +341,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
 
                     foreach (var (key, entry) in _management)
                     {
-                        // Skip if cancelled
-                        if (entry.IsCancelled)
-                        {
-                            _management.TryRemove(key, out _);
-                            _logger
-                                .LogTrace(
-                                    """Removed cancelled scheduled entry for entity "{Identifier}".""",
-                                    entry.GetEntityIdentifierString());
-                            continue;
-                        }
-
-                        if (entry.EnqueueAt > now)
-                        {
-                            continue;
-                        }
-
-                        // Promote atomically with the intake gate: while intake is suspended nothing is
-                        // promoted, and a Clear() on leadership loss cannot be raced by a concurrent
-                        // promotion re-adding an entry to the ready queue after the clear.
-                        lock (_gateLock)
-                        {
-                            if (_intakeSuspended)
-                            {
-                                _logger
-                                    .LogTrace(
-                                        """Intake suspended for {Entity}; skipping promotion of scheduled entry "{Identifier}".""",
-                                        typeof(TEntity).Name,
-                                        entry.GetEntityIdentifierString());
-                                continue;
-                            }
-
-                            if (!_management.TryRemove(key, out _))
-                            {
-                                continue;
-                            }
-
-                            _queue.Writer.TryWrite(entry.ToQueueEntry());
-                        }
-
-                        _logger
-                            .LogTrace(
-                                """Moved scheduled entry for entity "{Identifier}" to ready queue.""",
-                                entry.GetEntityIdentifierString());
+                        ProcessScheduledEntry(key, entry, now);
                     }
                 }
             }

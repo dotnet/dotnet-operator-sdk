@@ -477,6 +477,89 @@ public sealed class TimedEntityQueueTest
         queue.GetKey(CreateSecret("ns", "secret")).Should().Be("ns/secret");
     }
 
+    [Fact]
+    [Trait("Area", "TimerLoop")]
+    public async Task Timer_Should_Keep_The_Entry_That_Replaced_A_Cancelled_One()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        var secret = CreateSecret("ns", "secret");
+        var key = queue.GetKey(secret)!;
+        await queue.Enqueue(
+            secret,
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.ApiServer,
+            LaterThanDrainTimeout,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+        var replaced = queue.GetScheduledEntry(key)!;
+        await queue.Enqueue(
+            secret,
+            ReconciliationType.Deleted,
+            ReconciliationTriggerSource.ApiServer,
+            LaterThanDrainTimeout,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+        var replacement = queue.GetScheduledEntry(key);
+
+        // The timer loop read the entry before Enqueue replaced and cancelled it.
+        queue.ProcessScheduledEntry(key, replaced, DateTimeOffset.UtcNow);
+
+        queue.GetScheduledEntry(key).Should().BeSameAs(replacement);
+        queue.ReadyCount.Should().Be(0);
+    }
+
+    [Fact]
+    [Trait("Area", "TimerLoop")]
+    public async Task Timer_Should_Not_Promote_An_Entry_That_Was_Replaced()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        var secret = CreateSecret("ns", "secret");
+        var key = queue.GetKey(secret)!;
+        await queue.Enqueue(
+            secret,
+            ReconciliationType.Deleted,
+            ReconciliationTriggerSource.ApiServer,
+            LaterThanDrainTimeout,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+        var replacement = queue.GetScheduledEntry(key);
+
+        // A due entry the timer loop read and found not cancelled, before Enqueue replaced it.
+        var stale = new TimedQueueEntry<V1Secret>(
+            secret,
+            ReconciliationType.Modified,
+            ReconciliationTriggerSource.ApiServer,
+            TimeSpan.Zero,
+            retryCount: 0);
+        queue.ProcessScheduledEntry(key, stale, DateTimeOffset.UtcNow);
+
+        queue.GetScheduledEntry(key).Should().BeSameAs(replacement);
+        queue.ReadyCount.Should().Be(0);
+    }
+
+    [Fact]
+    [Trait("Area", "TimerLoop")]
+    public async Task Timer_Should_Promote_The_Scheduled_Entry_Once_It_Is_Due()
+    {
+        using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
+        var secret = CreateSecret("ns", "secret");
+        var key = queue.GetKey(secret)!;
+        await queue.Enqueue(
+            secret,
+            ReconciliationType.Deleted,
+            ReconciliationTriggerSource.ApiServer,
+            LaterThanDrainTimeout,
+            retryCount: 0,
+            TestContext.Current.CancellationToken);
+        var scheduled = queue.GetScheduledEntry(key)!;
+
+        queue.ProcessScheduledEntry(key, scheduled, scheduled.EnqueueAt);
+
+        queue.GetScheduledEntry(key).Should().BeNull();
+        var items = await DrainQueue(queue, expectedCount: 1);
+        items.Should().ContainSingle().Which.ReconciliationType.Should().Be(ReconciliationType.Deleted);
+    }
+
     private static V1Secret CreateSecret(string secretNamespace, string secretName)
     {
         var secret = new V1Secret();
