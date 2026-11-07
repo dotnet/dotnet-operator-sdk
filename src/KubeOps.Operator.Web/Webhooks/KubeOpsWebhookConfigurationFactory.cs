@@ -20,6 +20,7 @@ public class KubeOpsWebhookConfigurationFactory : IWebhookConfigurationFactory
         IEnumerable<MutatingWebhookRegistration> registrations)
     {
         var webhooks = registrations.Select(CreateMutatingWebhook).ToList();
+        EnsureUniqueNames(webhooks.Select(w => w.Name));
 
         return new V1MutatingWebhookConfiguration()
         {
@@ -33,6 +34,7 @@ public class KubeOpsWebhookConfigurationFactory : IWebhookConfigurationFactory
         IEnumerable<ValidatingWebhookRegistration> registrations)
     {
         var webhooks = registrations.Select(CreateValidatingWebhook).ToList();
+        EnsureUniqueNames(webhooks.Select(w => w.Name));
 
         return new V1ValidatingWebhookConfiguration()
         {
@@ -98,6 +100,22 @@ public class KubeOpsWebhookConfigurationFactory : IWebhookConfigurationFactory
             CaBundle = reg.CaBundle,
         },
     };
+
+    /// <summary>
+    /// The API server rejects a webhook configuration with duplicate webhook names. Fail early with the name instead.
+    /// The names are derived from the entity, so a duplicate means two webhooks of the same type handle entities with
+    /// the same kind, group and version.
+    /// </summary>
+    private static void EnsureUniqueNames(IEnumerable<string> names)
+    {
+        var duplicates = names.GroupBy(n => n).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        if (duplicates.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Duplicate webhook names: {string.Join(", ", duplicates)}. Each entity kind, group and version " +
+                "may have only one validation and one mutation webhook.");
+        }
+    }
 
     private static string Defaulted(string? value, string defaultValue) =>
         string.IsNullOrWhiteSpace(value) ? defaultValue : value;

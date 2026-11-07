@@ -11,6 +11,16 @@ namespace KubeOps.Operator.Web.Test.Webhooks;
 
 internal sealed class CapturingKubernetesClient : IKubernetesClient
 {
+    /// <summary>
+    /// Gets the objects returned by <see cref="GetAsync{TEntity}"/>, keyed by name.
+    /// </summary>
+    public Dictionary<string, IKubernetesObject<V1ObjectMeta>> Existing { get; } = [];
+
+    /// <summary>
+    /// Gets the objects passed to <see cref="UpdateAsync{TEntity}"/>.
+    /// </summary>
+    public List<IKubernetesObject<V1ObjectMeta>> Updated { get; } = [];
+
     public IKubernetes ApiClient => throw new NotSupportedException();
 
     public Uri BaseUri => new("https://localhost");
@@ -31,7 +41,9 @@ internal sealed class CapturingKubernetesClient : IKubernetesClient
         string? @namespace = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => Task.FromResult<TEntity?>(default);
+        => Task.FromResult(Existing.TryGetValue(name, out var existing) && existing is TEntity entity
+            ? entity
+            : default);
 
     public TEntity? Get<TEntity>(string name, string? @namespace = null)
         where TEntity : IKubernetesObject<V1ObjectMeta>
@@ -62,7 +74,10 @@ internal sealed class CapturingKubernetesClient : IKubernetesClient
         TEntity entity,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
-        => Task.FromResult(entity);
+    {
+        Updated.Add(entity);
+        return Task.FromResult(entity);
+    }
 
     public Task<TEntity> UpdateStatusAsync<TEntity>(
         TEntity entity,

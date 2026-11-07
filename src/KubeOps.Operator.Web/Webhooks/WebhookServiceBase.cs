@@ -39,9 +39,9 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
     {
         var registrations = loader
             .ValidationWebhooks
-            .Select(t => (
-                Uri: GetWebhookUri(t),
-                Entities.ToEntityMetadata(t.BaseType!.GenericTypeArguments[0]).Metadata))
+            .Select(w => (
+                Uri: GetWebhookUri(w.Type),
+                Entities.ToEntityMetadata(w.Entity).Metadata))
             .Select(hook => new ValidatingWebhookRegistration(
                 hook.Metadata,
                 hook.Uri,
@@ -59,9 +59,9 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
     {
         var registrations = loader
             .MutationWebhooks
-            .Select(t => (
-                Uri: GetWebhookUri(t),
-                Entities.ToEntityMetadata(t.BaseType!.GenericTypeArguments[0]).Metadata))
+            .Select(w => (
+                Uri: GetWebhookUri(w.Type),
+                Entities.ToEntityMetadata(w.Entity).Metadata))
             .Select(hook => new MutatingWebhookRegistration(
                 hook.Metadata,
                 hook.Uri,
@@ -79,7 +79,7 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
     {
         foreach (var wh in loader.ConversionWebhooks)
         {
-            var metadata = Entities.ToEntityMetadata(wh.BaseType!.GenericTypeArguments[0]).Metadata;
+            var metadata = Entities.ToEntityMetadata(wh.Entity).Metadata;
             var crdName = $"{metadata.PluralName}.{metadata.Group}";
 
             if (await Client.GetAsync<V1CustomResourceDefinition>(crdName) is not { } crd)
@@ -87,7 +87,7 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
                 continue;
             }
 
-            var webhookUri = GetWebhookUri(wh);
+            var webhookUri = GetWebhookUri(wh.Type);
 
             crd.Spec.Conversion = new()
             {
@@ -113,22 +113,24 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
 
         if (webhookAttribute is not null)
         {
-            return new Uri(
-                Uri,
-                webhookAttribute.Uri);
+            return Append(webhookAttribute.Uri.OriginalString);
         }
 
         var routeAttribute = wh.GetCustomAttribute<RouteAttribute>();
 
         if (routeAttribute is { Template: not null and not "" })
         {
-            return new Uri(
-                Uri,
-                routeAttribute.Template);
+            return Append(routeAttribute.Template);
         }
 
         throw new InvalidOperationException(
             $"No {nameof(IWebhookAttribute)} or {nameof(RouteAttribute)} with a valid Uri found on webhook class {wh.FullName}. " +
             $"Add one of these attributes to specify the webhook's relative URI.");
     }
+
+    /// <summary>
+    /// Appends the webhook route to <see cref="Uri"/>. Resolving the route as a relative URI would drop the path of
+    /// the base URI, because webhook routes start with a slash.
+    /// </summary>
+    private Uri Append(string route) => new($"{Uri.AbsoluteUri.TrimEnd('/')}/{route.TrimStart('/')}");
 }
