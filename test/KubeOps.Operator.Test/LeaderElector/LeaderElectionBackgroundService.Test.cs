@@ -27,7 +27,7 @@ public sealed class LeaderElectionBackgroundServiceTest
 
         var electionLock = Mock.Of<ILock>();
 
-        var electionLockSubsequentCallEvent = new AutoResetEvent(false);
+        var electionLockSubsequentCall = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         bool hasElectionLockThrown = false;
         Mock.Get(electionLock)
             .Setup(el => el.GetAsync(It.IsAny<CancellationToken>()))
@@ -37,7 +37,7 @@ public sealed class LeaderElectionBackgroundServiceTest
                     if (hasElectionLockThrown)
                     {
                         // Signal to the test that a subsequent call has been made.
-                        electionLockSubsequentCallEvent.Set();
+                        electionLockSubsequentCall.TrySetResult();
 
                         // Delay returning for a long time, allowing the test to stop the background service, in turn cancelling the cancellation token.
                         await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
@@ -57,8 +57,12 @@ public sealed class LeaderElectionBackgroundServiceTest
         await leaderElectionBackgroundService.StartAsync(TestContext.Current.CancellationToken);
 
         // Starting the background service should result in the lock attempt throwing, and then a subsequent attempt being made.
-        // Wait for the subsequent event to be signalled, if we time out the test fails. The retry delay requires us to wait at least 3 seconds.
-        electionLockSubsequentCallEvent.WaitOne(TimeSpan.FromMilliseconds(3100)).Should().BeTrue();
+        // The first retry waits 2s plus up to 1s jitter. Wait asynchronously with a generous margin: a blocking wait with a
+        // tight timeout failed on busy CI runners, where the delayed continuation needs a free thread pool thread (#1305).
+        var retried = await Task.WhenAny(
+            electionLockSubsequentCall.Task,
+            Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        retried.Should().Be(electionLockSubsequentCall.Task, "the service should retry after the lock attempt threw");
 
         await leaderElectionBackgroundService.StopAsync(TestContext.Current.CancellationToken);
     }

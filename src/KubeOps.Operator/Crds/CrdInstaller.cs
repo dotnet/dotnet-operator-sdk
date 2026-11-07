@@ -185,10 +185,10 @@ internal sealed class CrdInstaller
         var entities = assembly
             .DefinedTypes
             .Where(t => t is { IsInterface: false, IsAbstract: false, IsGenericType: false })
-            .Select(t => (t, attrs: CustomAttributeData.GetCustomAttributes(t)))
-            .Where(e => e.attrs.Any(a => a.AttributeType.Name == nameof(KubernetesEntityAttribute)) &&
-                        e.attrs.All(a => a.AttributeType.Name != nameof(IgnoreAttribute)))
-            .Select(e => e.t)
+            .Select(t => (Type: t, Attributes: CustomAttributeData.GetCustomAttributes(t)))
+            .Where(e => e.Attributes.Any(a => a.AttributeType.Name == nameof(KubernetesEntityAttribute)) &&
+                        e.Attributes.All(a => a.AttributeType.Name != nameof(IgnoreAttribute)))
+            .Select(e => e.Type)
             .ToList();
 
         _crds = _crdResourceFactory.CreateCustomResourceDefinitions(entities).ToList();

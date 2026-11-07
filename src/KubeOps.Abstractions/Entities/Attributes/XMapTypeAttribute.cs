@@ -25,6 +25,7 @@ public enum XMapType
 /// <summary>
 /// Annotates an object to further describe its topology.
 /// </summary>
+/// <param name="mapType">The topology type of the object.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class XMapTypeAttribute(XMapType mapType) : Attribute
 {

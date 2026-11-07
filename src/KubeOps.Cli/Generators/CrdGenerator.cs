@@ -12,8 +12,8 @@ using KubeOps.Transpiler;
 
 namespace KubeOps.Cli.Generators;
 
-internal sealed class CrdGenerator(MetadataLoadContext parser, byte[] caBundle,
-    OutputFormat outputFormat) : IConfigGenerator
+internal sealed class CrdGenerator(MetadataLoadContext parser, byte[] caBundle, OutputFormat outputFormat)
+    : IConfigGenerator
 {
     public void Generate(ResultOutput output)
     {

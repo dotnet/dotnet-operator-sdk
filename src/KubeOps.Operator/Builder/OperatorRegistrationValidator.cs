@@ -40,6 +40,10 @@ namespace KubeOps.Operator.Builder;
 /// any work — nothing has started, so there is nothing to unwind.
 /// </para>
 /// </remarks>
+/// <param name="registry">The registry of the managed entity types and the service registrations.</param>
+/// <param name="settings">The operator settings.</param>
+/// <param name="cacheProvider">The FusionCache provider used to probe the watcher cache for tagging.</param>
+/// <param name="logger">The logger.</param>
 internal sealed class OperatorRegistrationValidator(
     OperatorRegistrationRegistry registry,
     OperatorSettings settings,

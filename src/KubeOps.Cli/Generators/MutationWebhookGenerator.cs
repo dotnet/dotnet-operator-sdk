@@ -10,8 +10,8 @@ using KubeOps.Cli.Transpilation;
 
 namespace KubeOps.Cli.Generators;
 
-internal class MutationWebhookGenerator
-    (List<MutationWebhook> webhooks, byte[] caBundle, OutputFormat format) : IConfigGenerator
+internal class MutationWebhookGenerator(
+    List<MutationWebhook> webhooks, byte[] caBundle, OutputFormat format) : IConfigGenerator
 {
     public void Generate(ResultOutput output)
     {
