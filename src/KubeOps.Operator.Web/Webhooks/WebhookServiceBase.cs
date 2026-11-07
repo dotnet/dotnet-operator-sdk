@@ -29,6 +29,11 @@ internal abstract class WebhookServiceBase(
     byte[]? caBundle,
     IWebhookConfigurationFactory webhookConfigurationFactory)
 {
+    private string? _validatingConfigurationName;
+    private string? _mutatingConfigurationName;
+
+    private string BasePrefix => $"{uri.AbsoluteUri.TrimEnd('/')}/";
+
     internal async Task RegisterAll()
     {
         await RegisterValidators();
@@ -48,6 +53,7 @@ internal abstract class WebhookServiceBase(
         if (validatorConfig.Webhooks.Any())
         {
             await client.SaveAsync(validatorConfig);
+            _validatingConfigurationName = validatorConfig.Name();
         }
     }
 
@@ -63,6 +69,39 @@ internal abstract class WebhookServiceBase(
         if (mutatorConfig.Webhooks.Any())
         {
             await client.SaveAsync(mutatorConfig);
+            _mutatingConfigurationName = mutatorConfig.Name();
+        }
+    }
+
+    /// <summary>
+    /// Removes the validating and mutating webhook configurations this service registered, as long as all their
+    /// webhooks still point to its base URI. A configuration that another operator instance registered against its
+    /// own endpoint in the meantime is kept. Conversion webhooks are written into the CRDs and stay as they are.
+    /// </summary>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>A task that completes when the configurations were checked and removed.</returns>
+    internal async Task UnregisterAll(CancellationToken cancellationToken)
+    {
+        if (_validatingConfigurationName is { } validatingName &&
+            await client.GetAsync<V1ValidatingWebhookConfiguration>(
+                validatingName,
+                cancellationToken: cancellationToken) is { } validating &&
+            PointsToBaseUri(validating.Webhooks?.Select(w => w.ClientConfig?.Url)))
+        {
+            await client.DeleteAsync<V1ValidatingWebhookConfiguration>(
+                validatingName,
+                cancellationToken: cancellationToken);
+        }
+
+        if (_mutatingConfigurationName is { } mutatingName &&
+            await client.GetAsync<V1MutatingWebhookConfiguration>(
+                mutatingName,
+                cancellationToken: cancellationToken) is { } mutating &&
+            PointsToBaseUri(mutating.Webhooks?.Select(w => w.ClientConfig?.Url)))
+        {
+            await client.DeleteAsync<V1MutatingWebhookConfiguration>(
+                mutatingName,
+                cancellationToken: cancellationToken);
         }
     }
 
@@ -123,5 +162,8 @@ internal abstract class WebhookServiceBase(
     /// Appends the webhook route to the base URI. Resolving the route as a relative URI would drop the path of
     /// the base URI, because webhook routes start with a slash.
     /// </summary>
-    private Uri Append(string route) => new($"{uri.AbsoluteUri.TrimEnd('/')}/{route.TrimStart('/')}");
+    private Uri Append(string route) => new($"{BasePrefix}{route.TrimStart('/')}");
+
+    private bool PointsToBaseUri(IEnumerable<string?>? urls) =>
+        urls?.All(url => url?.StartsWith(BasePrefix, StringComparison.OrdinalIgnoreCase) == true) == true;
 }

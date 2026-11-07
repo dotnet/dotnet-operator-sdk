@@ -7,6 +7,7 @@ using FluentAssertions;
 using KubeOps.Operator.Web.Certificates;
 using KubeOps.Operator.Web.Test.TestApp;
 using KubeOps.Operator.Web.Test.Webhooks;
+using KubeOps.Operator.Web.Webhooks;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -46,6 +47,29 @@ public sealed class CertificateWebhookServiceTest : IDisposable
             .NotContain(caBundle => caBundle.SequenceEqual(serverCertificateBundle));
         factory.MutatingCaBundles.Should()
             .NotContain(caBundle => caBundle.SequenceEqual(serverCertificateBundle));
+    }
+
+    [Fact]
+    public async Task StopAsync_Keeps_The_Webhook_Configurations()
+    {
+        // The certificate provider can serve an operator inside the cluster. During a rolling update the old pod
+        // stops after the new one registered the same configurations, so stopping must not remove them.
+        var client = new CapturingKubernetesClient();
+        var service = new CertificateWebhookService(
+            NullLogger<CertificateWebhookService>.Instance,
+            client,
+            TestWebhooks.Loader,
+            new(Environment.MachineName, 443),
+            new CertificateGenerator(Environment.MachineName),
+            new KubeOpsWebhookConfigurationFactory());
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        await service.StopAsync(TestContext.Current.CancellationToken);
+
+        client.Deleted.Should().BeEmpty();
+        client.Existing.Should().ContainKeys(
+            KubeOpsWebhookConfigurationFactory.ValidatingConfigurationName,
+            KubeOpsWebhookConfigurationFactory.MutatingConfigurationName);
     }
 
     public void Dispose()
