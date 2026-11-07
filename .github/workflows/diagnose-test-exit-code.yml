@@ -1,5 +1,6 @@
-# Temporary workflow for #1305: runs the test step repeatedly with diagnostics until `dotnet test`
-# exits with a non-zero code, then uploads the logs of the failing iteration. Not meant to be merged.
+# Temporary workflow for #1305: runs the test step repeatedly with diagnostics in parallel slots, records
+# every failing iteration and the failed tests, and uploads the logs of the failing iterations.
+# Not meant to be merged.
 name: Diagnose Test Exit Code
 
 on:
@@ -25,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        slot: [1, 2, 3, 4, 5]
+        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       - uses: actions/checkout@v7
 
@@ -37,14 +38,18 @@ jobs:
       - name: Create Kubernetes Cluster
         uses: helm/kind-action@v1.15.2
 
-      - name: Execute Tests Until Failure
+      - name: Execute Tests Repeatedly
         env:
-          ITERATIONS: "15"
+          ITERATIONS: "30"
         run: |
           set +e
           root="$RUNNER_TEMP/test-diagnostics"
-          echo "| Iteration | Exit code |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p "$root"
+          failures="$root/failures.tsv"
+          : > "$failures"
+          failed_iterations=0
+          echo "| Iteration | Exit code | Failed tests |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- | --- |" >> "$GITHUB_STEP_SUMMARY"
 
           for i in $(seq 1 "$ITERATIONS"); do
             dir="$root/iteration-$i"
@@ -61,16 +66,26 @@ jobs:
                 2>&1 | tee "$dir/console.log"
             code=${PIPESTATUS[0]}
             echo "::endgroup::"
-            echo "| $i | $code |" >> "$GITHUB_STEP_SUMMARY"
+
+            tests=$(sed 's/\x1b\[[0-9;]*m//g' "$dir/console.log" | grep -E '^failed ' | sed -E 's/^failed //; s/ \([^)]*\)$//' | sort -u)
+            echo "| $i | $code | $(echo "$tests" | paste -sd ',' - | sed 's/,/<br>/g') |" >> "$GITHUB_STEP_SUMMARY"
 
             if [ "$code" -ne 0 ]; then
+              failed_iterations=$((failed_iterations + 1))
               echo "::error::Iteration $i: dotnet test exited with code $code"
-              exit "$code"
+              if [ -n "$tests" ]; then
+                echo "$tests" | sed "s/^/${{ matrix.slot }}\t$i\t$code\t/" >> "$failures"
+              else
+                printf '%s\t%s\t%s\t%s\n' "${{ matrix.slot }}" "$i" "$code" "<no failed test reported>" >> "$failures"
+              fi
+            else
+              rm -rf "$dir"
             fi
-
-            echo "Iteration $i: exit code 0"
-            rm -rf "$dir"
           done
+
+          echo "Slot ${{ matrix.slot }}: $failed_iterations of $ITERATIONS iterations failed"
+          echo "**$failed_iterations of $ITERATIONS iterations failed**" >> "$GITHUB_STEP_SUMMARY"
+          [ "$failed_iterations" -eq 0 ]
 
       - name: Upload Diagnostics
         if: failure()
