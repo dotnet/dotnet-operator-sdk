@@ -55,6 +55,13 @@ jobs:
             dir="$root/iteration-$i"
             mkdir -p "$dir"
             echo "::group::Iteration $i"
+            mkdir -p "$dir/dumps"
+            # Crash diagnostics for test hosts that die without a failed test (e.g. exit code 139, SIGSEGV):
+            # a heap dump plus a JSON crash report with the native and managed stacks of all threads.
+            DOTNET_DbgEnableMiniDump=1 \
+            DOTNET_DbgMiniDumpType=2 \
+            DOTNET_DbgMiniDumpName="$dir/dumps/%e.%p.dmp" \
+            DOTNET_EnableCrashReport=1 \
             DOTNET_CLI_TEST_TRACEFILE="$dir/dotnet-test-trace.log" \
               dotnet test --configuration Release \
                 --output Detailed \
