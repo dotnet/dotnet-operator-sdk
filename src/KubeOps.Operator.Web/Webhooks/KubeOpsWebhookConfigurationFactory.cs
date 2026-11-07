@@ -15,6 +15,10 @@ namespace KubeOps.Operator.Web.Webhooks;
 /// </summary>
 public class KubeOpsWebhookConfigurationFactory : IWebhookConfigurationFactory
 {
+    internal const string MutatingConfigurationName = "dev-mutators";
+
+    internal const string ValidatingConfigurationName = "dev-validators";
+
     /// <inheritdoc />
     public virtual V1MutatingWebhookConfiguration CreateMutatingConfiguration(
         IEnumerable<MutatingWebhookRegistration> registrations)
@@ -24,7 +28,7 @@ public class KubeOpsWebhookConfigurationFactory : IWebhookConfigurationFactory
 
         return new V1MutatingWebhookConfiguration()
         {
-            Metadata = new() { Name = "dev-mutators" },
+            Metadata = new() { Name = MutatingConfigurationName },
             Webhooks = webhooks,
         }.Initialize();
     }
@@ -38,7 +42,7 @@ public class KubeOpsWebhookConfigurationFactory : IWebhookConfigurationFactory
 
         return new V1ValidatingWebhookConfiguration()
         {
-            Metadata = new() { Name = "dev-validators" },
+            Metadata = new() { Name = ValidatingConfigurationName },
             Webhooks = webhooks,
         }.Initialize();
     }

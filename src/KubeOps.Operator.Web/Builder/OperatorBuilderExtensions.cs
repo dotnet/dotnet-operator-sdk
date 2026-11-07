@@ -59,7 +59,7 @@ public static class OperatorBuilderExtensions
     public static IOperatorBuilder UseCertificateProvider(this IOperatorBuilder builder, ushort port, string hostname, ICertificateProvider certificateProvider)
     {
         builder.Services.AddHostedService<CertificateWebhookService>();
-        builder.Services.AddSingleton(new WebhookLoader(Assembly.GetEntryAssembly()!));
+        builder.Services.TryAddSingleton(_ => new WebhookLoader(Assembly.GetEntryAssembly()!));
         builder.Services.AddSingleton(new WebhookConfig(hostname, port));
         builder.Services.AddSingleton(certificateProvider);
         builder.Services.TryAddSingleton<IWebhookConfigurationFactory, KubeOpsWebhookConfigurationFactory>();
@@ -129,7 +129,7 @@ public static class OperatorBuilderExtensions
     private static IOperatorBuilder AddExternalWebhookService(this IOperatorBuilder builder)
     {
         builder.Services.AddHostedService<ExternalWebhookService>();
-        builder.Services.AddSingleton(new WebhookLoader(Assembly.GetEntryAssembly()!));
+        builder.Services.TryAddSingleton(_ => new WebhookLoader(Assembly.GetEntryAssembly()!));
         builder.Services.TryAddSingleton<IWebhookConfigurationFactory, KubeOpsWebhookConfigurationFactory>();
 
         return builder;

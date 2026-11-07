@@ -16,12 +16,11 @@ internal sealed class ExternalWebhookService(
     WebhookLoader loader,
     ExternalWebhookEndpoint endpoint,
     IWebhookConfigurationFactory webhookConfigurationFactory)
-    : WebhookServiceBase(client, loader, endpoint.BaseUri, webhookConfigurationFactory), IHostedService
+    : WebhookServiceBase(client, loader, endpoint.BaseUri, endpoint.CaBundle, webhookConfigurationFactory),
+        IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        CaBundle = endpoint.CaBundle;
-
         logger.LogDebug("Registering webhooks against external endpoint {Endpoint}", endpoint.BaseUri);
         await RegisterAll();
     }

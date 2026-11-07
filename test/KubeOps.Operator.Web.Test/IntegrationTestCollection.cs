@@ -2,14 +2,13 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
 using k8s;
-using k8s.Autorest;
 using k8s.Models;
 
+using KubeOps.KubernetesClient;
 using KubeOps.Operator.Web.Builder;
 using KubeOps.Operator.Web.Certificates;
 using KubeOps.Operator.Web.Test.TestApp;
@@ -201,21 +200,10 @@ public sealed class ApplicationProvider : IAsyncLifetime
         _certificates?.Dispose();
 
         // The webhook configurations fail closed; remove them so they do not outlive the test app.
-        using var client = new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig());
-        var admission = client.AdmissionregistrationV1;
-        await IgnoreNotFound(() => admission.DeleteValidatingWebhookConfigurationAsync("dev-validators"));
-        await IgnoreNotFound(() => admission.DeleteMutatingWebhookConfigurationAsync("dev-mutators"));
-    }
-
-    private static async Task IgnoreNotFound(Func<Task> delete)
-    {
-        try
-        {
-            await delete();
-        }
-        catch (HttpOperationException e) when (e.Response.StatusCode == HttpStatusCode.NotFound)
-        {
-            // Already gone.
-        }
+        using var client = new KubernetesClient.KubernetesClient() as IKubernetesClient;
+        await client.DeleteAsync<V1ValidatingWebhookConfiguration>(
+            KubeOpsWebhookConfigurationFactory.ValidatingConfigurationName);
+        await client.DeleteAsync<V1MutatingWebhookConfiguration>(
+            KubeOpsWebhookConfigurationFactory.MutatingConfigurationName);
     }
 }
