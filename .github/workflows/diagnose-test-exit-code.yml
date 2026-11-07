@@ -8,6 +8,7 @@ on:
       - "**"
     paths:
       - .github/workflows/diagnose-test-exit-code.yml
+      - test/**
 
 concurrency:
   group: diagnose-test-exit-code-${{ github.ref }}
