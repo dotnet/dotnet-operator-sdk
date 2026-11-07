@@ -7,6 +7,8 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Defines a range maximum for a numeric property.
 /// </summary>
+/// <param name="maximum">The maximum value.</param>
+/// <param name="exclusiveMaximum">Whether the maximum value itself is excluded.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class RangeMaximumAttribute(double maximum, bool exclusiveMaximum = false) : Attribute
 {

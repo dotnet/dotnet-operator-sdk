@@ -7,6 +7,7 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Define "shortNames" for CRDs.
 /// </summary>
+/// <param name="shortNames">The short names to attach to the CRD.</param>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class KubernetesEntityShortNamesAttribute(params string[] shortNames) : Attribute
 {

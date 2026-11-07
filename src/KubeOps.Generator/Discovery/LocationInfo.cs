@@ -12,8 +12,6 @@ namespace KubeOps.Generator.Discovery;
 // capture the primitives needed to reconstruct it for diagnostics.
 internal record struct LocationInfo(string FilePath, TextSpan TextSpan, LinePositionSpan LineSpan)
 {
-    public Location ToLocation() => Location.Create(FilePath, TextSpan, LineSpan);
-
     public static LocationInfo? CreateFrom(SyntaxNode node)
     {
         var location = node.GetLocation();
@@ -21,4 +19,6 @@ internal record struct LocationInfo(string FilePath, TextSpan TextSpan, LinePosi
             ? null
             : new LocationInfo(location.SourceTree.FilePath, location.SourceSpan, location.GetLineSpan().Span);
     }
+
+    public Location ToLocation() => Location.Create(FilePath, TextSpan, LineSpan);
 }

@@ -4,6 +4,8 @@
 
 using FluentAssertions;
 
+using k8s.Models;
+
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Finalizer;
@@ -24,16 +26,22 @@ public sealed class EntityFinalizerAutoAttachIntegrationTest : IntegrationTestBa
     [Fact]
     public async Task Should_Attach_Finalizer_On_Entity_And_Call_Reconcile_Once()
     {
-        var watcherCounter = new InvocationCounter<V1OperatorIntegrationTestEntity> { TargetInvocationCount = 3 };
+        var created = await _client.CreateAsync(
+            new V1OperatorIntegrationTestEntity("first", "first", _ns.Namespace, couldChangeStatus: true),
+            TestContext.Current.CancellationToken);
+
+        // Watch from the resource version of the created entity: the API server then replays every later
+        // event, no matter when the watch connection is established. Without it, the operator could attach
+        // the finalizer before the watch is open, and the watch would miss events (#1305).
+        // 2 events: finalizer attached, status updated.
+        var watcherCounter = new InvocationCounter<V1OperatorIntegrationTestEntity> { TargetInvocationCount = 2 };
         using var watcher =
             _client.Watch<V1OperatorIntegrationTestEntity>(
                 (_, e) => watcherCounter.Invocation(e),
                 @namespace: _ns.Namespace,
+                resourceVersion: created.ResourceVersion(),
                 cancellationToken: TestContext.Current.CancellationToken);
 
-        await _client.CreateAsync(
-            new V1OperatorIntegrationTestEntity("first", "first", _ns.Namespace, couldChangeStatus: true),
-            TestContext.Current.CancellationToken);
         await _mock.WaitForInvocations;
         await watcherCounter.WaitForInvocations;
 

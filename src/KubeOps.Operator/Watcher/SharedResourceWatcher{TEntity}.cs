@@ -30,6 +30,17 @@ namespace KubeOps.Operator.Watcher;
 /// number of controllers.
 /// </summary>
 /// <typeparam name="TEntity">The Kubernetes entity type.</typeparam>
+/// <param name="activitySource">The activity source used to trace watch events.</param>
+/// <param name="logger">The logger.</param>
+/// <param name="cacheProvider">The FusionCache provider for the event deduplication cache.</param>
+/// <param name="entityQueue">The queue that receives the watched entities for reconciliation.</param>
+/// <param name="settings">The operator settings.</param>
+/// <param name="labelSelector">The label selector that restricts the watched entities.</param>
+/// <param name="fieldSelector">The field selector that restricts the watched entities.</param>
+/// <param name="client">The Kubernetes client.</param>
+/// <param name="dispatcher">The dispatcher that forwards each event to the matching controller pipelines.</param>
+/// <param name="scopeFactory">The factory for the logging scopes of watched entities.</param>
+/// <param name="metrics">The operator metrics, or <c>null</c> when metrics are disabled.</param>
 internal sealed class SharedResourceWatcher<TEntity>(
     ActivitySource activitySource,
     ILogger<SharedResourceWatcher<TEntity>> logger,

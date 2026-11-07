@@ -7,6 +7,8 @@ namespace KubeOps.Abstractions.Entities.Attributes;
 /// <summary>
 /// Defines a range minimum for a numeric property.
 /// </summary>
+/// <param name="minimum">The minimum value.</param>
+/// <param name="exclusiveMinimum">Whether the minimum value itself is excluded.</param>
 [AttributeUsage(AttributeTargets.Property)]
 public class RangeMinimumAttribute(double minimum, bool exclusiveMinimum = false) : Attribute
 {

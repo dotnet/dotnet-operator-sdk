@@ -10,8 +10,8 @@ using KubeOps.Cli.Transpilation;
 
 namespace KubeOps.Cli.Generators;
 
-internal sealed class ValidationWebhookGenerator
-    (List<ValidationWebhook> webhooks, byte[] caBundle, OutputFormat format) : IConfigGenerator
+internal sealed class ValidationWebhookGenerator(
+    List<ValidationWebhook> webhooks, byte[] caBundle, OutputFormat format) : IConfigGenerator
 {
     public void Generate(ResultOutput output)
     {

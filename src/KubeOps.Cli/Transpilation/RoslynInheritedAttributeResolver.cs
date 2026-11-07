@@ -19,6 +19,7 @@ namespace KubeOps.Cli.Transpilation;
 /// constants, and each constant is mapped to the base-constructor parameter — and therefore the
 /// property — it initializes. No user code is executed and no IL is parsed.
 /// </summary>
+/// <param name="compilations">The compilations of the inspected projects.</param>
 internal sealed class RoslynInheritedAttributeResolver(IReadOnlyList<Compilation> compilations)
     : IInheritedAttributeResolver
 {
