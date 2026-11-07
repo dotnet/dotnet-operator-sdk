@@ -13,6 +13,7 @@ namespace KubeOps.Aspire.Hosting.Test;
 
 public class KubeOpsHostingTest
 {
+    [Trait("Area", "Hosting")]
     [Fact]
     public void AddKubeOps_Adds_Named_Project_Resource()
     {
@@ -24,6 +25,7 @@ public class KubeOpsHostingTest
             .Should().ContainSingle(resource => resource.Name == "operator-test");
     }
 
+    [Trait("Area", "Hosting")]
     [Fact]
     public void AddKubeOps_Returns_Builder_For_Chaining()
     {
@@ -35,6 +37,7 @@ public class KubeOpsHostingTest
         resourceBuilder.Resource.Name.Should().Be("operator-test");
     }
 
+    [Trait("Area", "Hosting")]
     [Fact]
     public void AddKubeOps_Uses_Explicit_Start_Without_Run_Target()
     {
@@ -46,6 +49,7 @@ public class KubeOpsHostingTest
             .Should().Contain(annotation => annotation is ExplicitStartupAnnotation);
     }
 
+    [Trait("Area", "Publishing")]
     [Fact]
     public void AddKubeOps_Adds_Standalone_Publish_Step_Without_Kubernetes_Target()
     {
@@ -57,6 +61,7 @@ public class KubeOpsHostingTest
             .Should().Contain(annotation => annotation.GetType().FullName == "Aspire.Hosting.Pipelines.PipelineStepAnnotation");
     }
 
+    [Trait("Area", "Hosting")]
     [Fact]
     public void RunWithKubernetes_Enables_Local_Run_With_Ephemeral_Crds_By_Default()
     {
@@ -73,6 +78,7 @@ public class KubeOpsHostingTest
             .Which.Options.CrdMode.Should().Be(KubeOpsRunCrdMode.Ephemeral);
     }
 
+    [Trait("Area", "Hosting")]
     [Fact]
     public void RunWithKubernetes_Can_Use_Persistent_Crds()
     {
@@ -87,6 +93,7 @@ public class KubeOpsHostingTest
             .Which.Options.CrdMode.Should().Be(KubeOpsRunCrdMode.Persistent);
     }
 
+    [Trait("Area", "Hosting")]
     [Fact]
     public void RunWithKubernetes_With_ConnectionString_Resource_Enables_Local_Run_With_Ephemeral_Crds_By_Default()
     {
@@ -105,6 +112,7 @@ public class KubeOpsHostingTest
         runOptions.TargetResource.Should().BeSameAs(cluster.Resource);
     }
 
+    [Trait("Area", "Hosting")]
     [Fact]
     public void RunWithKubernetes_With_ConnectionString_Resource_Adds_Reference_And_WaitFor()
     {
@@ -119,6 +127,7 @@ public class KubeOpsHostingTest
             .And.Contain(annotation => annotation is WaitAnnotation);
     }
 
+    [Trait("Area", "Hosting")]
     [Fact]
     public void RunWithKubernetes_With_ConnectionString_Resource_Can_Use_Persistent_Crds()
     {
@@ -133,6 +142,7 @@ public class KubeOpsHostingTest
             .Which.Options.CrdMode.Should().Be(KubeOpsRunCrdMode.Persistent);
     }
 
+    [Trait("Area", "Publishing")]
     [Fact]
     public void PublishAsKubernetesOperator_Configures_Service_Account()
     {
@@ -146,6 +156,7 @@ public class KubeOpsHostingTest
             .Which.Options.ServiceAccountName.Should().Be("operator-sa");
     }
 
+    [Trait("Area", "Publishing")]
     [Fact]
     public void AddKubeOps_Defaults_Published_Service_Account_To_Resource_Name()
     {
@@ -158,6 +169,7 @@ public class KubeOpsHostingTest
             .Which.Options.ServiceAccountName.Should().Be("operator-test");
     }
 
+    [Trait("Area", "Publishing")]
     [Fact]
     public void PublishAsKubernetesOperator_Binds_To_Kubernetes_Environment()
     {
@@ -171,6 +183,7 @@ public class KubeOpsHostingTest
             .Should().BeSameAs(kubernetes.Resource);
     }
 
+    [Trait("Area", "WebhookDevTunnel")]
     [Fact]
     public void WithWebhookDevTunnel_Adds_Anonymous_Dev_Tunnel_For_Webhook_Endpoint()
     {
@@ -188,6 +201,7 @@ public class KubeOpsHostingTest
                 port.Name == "operator-test-webhooks-operator-test-http" && port.Options.AllowAnonymous == true);
     }
 
+    [Trait("Area", "WebhookDevTunnel")]
     [Fact]
     public async Task WithWebhookDevTunnel_Passes_Tunnel_Url_To_Operator_And_Waits_For_Tunnel()
     {
@@ -213,6 +227,7 @@ public class KubeOpsHostingTest
             .Which.EndpointAnnotation.Should().BeSameAs(port.Annotations.OfType<EndpointAnnotation>().Single());
     }
 
+    [Trait("Area", "WebhookDevTunnel")]
     [Fact]
     public void WithWebhookDevTunnel_Uses_Configured_Endpoint_And_Tunnel_Options()
     {
@@ -229,6 +244,7 @@ public class KubeOpsHostingTest
             .Should().ContainSingle(port => port.Name == "operator-test-webhooks-operator-test-webhooks");
     }
 
+    [Trait("Area", "WebhookDevTunnel")]
     [Fact]
     public void WithWebhookDevTunnel_Adds_Nothing_In_Publish_Mode()
     {
