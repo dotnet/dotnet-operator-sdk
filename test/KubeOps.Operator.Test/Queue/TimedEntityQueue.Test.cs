@@ -17,6 +17,16 @@ namespace KubeOps.Operator.Test.Queue;
 
 public sealed class TimedEntityQueueTest
 {
+    // Upper bound for an expected entry to arrive; only reached when something is broken or the runner is busy.
+    private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(5);
+
+    // How long to keep listening for unexpected entries after the expected ones arrived.
+    private static readonly TimeSpan SettlePeriod = TimeSpan.FromMilliseconds(200);
+
+    // A schedule that must never be reached within a drain; used where the test asserts that the earlier
+    // schedule of a merged entry wins.
+    private static readonly TimeSpan LaterThanDrainTimeout = TimeSpan.FromSeconds(30);
+
     [Fact]
     public async Task Can_Enqueue_Multiple_Entities_With_Same_Name()
     {
@@ -37,24 +47,7 @@ public sealed class TimedEntityQueueTest
             retryCount: 0,
             TestContext.Current.CancellationToken);
 
-        var items = new List<QueueEntry<V1Secret>>();
-
-        using var tokenSource = new CancellationTokenSource();
-        tokenSource.CancelAfter(TimeSpan.FromMilliseconds(500));
-
-        var enumerator = queue.GetAsyncEnumerator(tokenSource.Token);
-
-        try
-        {
-            while (await enumerator.MoveNextAsync())
-            {
-                items.Add(enumerator.Current);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // We expect to timeout watching the queue so that we can assert the items received
-        }
+        var items = await DrainQueue(queue, expectedCount: 2);
 
         items.Select(e => e.Entity).Should().HaveCount(2);
     }
@@ -81,7 +74,7 @@ public sealed class TimedEntityQueueTest
             retryCount: 0,
             TestContext.Current.CancellationToken);
 
-        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+        var items = await DrainQueue(queue, expectedCount: 1);
 
         items.Should().ContainSingle();
         items[0].ReconciliationType.Should().Be(ReconciliationType.Modified);
@@ -108,11 +101,11 @@ public sealed class TimedEntityQueueTest
             secret,
             ReconciliationType.Added,
             ReconciliationTriggerSource.ApiServer,
-            TimeSpan.FromSeconds(5),
+            LaterThanDrainTimeout,
             retryCount: 2,
             TestContext.Current.CancellationToken);
 
-        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+        var items = await DrainQueue(queue, expectedCount: 1);
 
         items.Should().ContainSingle();
         items[0].ReconciliationType.Should().Be(ReconciliationType.Added);
@@ -143,7 +136,7 @@ public sealed class TimedEntityQueueTest
             retryCount: 1,
             TestContext.Current.CancellationToken);
 
-        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+        var items = await DrainQueue(queue, expectedCount: 1);
 
         items.Should().ContainSingle();
         items[0].ReconciliationType.Should().Be(ReconciliationType.Deleted);
@@ -162,7 +155,7 @@ public sealed class TimedEntityQueueTest
             secret,
             ReconciliationType.Modified,
             ReconciliationTriggerSource.Operator,
-            TimeSpan.FromSeconds(5),
+            LaterThanDrainTimeout,
             retryCount: 0,
             TestContext.Current.CancellationToken);
 
@@ -174,7 +167,7 @@ public sealed class TimedEntityQueueTest
             retryCount: 0,
             TestContext.Current.CancellationToken);
 
-        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+        var items = await DrainQueue(queue, expectedCount: 1);
 
         items.Should().ContainSingle();
         items[0].ReconciliationType.Should().Be(ReconciliationType.Deleted);
@@ -205,13 +198,13 @@ public sealed class TimedEntityQueueTest
             TestContext.Current.CancellationToken);
 
         // Give the timer time to promote the ready entry into the ready queue.
-        await WaitUntil(() => queue.ReadyCount == 1, TimeSpan.FromSeconds(2));
+        (await WaitUntil(() => queue.ReadyCount == 1, DrainTimeout)).Should().BeTrue();
 
         queue.Clear();
 
         queue.Count.Should().Be(0);
         queue.ReadyCount.Should().Be(0);
-        (await DrainQueue(queue, TimeSpan.FromMilliseconds(200))).Should().BeEmpty();
+        (await DrainQueue(queue, expectedCount: 0)).Should().BeEmpty();
     }
 
     [Fact]
@@ -233,7 +226,7 @@ public sealed class TimedEntityQueueTest
         // Returning false lets callers avoid counting a requeue that was not scheduled.
         scheduled.Should().BeFalse();
         queue.Count.Should().Be(0);
-        (await DrainQueue(queue, TimeSpan.FromMilliseconds(200))).Should().BeEmpty();
+        (await DrainQueue(queue, expectedCount: 0)).Should().BeEmpty();
     }
 
     [Fact]
@@ -254,7 +247,7 @@ public sealed class TimedEntityQueueTest
             TestContext.Current.CancellationToken);
 
         scheduled.Should().BeTrue();
-        (await DrainQueue(queue, TimeSpan.FromMilliseconds(500))).Should().ContainSingle();
+        (await DrainQueue(queue, expectedCount: 1)).Should().ContainSingle();
     }
 
     [Fact]
@@ -273,7 +266,7 @@ public sealed class TimedEntityQueueTest
 
         scheduled.Should().BeFalse();
         queue.Count.Should().Be(0);
-        (await DrainQueue(queue, TimeSpan.FromMilliseconds(200))).Should().BeEmpty();
+        (await DrainQueue(queue, expectedCount: 0)).Should().BeEmpty();
     }
 
     // Regression guard for the TOCTOU race: gate check + scheduling must be atomic with SuspendIntake/Clear.
@@ -404,7 +397,7 @@ public sealed class TimedEntityQueueTest
             retryCount: 0,
             TestContext.Current.CancellationToken);
 
-        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+        var items = await DrainQueue(queue, expectedCount: 2);
 
         items.Should().HaveCount(2);
         items.Should().ContainSingle(e => e.ReconciliationType == ReconciliationType.Deleted)
@@ -436,7 +429,7 @@ public sealed class TimedEntityQueueTest
             retryCount: 1,
             TestContext.Current.CancellationToken);
 
-        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+        var items = await DrainQueue(queue, expectedCount: 2);
 
         items.Should().HaveCount(2);
         items.Should().ContainSingle(e => e.ReconciliationType == ReconciliationType.Added)
@@ -468,7 +461,7 @@ public sealed class TimedEntityQueueTest
 
         queue.Count.Should().Be(1);
 
-        var items = await DrainQueue(queue, TimeSpan.FromMilliseconds(500));
+        var items = await DrainQueue(queue, expectedCount: 1);
 
         items.Should().ContainSingle()
             .Which.ReconciliationType.Should().Be(ReconciliationType.Deleted);
@@ -502,21 +495,28 @@ public sealed class TimedEntityQueueTest
         return secret;
     }
 
-    private static async Task WaitUntil(Func<bool> condition, TimeSpan timeout)
+    private static async Task<bool> WaitUntil(Func<bool> condition, TimeSpan timeout)
     {
         var deadline = DateTimeOffset.UtcNow + timeout;
         while (!condition() && DateTimeOffset.UtcNow < deadline)
         {
             await Task.Delay(20);
         }
+
+        return condition();
     }
 
+    // Collects entries until the expected number has arrived (or DrainTimeout elapsed), then keeps listening
+    // for SettlePeriod so that unexpected additional entries still surface. Waiting for the expected count
+    // instead of a fixed window keeps the tests stable on a busy CI runner: both the queue's timer loop and
+    // the consumer need a thread pool thread, and when parallel tests saturate the pool, getting one can
+    // take seconds (#1305). With expectedCount 0 only the settle period is awaited.
     private static async Task<List<QueueEntry<V1Secret>>> DrainQueue(
         TimedEntityQueue<V1Secret> queue,
-        TimeSpan timeout)
+        int expectedCount)
     {
         var items = new List<QueueEntry<V1Secret>>();
-        using var tokenSource = new CancellationTokenSource(timeout);
+        using var tokenSource = new CancellationTokenSource(expectedCount == 0 ? SettlePeriod : DrainTimeout);
         var enumerator = queue.GetAsyncEnumerator(tokenSource.Token);
 
         try
@@ -524,11 +524,15 @@ public sealed class TimedEntityQueueTest
             while (await enumerator.MoveNextAsync())
             {
                 items.Add(enumerator.Current);
+                if (items.Count == expectedCount)
+                {
+                    tokenSource.CancelAfter(SettlePeriod);
+                }
             }
         }
         catch (OperationCanceledException)
         {
-            // Expected: stop draining after assertion window.
+            // Expected: stop draining after the timeout or the settle period.
         }
 
         return items;
