@@ -4,12 +4,12 @@
 
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
 
 using k8s;
 using k8s.Models;
 
 using KubeOps.Operator.Web.Builder;
+using KubeOps.Operator.Web.Certificates;
 using KubeOps.Operator.Web.Test.TestApp;
 using KubeOps.Operator.Web.Webhooks;
 using KubeOps.Transpiler;
@@ -117,18 +117,51 @@ public sealed class MlcProvider : IAsyncLifetime
     }
 }
 
-[RequiresPreviewFeatures]
+/// <summary>
+/// Admission webhook integration tests need the Kubernetes API server to call the test app.
+/// They only run when <c>KUBEOPS_TEST_WEBHOOK_HOST</c> holds a host name or IP address under which the
+/// API server reaches this machine, for example the gateway of the <c>kind</c> Docker network or
+/// <c>host.docker.internal</c>. The test app then serves HTTPS on <see cref="Port"/> with a generated
+/// certificate and registers the webhooks with its CA bundle.
+/// </summary>
+public static class ExternalWebhookTestEndpoint
+{
+    public const string HostVariable = "KUBEOPS_TEST_WEBHOOK_HOST";
+
+    public const int Port = 5443;
+
+    public const string SkipReason =
+        $"Requires the API server to reach the test app; set {HostVariable} to a host name or IP of this machine.";
+
+    public static bool IsConfigured => !string.IsNullOrWhiteSpace(Host);
+
+    public static Uri BaseUri => new UriBuilder(Uri.UriSchemeHttps, Host, Port).Uri;
+
+    private static string? Host => Environment.GetEnvironmentVariable(HostVariable)?.Trim();
+}
+
 public sealed class ApplicationProvider : IAsyncLifetime
 {
+    private CertificateGenerator? _certificates;
     private WebApplication? _app;
 
     public async ValueTask InitializeAsync()
     {
+        if (!ExternalWebhookTestEndpoint.IsConfigured)
+        {
+            return;
+        }
+
+        var baseUri = ExternalWebhookTestEndpoint.BaseUri;
+        _certificates = new CertificateGenerator(baseUri.Host);
+        var serverCertificate = _certificates.Server.CopyServerCertWithPrivateKey();
+
         var builder = WebApplication.CreateBuilder();
-        builder.WebHost.ConfigureKestrel(c => c.ListenAnyIP(5000));
+        builder.WebHost.ConfigureKestrel(c =>
+            c.ListenAnyIP(baseUri.Port, listen => listen.UseHttps(serverCertificate)));
         builder.Services
             .AddKubernetesOperator()
-            .AddDevelopmentTunnel(5000);
+            .UseExternalWebhookEndpoint(baseUri, _certificates.Root.Certificate.EncodeToPemBytes());
 
         builder.Services.AddControllers().AddApplicationPart(typeof(ApplicationProvider).Assembly);
         builder.Services.AddHealthChecks();
@@ -144,7 +177,7 @@ public sealed class ApplicationProvider : IAsyncLifetime
         });
 
         builder.Services.RemoveAll<WebhookLoader>();
-        builder.Services.AddSingleton(new WebhookLoader(typeof(ApplicationProvider).Assembly));
+        builder.Services.AddSingleton(TestWebhooks.Loader);
 
         _app = builder.Build();
 
@@ -157,6 +190,14 @@ public sealed class ApplicationProvider : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        await _app!.DisposeAsync();
+        if (_app is null)
+        {
+            return;
+        }
+
+        // Stopping the app removes the webhook configurations it registered; disposing alone does not stop it.
+        await _app.StopAsync();
+        await _app.DisposeAsync();
+        _certificates?.Dispose();
     }
 }

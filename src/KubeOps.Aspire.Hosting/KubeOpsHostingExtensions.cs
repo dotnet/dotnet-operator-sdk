@@ -8,6 +8,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.DevTunnels;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
@@ -22,6 +23,8 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class KubeOpsHostingExtensions
 {
+    private const string WebhookExternalUrlEnvironmentVariable = "KubeOps__Webhooks__ExternalUrl";
+
     /// <summary>
     /// Adds a KubeOps operator project to the distributed application model.
     /// </summary>
@@ -204,6 +207,51 @@ public static class KubeOpsHostingExtensions
         builder.Resource.Annotations.Add(runAnnotation);
         ConfigureKubeOpsRun(builder, publishAnnotation, runAnnotation);
         return builder;
+    }
+
+    /// <summary>
+    /// Exposes the operator's webhook endpoint through a Microsoft Dev Tunnel and passes the public tunnel URL to the
+    /// operator, so a cluster that cannot reach the developer machine can still call the locally running webhooks.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The operator project must register its webhooks with <c>UseExternalWebhookEndpoint()</c> from
+    /// <c>KubeOps.Operator.Web</c>, which reads the URL from <c>KubeOps__Webhooks__ExternalUrl</c>. The operator starts
+    /// once the tunnel is running.
+    /// </para>
+    /// <para>
+    /// The tunnel allows anonymous access because the Kubernetes API server cannot authenticate against the Dev Tunnels
+    /// service. It requires the <c>devtunnel</c> CLI and a signed-in Microsoft or GitHub account. The tunnel ID is derived
+    /// from the resource name and the AppHost, so the public URL stays the same across runs. Nothing is added in publish
+    /// mode.
+    /// </para>
+    /// </remarks>
+    /// <param name="builder">The operator project resource builder.</param>
+    /// <param name="endpointName">The name of the operator's HTTP(S) endpoint that serves the webhooks.</param>
+    /// <param name="configureTunnel">Optional additional configuration of the dev tunnel, e.g. its expiration.</param>
+    /// <returns>The same project builder for chaining.</returns>
+    public static IResourceBuilder<ProjectResource> WithWebhookDevTunnel(
+        this IResourceBuilder<ProjectResource> builder,
+        string endpointName = "http",
+        Action<IResourceBuilder<DevTunnelResource>>? configureTunnel = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(endpointName);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return builder;
+        }
+
+        var endpoint = builder.GetEndpoint(endpointName);
+        var tunnel = builder.ApplicationBuilder
+            .AddDevTunnel($"{builder.Resource.Name}-webhooks")
+            .WithReference(endpoint, allowAnonymous: true);
+        configureTunnel?.Invoke(tunnel);
+
+        return builder
+            .WithEnvironment(WebhookExternalUrlEnvironmentVariable, tunnel.GetEndpoint(endpoint))
+            .WaitFor(tunnel);
     }
 
     internal static void RunKubeOpsGenerator(

@@ -10,22 +10,42 @@ using KubeOps.Operator.Web.Webhooks.Conversion;
 
 namespace KubeOps.Operator.Web.Webhooks;
 
-internal record WebhookLoader(Assembly Entry)
+internal sealed class WebhookLoader(IEnumerable<TypeInfo> types)
 {
-    public IEnumerable<TypeInfo> ValidationWebhooks => Entry
-        .DefinedTypes
-        .Where(t => t.BaseType?.IsGenericType == true &&
-                    t.BaseType?.GetGenericTypeDefinition() == typeof(ValidationWebhook<>));
+    public WebhookLoader(Assembly entry)
+        : this(entry.DefinedTypes)
+    {
+    }
 
-    public IEnumerable<TypeInfo> MutationWebhooks => Entry
-        .DefinedTypes
-        .Where(t => t.BaseType?.IsGenericType == true &&
-                    t.BaseType?.GetGenericTypeDefinition() == typeof(MutationWebhook<>));
+    public IEnumerable<WebhookType> ValidationWebhooks => Find(typeof(ValidationWebhook<>));
 
-    public IEnumerable<TypeInfo> ConversionWebhooks => Entry
-        .DefinedTypes
-        .Where(t => t.BaseType?.IsGenericType == true &&
+    public IEnumerable<WebhookType> MutationWebhooks => Find(typeof(MutationWebhook<>));
+
 #pragma warning disable CA2252 // This is internal only.
-                    t.BaseType?.GetGenericTypeDefinition() == typeof(ConversionWebhook<>));
+    public IEnumerable<WebhookType> ConversionWebhooks => Find(typeof(ConversionWebhook<>));
 #pragma warning restore CA2252
+
+    /// <summary>
+    /// Returns the entity type of the closest base class built from <paramref name="webhookDefinition"/>, so webhooks
+    /// derived from an intermediate base class are found as well.
+    /// </summary>
+    private static Type? EntityType(Type type, Type webhookDefinition)
+    {
+        for (var baseType = type.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            if (baseType.IsGenericType && baseType.GetGenericTypeDefinition() == webhookDefinition)
+            {
+                return baseType.GenericTypeArguments[0];
+            }
+        }
+
+        return null;
+    }
+
+    private IEnumerable<WebhookType> Find(Type webhookDefinition) =>
+        from type in types
+        where type is { IsAbstract: false, ContainsGenericParameters: false }
+        let entity = EntityType(type, webhookDefinition)
+        where entity is not null
+        select new WebhookType(type, entity);
 }

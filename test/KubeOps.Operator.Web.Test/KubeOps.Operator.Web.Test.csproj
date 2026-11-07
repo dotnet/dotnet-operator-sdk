@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <UsesMSBuildLocator>true</UsesMSBuildLocator>
-        <NoWarn>CS0618</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

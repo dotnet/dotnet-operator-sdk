@@ -10,6 +10,7 @@ using KubeOps.Operator.Web.Certificates;
 
 namespace KubeOps.Operator.Web.Test.Certificates;
 
+[Trait("Area", "Certificate")]
 public class CertificateGeneratorTest : IDisposable
 {
     private readonly CertificateGenerator _certificateGenerator = new(Environment.MachineName);
