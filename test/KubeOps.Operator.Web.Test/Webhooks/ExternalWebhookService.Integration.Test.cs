@@ -7,20 +7,18 @@ using FluentAssertions;
 using k8s.Models;
 
 using KubeOps.KubernetesClient;
+using KubeOps.Operator.Web.Webhooks;
 
 namespace KubeOps.Operator.Web.Test.Webhooks;
 
 public sealed class ExternalWebhookServiceIntegrationTest : IntegrationTestBase
 {
-    [Fact(
-        Skip = ExternalWebhookTestEndpoint.SkipReason,
-        SkipUnless = nameof(ExternalWebhookTestEndpoint.IsConfigured),
-        SkipType = typeof(ExternalWebhookTestEndpoint))]
+    [WebhookIntegrationFact]
     public async Task Should_Install_Validation_Webhooks()
     {
         using var client = new KubernetesClient.KubernetesClient() as IKubernetesClient;
         var validators = await client.GetAsync<V1ValidatingWebhookConfiguration>(
-            "dev-validators",
+            KubeOpsWebhookConfigurationFactory.ValidatingConfigurationName,
             cancellationToken: TestContext.Current.CancellationToken);
 
         validators.Should().NotBeNull();
@@ -30,15 +28,12 @@ public sealed class ExternalWebhookServiceIntegrationTest : IntegrationTestBase
             w.ClientConfig.Url.EndsWith("/validate/v1operatorwebintegrationtestentity"));
     }
 
-    [Fact(
-        Skip = ExternalWebhookTestEndpoint.SkipReason,
-        SkipUnless = nameof(ExternalWebhookTestEndpoint.IsConfigured),
-        SkipType = typeof(ExternalWebhookTestEndpoint))]
+    [WebhookIntegrationFact]
     public async Task Should_Install_Mutation_Webhooks()
     {
         using var client = new KubernetesClient.KubernetesClient() as IKubernetesClient;
         var mutators = await client.GetAsync<V1MutatingWebhookConfiguration>(
-            "dev-mutators",
+            KubeOpsWebhookConfigurationFactory.MutatingConfigurationName,
             cancellationToken: TestContext.Current.CancellationToken);
 
         mutators.Should().NotBeNull();

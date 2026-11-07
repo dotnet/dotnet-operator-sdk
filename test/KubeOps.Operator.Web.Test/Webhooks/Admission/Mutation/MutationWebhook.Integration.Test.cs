@@ -11,10 +11,7 @@ namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Mutation;
 
 public sealed class MutationWebhookIntegrationTest : IntegrationTestBase
 {
-    [Fact(
-        Skip = ExternalWebhookTestEndpoint.SkipReason,
-        SkipUnless = nameof(ExternalWebhookTestEndpoint.IsConfigured),
-        SkipType = typeof(ExternalWebhookTestEndpoint))]
+    [WebhookIntegrationFact]
     public async Task Should_Allow_Creation_Of_Entity()
     {
         using var client = new KubernetesClient.KubernetesClient() as IKubernetesClient;
@@ -25,10 +22,7 @@ public sealed class MutationWebhookIntegrationTest : IntegrationTestBase
         await client.DeleteAsync(e, TestContext.Current.CancellationToken);
     }
 
-    [Fact(
-        Skip = ExternalWebhookTestEndpoint.SkipReason,
-        SkipUnless = nameof(ExternalWebhookTestEndpoint.IsConfigured),
-        SkipType = typeof(ExternalWebhookTestEndpoint))]
+    [WebhookIntegrationFact]
     public async Task Should_Mutate_Entity_According_To_Code()
     {
         using var client = new KubernetesClient.KubernetesClient() as IKubernetesClient;

@@ -14,11 +14,7 @@ internal sealed record ExternalWebhookEndpoint(Uri BaseUri, byte[]? CaBundle)
     {
         ArgumentNullException.ThrowIfNull(baseUri);
 
-        // The API server only calls webhook URLs with the https scheme and without query or fragment.
-        if (!baseUri.IsAbsoluteUri ||
-            baseUri.Scheme != Uri.UriSchemeHttps ||
-            !string.IsNullOrEmpty(baseUri.Query) ||
-            !string.IsNullOrEmpty(baseUri.Fragment))
+        if (!IsValid(baseUri))
         {
             throw new ArgumentException(
                 $"The external webhook endpoint '{baseUri}' must be an absolute https URL without query or fragment.",
@@ -33,21 +29,26 @@ internal sealed record ExternalWebhookEndpoint(Uri BaseUri, byte[]? CaBundle)
         var value = configuration[ConfigurationKey];
         if (string.IsNullOrWhiteSpace(value))
         {
+            var environmentVariable = ConfigurationKey.Replace(":", "__", StringComparison.Ordinal);
             throw new InvalidOperationException(
-                $"The external webhook endpoint is not configured. Set '{ConfigurationKey}' " +
-                "(environment variable 'KubeOps__Webhooks__ExternalUrl') to the public https URL of the tunnel.");
+                $"The external webhook endpoint is not configured. Set '{ConfigurationKey}' (environment variable " +
+                $"'{environmentVariable}') to the public https URL of the tunnel.");
         }
 
-        try
-        {
-            return Create(new Uri(value, UriKind.Absolute), null);
-        }
-        catch (Exception e) when (e is UriFormatException or ArgumentException)
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var baseUri) || !IsValid(baseUri))
         {
             throw new InvalidOperationException(
                 $"The configured external webhook endpoint '{value}' ({ConfigurationKey}) must be an absolute " +
-                "https URL without query or fragment.",
-                e);
+                "https URL without query or fragment.");
         }
+
+        return new(baseUri, null);
     }
+
+    // The API server only calls webhook URLs with the https scheme and without query or fragment.
+    private static bool IsValid(Uri baseUri) =>
+        baseUri.IsAbsoluteUri &&
+        baseUri.Scheme == Uri.UriSchemeHttps &&
+        string.IsNullOrEmpty(baseUri.Query) &&
+        string.IsNullOrEmpty(baseUri.Fragment);
 }

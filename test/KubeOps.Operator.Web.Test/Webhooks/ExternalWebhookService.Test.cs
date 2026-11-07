@@ -28,27 +28,17 @@ public sealed class ExternalWebhookServiceTest
             .And.OnlyContain(r => r.Uri.Host == TunnelUri.Host && r.Uri.AbsolutePath.StartsWith("/mutate/"));
     }
 
-    [Fact]
-    public async Task StartAsync_Registers_Webhooks_Without_CaBundle_By_Default()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(new byte[] { 1, 2, 3 })]
+    public async Task StartAsync_Registers_Webhooks_With_The_Configured_CaBundle(byte[]? caBundle)
     {
-        var factory = new CapturingWebhookConfigurationFactory();
-
-        await CreateService(new(TunnelUri, null), factory).StartAsync(TestContext.Current.CancellationToken);
-
-        factory.ValidatingRegistrations.Should().OnlyContain(r => r.CaBundle == null);
-        factory.MutatingRegistrations.Should().OnlyContain(r => r.CaBundle == null);
-    }
-
-    [Fact]
-    public async Task StartAsync_Uses_Configured_CaBundle()
-    {
-        byte[] caBundle = [1, 2, 3];
         var factory = new CapturingWebhookConfigurationFactory();
 
         await CreateService(new(TunnelUri, caBundle), factory).StartAsync(TestContext.Current.CancellationToken);
 
-        factory.ValidatingCaBundles.Should().NotBeEmpty().And.OnlyContain(b => b.SequenceEqual(caBundle));
-        factory.MutatingCaBundles.Should().NotBeEmpty().And.OnlyContain(b => b.SequenceEqual(caBundle));
+        factory.ValidatingRegistrations.Should().NotBeEmpty().And.OnlyContain(r => r.CaBundle == caBundle);
+        factory.MutatingRegistrations.Should().NotBeEmpty().And.OnlyContain(r => r.CaBundle == caBundle);
     }
 
     private static ExternalWebhookService CreateService(

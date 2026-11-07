@@ -14,20 +14,21 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace KubeOps.Operator.Web.Webhooks;
 
-internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoader loader, Uri uri, IWebhookConfigurationFactory webhookConfigurationFactory)
+/// <summary>
+/// Registers the webhooks of the operator in the cluster.
+/// </summary>
+/// <param name="client">The Kubernetes client.</param>
+/// <param name="loader">The loader that finds the webhooks.</param>
+/// <param name="uri">The base URI the API server uses to call the operator.</param>
+/// <param name="caBundle">The PEM-encoded CA bundle that validates the operator's certificate, if any.</param>
+/// <param name="webhookConfigurationFactory">The factory that builds the webhook configurations.</param>
+internal abstract class WebhookServiceBase(
+    IKubernetesClient client,
+    WebhookLoader loader,
+    Uri uri,
+    byte[]? caBundle,
+    IWebhookConfigurationFactory webhookConfigurationFactory)
 {
-    /// <summary>
-    /// The URI the webhooks will use to connect to the operator.
-    /// </summary>
-    private protected Uri Uri { get; } = uri;
-
-    private protected IKubernetesClient Client { get; } = client;
-
-    /// <summary>
-    /// The PEM-encoded CA bundle for validating the webhook's certificate.
-    /// </summary>
-    private protected byte[]? CaBundle { get; set; }
-
     internal async Task RegisterAll()
     {
         await RegisterValidators();
@@ -37,41 +38,31 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
 
     internal async Task RegisterValidators()
     {
-        var registrations = loader
-            .ValidationWebhooks
-            .Select(w => (
-                Uri: GetWebhookUri(w.Type),
-                Entities.ToEntityMetadata(w.Entity).Metadata))
-            .Select(hook => new ValidatingWebhookRegistration(
-                hook.Metadata,
-                hook.Uri,
-                CaBundle));
+        var registrations = loader.ValidationWebhooks.Select(w => new ValidatingWebhookRegistration(
+            Entities.ToEntityMetadata(w.Entity).Metadata,
+            GetWebhookUri(w.Type),
+            caBundle));
 
         var validatorConfig = webhookConfigurationFactory.CreateValidatingConfiguration(registrations);
 
         if (validatorConfig.Webhooks.Any())
         {
-            await Client.SaveAsync(validatorConfig);
+            await client.SaveAsync(validatorConfig);
         }
     }
 
     internal async Task RegisterMutators()
     {
-        var registrations = loader
-            .MutationWebhooks
-            .Select(w => (
-                Uri: GetWebhookUri(w.Type),
-                Entities.ToEntityMetadata(w.Entity).Metadata))
-            .Select(hook => new MutatingWebhookRegistration(
-                hook.Metadata,
-                hook.Uri,
-                CaBundle));
+        var registrations = loader.MutationWebhooks.Select(w => new MutatingWebhookRegistration(
+            Entities.ToEntityMetadata(w.Entity).Metadata,
+            GetWebhookUri(w.Type),
+            caBundle));
 
         var mutatorConfig = webhookConfigurationFactory.CreateMutatingConfiguration(registrations);
 
         if (mutatorConfig.Webhooks.Any())
         {
-            await Client.SaveAsync(mutatorConfig);
+            await client.SaveAsync(mutatorConfig);
         }
     }
 
@@ -82,7 +73,7 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
             var metadata = Entities.ToEntityMetadata(wh.Entity).Metadata;
             var crdName = $"{metadata.PluralName}.{metadata.Group}";
 
-            if (await Client.GetAsync<V1CustomResourceDefinition>(crdName) is not { } crd)
+            if (await client.GetAsync<V1CustomResourceDefinition>(crdName) is not { } crd)
             {
                 continue;
             }
@@ -98,12 +89,12 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
                     ClientConfig = new()
                     {
                         Url = webhookUri.ToString(),
-                        CaBundle = CaBundle,
+                        CaBundle = caBundle,
                     },
                 },
             };
 
-            await Client.UpdateAsync(crd);
+            await client.UpdateAsync(crd);
         }
     }
 
@@ -129,8 +120,8 @@ internal abstract class WebhookServiceBase(IKubernetesClient client, WebhookLoad
     }
 
     /// <summary>
-    /// Appends the webhook route to <see cref="Uri"/>. Resolving the route as a relative URI would drop the path of
+    /// Appends the webhook route to the base URI. Resolving the route as a relative URI would drop the path of
     /// the base URI, because webhook routes start with a slash.
     /// </summary>
-    private Uri Append(string route) => new($"{Uri.AbsoluteUri.TrimEnd('/')}/{route.TrimStart('/')}");
+    private Uri Append(string route) => new($"{uri.AbsoluteUri.TrimEnd('/')}/{route.TrimStart('/')}");
 }

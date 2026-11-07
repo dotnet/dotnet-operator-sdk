@@ -17,12 +17,11 @@ internal sealed class CertificateWebhookService(ILogger<CertificateWebhookServic
         client,
         loader,
         new Uri($"https://{config.Hostname}:{config.Port}"),
+        provider.Root.Certificate.EncodeToPemBytes(),
         webhookConfigurationFactory), IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        CaBundle = provider.Root.Certificate.EncodeToPemBytes();
-
         logger.LogDebug("Registering webhooks");
         await RegisterAll();
     }
