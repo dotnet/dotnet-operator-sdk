@@ -152,8 +152,9 @@ internal static class OperatorGenerator
                 new V1Namespace { Metadata = new() { Name = "system" } }.Initialize());
         }
 
+        // Kustomize only finds its config under a YAML file name, regardless of the format of the resources.
         result.Add(
-            $"kustomization.{format.GetFileExtension()}",
+            "kustomization.yaml",
             new KustomizationConfig
             {
                 NamePrefix = $"{name}-",
@@ -188,7 +189,8 @@ internal static class OperatorGenerator
                         new() { Name = "webhook-cert", Files = new List<string> { "svc.pem", "svc-key.pem", }, },
                     }
                     : null,
-            });
+            },
+            OutputFormat.Yaml);
 
         if (outPath is not null)
         {

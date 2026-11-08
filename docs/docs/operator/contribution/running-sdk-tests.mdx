@@ -12,7 +12,10 @@ The SDK's test projects live under `test/`, one per package. Two kinds of tests 
 - **Integration tests** (files named `*.Integration.Test.cs`, grouped in the
   `[Collection("Integration Tests")]` xUnit collection) require a **running Kubernetes cluster**
   reachable through your current kubeconfig context. The CI uses [kind](https://kind.sigs.k8s.io/);
-  locally any cluster works (kind, minikube, Docker Desktop, …).
+  locally any cluster works (kind, minikube, Docker Desktop, …). The integration tests of
+  `KubeOps.Cli.Test` also need `kubectl` on the `PATH`: they run the CLI against the operator in
+  `test/KubeOps.Cli.Test.Operator` and validate the generated manifests with `kubectl kustomize` and a
+  server-side dry run.
 
 :::caution
 Integration tests create and delete resources (CRDs, namespaces, custom resources) in the cluster

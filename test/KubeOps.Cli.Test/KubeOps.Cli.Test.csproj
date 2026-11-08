@@ -5,6 +5,8 @@
     </PropertyGroup>
     <ItemGroup>
         <ProjectReference Include="..\..\src\KubeOps.Cli\KubeOps.Cli.csproj" />
+        <!-- No code reference: the integration tests load this project through MSBuild, which requires it to be restored. -->
+        <ProjectReference Include="..\KubeOps.Cli.Test.Operator\KubeOps.Cli.Test.Operator.csproj" ReferenceOutputAssembly="false" />
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="KubernetesClient" Version="21.0.8" />
