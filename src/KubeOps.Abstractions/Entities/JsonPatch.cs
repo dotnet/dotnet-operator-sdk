@@ -7,9 +7,17 @@ namespace KubeOps.Abstractions.Entities;
 /// <summary>
 /// A JSON Patch document (RFC 6902).
 /// </summary>
-/// <param name="Operations">The operations of the patch.</param>
-public sealed record JsonPatch(IReadOnlyList<PatchOperation> Operations)
+public sealed class JsonPatch
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JsonPatch"/> class.
+    /// </summary>
+    /// <param name="operations">The operations of the patch.</param>
+    public JsonPatch(IReadOnlyList<PatchOperation> operations)
+    {
+        Operations = operations;
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="JsonPatch"/> class.
     /// </summary>
@@ -18,4 +26,9 @@ public sealed record JsonPatch(IReadOnlyList<PatchOperation> Operations)
         : this((IReadOnlyList<PatchOperation>)operations)
     {
     }
+
+    /// <summary>
+    /// Gets the operations of the patch.
+    /// </summary>
+    public IReadOnlyList<PatchOperation> Operations { get; }
 }
