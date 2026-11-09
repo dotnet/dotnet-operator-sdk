@@ -350,7 +350,7 @@ public interface IKubernetesClient : IDisposable
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the entity to be patched does not exist on the API.</exception>
-    Task<TEntity> PatchAsync<TEntity>(
+    async Task<TEntity> PatchAsync<TEntity>(
         TEntity entity,
         Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>>? operationsFilter = null,
         string? fieldManager = null,
@@ -359,14 +359,14 @@ public interface IKubernetesClient : IDisposable
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
-        var currentEntity = Get<TEntity>(entity.Name(), entity.Namespace());
+        var currentEntity = await GetAsync<TEntity>(entity.Name(), entity.Namespace(), cancellationToken);
         if (currentEntity is null)
         {
             throw new InvalidOperationException(
                 $"Cannot patch entity {typeof(TEntity).Name} with name {entity.Name()} in namespace {entity.Namespace()}: Entity does not exist.");
         }
 
-        return PatchAsync(
+        return await PatchAsync(
             currentEntity,
             entity,
             operationsFilter,
