@@ -291,3 +291,9 @@ JSON Patch API is now part of `KubeOps.Abstractions` and no longer requires prev
 - Removed without replacement: applying a patch (`JsonPatch.Apply`), `CreatePatch` for arbitrary
   objects, and `System.Text.Json` serialization of the patch types. Use `entity.CreateJsonPatch(other)`
   or `node.CreatePatch(otherNode)` to create a patch and `patch.ToJsonString()` to serialize it.
+
+### Synchronous `IKubernetesClient` methods removed
+
+`Get`, `List`, `Save`, `Create`, `Update`, `UpdateStatus`, `Patch` and `Delete` are gone. They blocked a
+thread on the API call. Use the `...Async` variants, which also accept a `CancellationToken`.
+`GetCurrentNamespace` stays, because it does not call the API, and so does `Watch`.
