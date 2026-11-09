@@ -72,6 +72,7 @@ public sealed class JsonPatchTest
     [InlineData("true", "false", false)]
     [InlineData("1e400", "1e400", true)]
     [InlineData("1e400", "1e401", false)]
+    [InlineData("0.1000000000000000000000000000001", "0.1", false)]
     public void CreatePatch_Should_Compare_Values(string from, string to, bool equivalent) =>
         JsonNode.Parse(from).CreatePatch(JsonNode.Parse(to)).Operations.Should().HaveCount(equivalent ? 0 : 1);
 

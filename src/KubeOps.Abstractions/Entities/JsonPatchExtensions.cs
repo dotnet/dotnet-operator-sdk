@@ -3,7 +3,6 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using k8s;
@@ -162,12 +161,12 @@ public static class JsonPatchExtensions
             case (JsonArray fromArray, JsonArray toArray):
                 AddArrayOperations(operations, fromArray, toArray, path);
                 break;
-            case (null, null):
-                break;
-            case (JsonValue fromValue, JsonValue toValue) when IsEquivalent(ToElement(fromValue), ToElement(toValue)):
-                break;
             default:
-                operations.Add(PatchOperation.Replace(path, to));
+                if (!JsonNode.DeepEquals(from, to))
+                {
+                    operations.Add(PatchOperation.Replace(path, to));
+                }
+
                 break;
         }
     }
@@ -236,28 +235,6 @@ public static class JsonPatchExtensions
 
     private static string CombinePath(string path, string key) =>
         $"{path}/{key.Replace("~", "~0").Replace("/", "~1")}";
-
-    private static bool IsEquivalent(JsonElement left, JsonElement right) =>
-        left.ValueKind == right.ValueKind && left.ValueKind switch
-        {
-            // Numbers compare by value (1 equals 1.0), the text is only the fallback outside the decimal range.
-            JsonValueKind.Number when left.TryGetDecimal(out var leftNumber) && right.TryGetDecimal(out var rightNumber)
-                => leftNumber == rightNumber,
-            JsonValueKind.Number => left.GetRawText() == right.GetRawText(),
-            JsonValueKind.String => left.GetString() == right.GetString(),
-            _ => true,
-        };
-
-    private static JsonElement ToElement(JsonValue value)
-    {
-        if (value.TryGetValue<JsonElement>(out var element))
-        {
-            return element;
-        }
-
-        using var document = JsonDocument.Parse(value.ToJsonString());
-        return document.RootElement.Clone();
-    }
 
     private static JsonObject ToJsonObject(PatchOperation operation)
     {
