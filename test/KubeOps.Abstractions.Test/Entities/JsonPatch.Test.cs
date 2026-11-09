@@ -119,14 +119,6 @@ public sealed class JsonPatchTest
     }
 
     [Fact]
-    public void ToJsonString_Should_Reject_Unknown_Operation_Type()
-    {
-        var patch = new JsonPatch(new PatchOperation((OperationType)42, "/a"));
-
-        patch.Invoking(p => p.ToJsonString()).Should().Throw<ArgumentOutOfRangeException>();
-    }
-
-    [Fact]
     public void ToBase64String_Should_Encode_The_Json_String()
     {
         var patch = new JsonPatch(PatchOperation.Remove("/a"));

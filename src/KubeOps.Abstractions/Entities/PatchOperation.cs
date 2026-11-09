@@ -9,19 +9,37 @@ namespace KubeOps.Abstractions.Entities;
 /// <summary>
 /// A single operation of a JSON Patch document (RFC 6902).
 /// </summary>
-/// <param name="Op">The type of the operation.</param>
-/// <param name="Path">The target path as JSON Pointer (RFC 6901).</param>
-/// <param name="Value">The value of an <c>add</c> or <c>replace</c> operation.</param>
-public sealed record PatchOperation(OperationType Op, string Path, JsonNode? Value = null)
+public sealed class PatchOperation
 {
+    private PatchOperation(OperationType op, string path, JsonNode? value = null)
+    {
+        Op = op;
+        Path = path;
+        Value = value?.DeepClone();
+    }
+
+    /// <summary>
+    /// Gets the type of the operation.
+    /// </summary>
+    public OperationType Op { get; }
+
+    /// <summary>
+    /// Gets the target path as JSON Pointer (RFC 6901).
+    /// </summary>
+    public string Path { get; }
+
+    /// <summary>
+    /// Gets the value of an <c>add</c> or <c>replace</c> operation.
+    /// </summary>
+    public JsonNode? Value { get; }
+
     /// <summary>
     /// Create an <c>add</c> operation.
     /// </summary>
     /// <param name="path">The target path.</param>
     /// <param name="value">The value to add. It is cloned.</param>
     /// <returns>The operation.</returns>
-    public static PatchOperation Add(string path, JsonNode? value) =>
-        new(OperationType.Add, path, value?.DeepClone());
+    public static PatchOperation Add(string path, JsonNode? value) => new(OperationType.Add, path, value);
 
     /// <summary>
     /// Create a <c>remove</c> operation.
@@ -36,6 +54,5 @@ public sealed record PatchOperation(OperationType Op, string Path, JsonNode? Val
     /// <param name="path">The target path.</param>
     /// <param name="value">The new value. It is cloned.</param>
     /// <returns>The operation.</returns>
-    public static PatchOperation Replace(string path, JsonNode? value) =>
-        new(OperationType.Replace, path, value?.DeepClone());
+    public static PatchOperation Replace(string path, JsonNode? value) => new(OperationType.Replace, path, value);
 }

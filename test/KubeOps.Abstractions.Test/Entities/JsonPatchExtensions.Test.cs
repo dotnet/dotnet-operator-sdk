@@ -4,8 +4,6 @@
 
 using FluentAssertions;
 
-using Json.Patch;
-
 using k8s;
 using k8s.Models;
 
