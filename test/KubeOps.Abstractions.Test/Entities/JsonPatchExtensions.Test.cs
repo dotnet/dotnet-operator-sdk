@@ -11,8 +11,6 @@ using KubeOps.Abstractions.Entities;
 
 namespace KubeOps.Abstractions.Test.Entities;
 
-#pragma warning disable CA2252 // Opt in to preview features before using them
-
 public sealed class JsonPatchExtensionsTest
 {
     [Fact]
