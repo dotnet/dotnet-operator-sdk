@@ -282,8 +282,9 @@ JSON Patch API is now part of `KubeOps.Abstractions` and no longer requires prev
 
 - `JsonPatch`, `PatchOperation` and `OperationType` moved from `Json.Patch` to
   `KubeOps.Abstractions.Entities`. Generated patches are unchanged.
-- `PatchOperation.Path` and `PatchOperation.From` are `string` values (JSON Pointers) instead of
-  `JsonPointer`.
+- `PatchOperation.Path` is a `string` (JSON Pointer) instead of a `JsonPointer`.
+- `OperationType` only has `Add`, `Remove` and `Replace`, and `PatchOperation.From` is gone. For
+  `move`, `copy` or `test` operations, pass the JSON text to `PatchAsync` as a `V1Patch`.
 - `JsonPatch.Net`, `JsonPointer.Net` and `Json.More.Net` are no longer transitive dependencies.
   Reference them yourself if your code uses them. Importing both `Json.Patch` and
   `KubeOps.Abstractions.Entities` in one file makes the shared type names ambiguous.

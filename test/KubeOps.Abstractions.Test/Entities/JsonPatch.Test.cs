@@ -110,13 +110,11 @@ public sealed class JsonPatchTest
             PatchOperation.Add("/a", JsonNode.Parse("1")),
             PatchOperation.Remove("/b"),
             PatchOperation.Replace("/c", null),
-            PatchOperation.Move("/d", "/e"),
-            PatchOperation.Copy("/f", "/g"),
-            PatchOperation.Test("/h", JsonNode.Parse("""{"i":[1.0]}""")));
+            PatchOperation.Replace("/d", JsonNode.Parse("""{"e":[1.0]}""")));
 
         patch.ToJsonString().Should().Be(
             """
-            [{"op":"add","path":"/a","value":1},{"op":"remove","path":"/b"},{"op":"replace","path":"/c","value":null},{"op":"move","path":"/e","from":"/d"},{"op":"copy","path":"/g","from":"/f"},{"op":"test","path":"/h","value":{"i":[1.0]}}]
+            [{"op":"add","path":"/a","value":1},{"op":"remove","path":"/b"},{"op":"replace","path":"/c","value":null},{"op":"replace","path":"/d","value":{"e":[1.0]}}]
             """);
     }
 

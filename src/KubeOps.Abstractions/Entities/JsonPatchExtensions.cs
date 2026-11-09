@@ -141,22 +141,8 @@ public static class JsonPatchExtensions
     /// </summary>
     /// <param name="patch">The <see cref="JsonPatch"/> to convert.</param>
     /// <returns>A string that represents the unformatted JSON representation of the patch.</returns>
-    public static string ToJsonString(this JsonPatch patch)
-    {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-        {
-            writer.WriteStartArray();
-            foreach (var operation in patch.Operations)
-            {
-                WriteOperation(writer, operation);
-            }
-
-            writer.WriteEndArray();
-        }
-
-        return Encoding.UTF8.GetString(stream.ToArray());
-    }
+    public static string ToJsonString(this JsonPatch patch) =>
+        new JsonArray(patch.Operations.Select(ToJsonObject).ToArray<JsonNode?>()).ToJsonString();
 
     /// <summary>
     /// Create the base 64 representation of a <see cref="JsonPatch"/>.
@@ -176,12 +162,12 @@ public static class JsonPatchExtensions
             case (JsonArray fromArray, JsonArray toArray):
                 AddArrayOperations(operations, fromArray, toArray, path);
                 break;
+            case (null, null):
+                break;
+            case (JsonValue fromValue, JsonValue toValue) when IsEquivalent(ToElement(fromValue), ToElement(toValue)):
+                break;
             default:
-                if (!IsEquivalent(from, to))
-                {
-                    operations.Add(PatchOperation.Replace(path, to));
-                }
-
+                operations.Add(PatchOperation.Replace(path, to));
                 break;
         }
     }
@@ -225,64 +211,34 @@ public static class JsonPatchExtensions
             return;
         }
 
-        if (to.Count >= from.Count)
+        // Descending when the array shrinks, because every removal shifts the elements behind it.
+        var indexes = to.Count >= from.Count
+            ? Enumerable.Range(0, to.Count)
+            : Enumerable.Range(0, from.Count).Reverse();
+
+        foreach (var index in indexes)
         {
-            for (var i = 0; i < to.Count; i++)
+            var elementPath = $"{path}/{index}";
+            if (index >= to.Count)
             {
-                AddArrayElementOperation(operations, from, to, i, CombinePath(path, i));
+                operations.Add(PatchOperation.Remove(elementPath));
             }
-
-            return;
-        }
-
-        // Descending, because every removal shifts the elements behind it.
-        for (var i = from.Count - 1; i >= 0; i--)
-        {
-            AddArrayElementOperation(operations, from, to, i, CombinePath(path, i));
-        }
-    }
-
-    private static void AddArrayElementOperation(
-        List<PatchOperation> operations,
-        JsonArray from,
-        JsonArray to,
-        int index,
-        string path)
-    {
-        if (index >= to.Count)
-        {
-            operations.Add(PatchOperation.Remove(path));
-        }
-        else if (index >= from.Count)
-        {
-            operations.Add(PatchOperation.Add(path, to[index]));
-        }
-        else
-        {
-            AddOperations(operations, from[index], to[index], path);
+            else if (index >= from.Count)
+            {
+                operations.Add(PatchOperation.Add(elementPath, to[index]));
+            }
+            else
+            {
+                AddOperations(operations, from[index], to[index], elementPath);
+            }
         }
     }
 
     private static string CombinePath(string path, string key) =>
         $"{path}/{key.Replace("~", "~0").Replace("/", "~1")}";
 
-    private static string CombinePath(string path, int index) => $"{path}/{index}";
-
-    private static bool IsEquivalent(JsonNode? left, JsonNode? right) => (left, right) switch
-    {
-        (null, null) => true,
-        (JsonValue leftValue, JsonValue rightValue) => IsEquivalent(ToElement(leftValue), ToElement(rightValue)),
-        _ => false,
-    };
-
-    private static bool IsEquivalent(JsonElement left, JsonElement right)
-    {
-        if (left.ValueKind != right.ValueKind)
-        {
-            return false;
-        }
-
-        return left.ValueKind switch
+    private static bool IsEquivalent(JsonElement left, JsonElement right) =>
+        left.ValueKind == right.ValueKind && left.ValueKind switch
         {
             // Numbers compare by value (1 equals 1.0), the text is only the fallback outside the decimal range.
             JsonValueKind.Number when left.TryGetDecimal(out var leftNumber) && right.TryGetDecimal(out var rightNumber)
@@ -291,7 +247,6 @@ public static class JsonPatchExtensions
             JsonValueKind.String => left.GetString() == right.GetString(),
             _ => true,
         };
-    }
 
     private static JsonElement ToElement(JsonValue value)
     {
@@ -304,32 +259,15 @@ public static class JsonPatchExtensions
         return document.RootElement.Clone();
     }
 
-    private static void WriteOperation(Utf8JsonWriter writer, PatchOperation operation)
+    private static JsonObject ToJsonObject(PatchOperation operation)
     {
-        writer.WriteStartObject();
-        writer.WriteString("op", GetOperationName(operation.Op));
-        writer.WriteString("path", operation.Path);
-
-        switch (operation.Op)
+        var node = new JsonObject { ["op"] = GetOperationName(operation.Op), ["path"] = operation.Path };
+        if (operation.Op != OperationType.Remove)
         {
-            case OperationType.Add or OperationType.Replace or OperationType.Test:
-                writer.WritePropertyName("value");
-                if (operation.Value is null)
-                {
-                    writer.WriteNullValue();
-                }
-                else
-                {
-                    operation.Value.WriteTo(writer);
-                }
-
-                break;
-            case OperationType.Move or OperationType.Copy:
-                writer.WriteString("from", operation.From);
-                break;
+            node["value"] = operation.Value?.DeepClone();
         }
 
-        writer.WriteEndObject();
+        return node;
     }
 
     private static string GetOperationName(OperationType type) => type switch
@@ -337,9 +275,6 @@ public static class JsonPatchExtensions
         OperationType.Add => "add",
         OperationType.Remove => "remove",
         OperationType.Replace => "replace",
-        OperationType.Move => "move",
-        OperationType.Copy => "copy",
-        OperationType.Test => "test",
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown JSON Patch operation type."),
     };
 }

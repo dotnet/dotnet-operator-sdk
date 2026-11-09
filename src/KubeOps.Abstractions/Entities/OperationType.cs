@@ -23,19 +23,4 @@ public enum OperationType
     /// Replaces the value at the target path.
     /// </summary>
     Replace,
-
-    /// <summary>
-    /// Moves the value at the source path to the target path.
-    /// </summary>
-    Move,
-
-    /// <summary>
-    /// Copies the value at the source path to the target path.
-    /// </summary>
-    Copy,
-
-    /// <summary>
-    /// Tests that the value at the target path equals the given value.
-    /// </summary>
-    Test,
 }
