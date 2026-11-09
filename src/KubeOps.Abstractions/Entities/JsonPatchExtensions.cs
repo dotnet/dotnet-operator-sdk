@@ -2,12 +2,9 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Runtime.Versioning;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
-
-using Json.More;
-using Json.Patch;
 
 using k8s;
 using k8s.Models;
@@ -17,9 +14,6 @@ namespace KubeOps.Abstractions.Entities;
 /// <summary>
 /// Method extensions for JSON diffing between two entities (<see cref="IKubernetesObject{TMetadata}"/>).
 /// </summary>
-[RequiresPreviewFeatures("JsonPatch extensions are a preview feature and may change in the future." +
-                         "Because maybe the default filtering does not catch all volatile and non-impactful" +
-                         "properties.")]
 public static class JsonPatchExtensions
 {
     /// <summary>
@@ -72,7 +66,7 @@ public static class JsonPatchExtensions
     /// </summary>
     public static readonly Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>> DefaultOperationsFilter =
         operations =>
-            operations.Where(o => !DefaultIgnoredProperties.Any(ignored => o.Path.ToString().StartsWith(ignored)))
+            operations.Where(o => !DefaultIgnoredProperties.Any(ignored => o.Path.StartsWith(ignored)))
                 .ToList();
 
     /// <summary>
@@ -107,6 +101,21 @@ public static class JsonPatchExtensions
     }
 
     /// <summary>
+    /// Computes the JSON Patch diff between two JSON nodes.
+    /// Objects are compared by key. Arrays are compared by index, and an array that
+    /// becomes empty or stops being empty is replaced as a whole.
+    /// </summary>
+    /// <param name="from">The source node to compare from.</param>
+    /// <param name="to">The target node to compare to.</param>
+    /// <returns>The JSON Patch that transforms the source node into the target node.</returns>
+    public static JsonPatch CreatePatch(this JsonNode? from, JsonNode? to)
+    {
+        var operations = new List<PatchOperation>();
+        AddOperations(operations, from, to, string.Empty);
+        return new JsonPatch(operations);
+    }
+
+    /// <summary>
     /// Checks if two Kubernetes entities implementing <see cref="IKubernetesObject{V1ObjectMeta}"/> have changes.
     /// </summary>
     /// <typeparam name="TEntity">The entity type.</typeparam>
@@ -132,7 +141,22 @@ public static class JsonPatchExtensions
     /// </summary>
     /// <param name="patch">The <see cref="JsonPatch"/> to convert.</param>
     /// <returns>A string that represents the unformatted JSON representation of the patch.</returns>
-    public static string ToJsonString(this JsonPatch patch) => patch.ToJsonDocument().RootElement.GetRawText();
+    public static string ToJsonString(this JsonPatch patch)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartArray();
+            foreach (var operation in patch.Operations)
+            {
+                WriteOperation(writer, operation);
+            }
+
+            writer.WriteEndArray();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
 
     /// <summary>
     /// Create the base 64 representation of a <see cref="JsonPatch"/>.
@@ -141,4 +165,181 @@ public static class JsonPatchExtensions
     /// <returns>The base64 encoded representation of the patch.</returns>
     public static string ToBase64String(this JsonPatch patch) =>
         Convert.ToBase64String(Encoding.UTF8.GetBytes(patch.ToJsonString()));
+
+    private static void AddOperations(List<PatchOperation> operations, JsonNode? from, JsonNode? to, string path)
+    {
+        switch (from, to)
+        {
+            case (JsonObject fromObject, JsonObject toObject):
+                AddObjectOperations(operations, fromObject, toObject, path);
+                break;
+            case (JsonArray fromArray, JsonArray toArray):
+                AddArrayOperations(operations, fromArray, toArray, path);
+                break;
+            default:
+                if (!IsEquivalent(from, to))
+                {
+                    operations.Add(PatchOperation.Replace(path, to));
+                }
+
+                break;
+        }
+    }
+
+    private static void AddObjectOperations(
+        List<PatchOperation> operations,
+        JsonObject from,
+        JsonObject to,
+        string path)
+    {
+        foreach (var (key, fromValue) in from)
+        {
+            if (to.TryGetPropertyValue(key, out var toValue))
+            {
+                AddOperations(operations, fromValue, toValue, CombinePath(path, key));
+            }
+            else
+            {
+                operations.Add(PatchOperation.Remove(CombinePath(path, key)));
+            }
+        }
+
+        foreach (var (key, toValue) in to)
+        {
+            if (!from.ContainsKey(key))
+            {
+                operations.Add(PatchOperation.Add(CombinePath(path, key), toValue));
+            }
+        }
+    }
+
+    private static void AddArrayOperations(
+        List<PatchOperation> operations,
+        JsonArray from,
+        JsonArray to,
+        string path)
+    {
+        if ((from.Count == 0) != (to.Count == 0))
+        {
+            operations.Add(PatchOperation.Replace(path, to));
+            return;
+        }
+
+        if (to.Count >= from.Count)
+        {
+            for (var i = 0; i < to.Count; i++)
+            {
+                AddArrayElementOperation(operations, from, to, i, CombinePath(path, i));
+            }
+
+            return;
+        }
+
+        // Descending, because every removal shifts the elements behind it.
+        for (var i = from.Count - 1; i >= 0; i--)
+        {
+            AddArrayElementOperation(operations, from, to, i, CombinePath(path, i));
+        }
+    }
+
+    private static void AddArrayElementOperation(
+        List<PatchOperation> operations,
+        JsonArray from,
+        JsonArray to,
+        int index,
+        string path)
+    {
+        if (index >= to.Count)
+        {
+            operations.Add(PatchOperation.Remove(path));
+        }
+        else if (index >= from.Count)
+        {
+            operations.Add(PatchOperation.Add(path, to[index]));
+        }
+        else
+        {
+            AddOperations(operations, from[index], to[index], path);
+        }
+    }
+
+    private static string CombinePath(string path, string key) =>
+        $"{path}/{key.Replace("~", "~0").Replace("/", "~1")}";
+
+    private static string CombinePath(string path, int index) => $"{path}/{index}";
+
+    private static bool IsEquivalent(JsonNode? left, JsonNode? right) => (left, right) switch
+    {
+        (null, null) => true,
+        (JsonValue leftValue, JsonValue rightValue) => IsEquivalent(ToElement(leftValue), ToElement(rightValue)),
+        _ => false,
+    };
+
+    private static bool IsEquivalent(JsonElement left, JsonElement right)
+    {
+        if (left.ValueKind != right.ValueKind)
+        {
+            return false;
+        }
+
+        return left.ValueKind switch
+        {
+            // Numbers compare by value (1 equals 1.0), the text is only the fallback outside the decimal range.
+            JsonValueKind.Number when left.TryGetDecimal(out var leftNumber) && right.TryGetDecimal(out var rightNumber)
+                => leftNumber == rightNumber,
+            JsonValueKind.Number => left.GetRawText() == right.GetRawText(),
+            JsonValueKind.String => left.GetString() == right.GetString(),
+            _ => true,
+        };
+    }
+
+    private static JsonElement ToElement(JsonValue value)
+    {
+        if (value.TryGetValue<JsonElement>(out var element))
+        {
+            return element;
+        }
+
+        using var document = JsonDocument.Parse(value.ToJsonString());
+        return document.RootElement.Clone();
+    }
+
+    private static void WriteOperation(Utf8JsonWriter writer, PatchOperation operation)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("op", GetOperationName(operation.Op));
+        writer.WriteString("path", operation.Path);
+
+        switch (operation.Op)
+        {
+            case OperationType.Add or OperationType.Replace or OperationType.Test:
+                writer.WritePropertyName("value");
+                if (operation.Value is null)
+                {
+                    writer.WriteNullValue();
+                }
+                else
+                {
+                    operation.Value.WriteTo(writer);
+                }
+
+                break;
+            case OperationType.Move or OperationType.Copy:
+                writer.WriteString("from", operation.From);
+                break;
+        }
+
+        writer.WriteEndObject();
+    }
+
+    private static string GetOperationName(OperationType type) => type switch
+    {
+        OperationType.Add => "add",
+        OperationType.Remove => "remove",
+        OperationType.Replace => "replace",
+        OperationType.Move => "move",
+        OperationType.Copy => "copy",
+        OperationType.Test => "test",
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown JSON Patch operation type."),
+    };
 }

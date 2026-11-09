@@ -14,7 +14,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="JsonPatch.Net" Version="4.0.1" />
         <PackageReference Include="KubernetesClient" Version="21.0.8" />
         <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.9.0" />
     </ItemGroup>

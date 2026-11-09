@@ -2,10 +2,6 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Runtime.Versioning;
-
-using Json.Patch;
-
 using k8s;
 using k8s.Models;
 
@@ -354,10 +350,6 @@ public interface IKubernetesClient : IDisposable
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the entity to be patched does not exist on the API.</exception>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
     Task<TEntity> PatchAsync<TEntity>(
         TEntity entity,
         Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>>? operationsFilter = null,
@@ -399,10 +391,6 @@ public interface IKubernetesClient : IDisposable
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
     Task<TEntity> PatchAsync<TEntity>(
         TEntity from,
         TEntity to,
@@ -430,10 +418,6 @@ public interface IKubernetesClient : IDisposable
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
     Task<TEntity> PatchAsync<TEntity>(
         TEntity entity,
         JsonPatch patch,
@@ -494,10 +478,6 @@ public interface IKubernetesClient : IDisposable
     /// <param name="entity">The entity containing the desired updates.</param>
     /// <returns>The patched entity.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the entity to be patched does not exist on the API.</exception>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
     TEntity Patch<TEntity>(TEntity entity)
         where TEntity : IKubernetesObject<V1ObjectMeta>
         => PatchAsync(entity, operationsFilter: null, cancellationToken: default).GetAwaiter().GetResult();
@@ -509,10 +489,6 @@ public interface IKubernetesClient : IDisposable
     /// <param name="from">The current/original entity.</param>
     /// <param name="to">The updated entity with desired changes.</param>
     /// <returns>The patched entity.</returns>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
     TEntity Patch<TEntity>(TEntity from, TEntity to)
         where TEntity : IKubernetesObject<V1ObjectMeta>
         => PatchAsync(from, to).GetAwaiter().GetResult();
@@ -527,10 +503,6 @@ public interface IKubernetesClient : IDisposable
     /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <returns>The patched entity.</returns>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
     TEntity Patch<TEntity>(
         TEntity entity,
         JsonPatch patch,
