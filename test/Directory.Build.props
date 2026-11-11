@@ -29,7 +29,11 @@
     <ItemGroup Condition="'$(IsTestProject)' == 'true'">
         <ProjectReference Include="$(MSBuildThisFileDirectory)\..\src\KubeOps.Abstractions\KubeOps.Abstractions.csproj" />
         <Using Include="Xunit"/>
+        <Using Include="KubeOps.TestTraits"/>
         <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute" />
+        <!-- Shared trait constants and the test that every test carries a Category and an Area. -->
+        <Compile Include="$(MSBuildThisFileDirectory)TestTraits.cs" Link="TestTraits.cs" />
+        <Compile Include="$(MSBuildThisFileDirectory)TestTraits.Test.cs" Link="TestTraits.Test.cs" />
     </ItemGroup>
 
     <!--

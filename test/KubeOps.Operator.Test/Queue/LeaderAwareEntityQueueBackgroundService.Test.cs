@@ -27,7 +27,9 @@ using LeaderElectorType = k8s.LeaderElection.LeaderElector;
 
 namespace KubeOps.Operator.Test.Queue;
 
-[Trait("Area", "LeaderLoss")]
+[Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Queue)]
 public sealed class LeaderAwareEntityQueueBackgroundServiceTest
 {
     [Fact]
@@ -299,7 +301,7 @@ public sealed class LeaderAwareEntityQueueBackgroundServiceTest
         await service.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
-    [Trait("Area", "Otel")]
+    [Trait(TestTrait.Feature, TestFeature.Otel)]
     [Fact]
     public async Task Records_Reconciliation_Metrics_When_Leader()
     {

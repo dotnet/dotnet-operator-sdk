@@ -21,6 +21,8 @@ namespace KubeOps.Operator.Test.Controller;
 /// single shared watch connection dispatches events to all controllers whose label selectors match,
 /// evaluated client-side.
 /// </summary>
+[Trait(TestTrait.Area, TestArea.Reconciliation)]
+[Trait(TestTrait.Feature, TestFeature.MultipleControllers)]
 public sealed class MultipleControllersSharedWatcherIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();

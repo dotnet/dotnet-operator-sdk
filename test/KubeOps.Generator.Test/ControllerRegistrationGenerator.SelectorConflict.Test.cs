@@ -68,7 +68,6 @@ public sealed partial class ControllerRegistrationGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "Partial")]
     public void Should_Report_Error_When_Partial_Controller_Declares_Selectors_On_Separate_Parts()
     {
         const string input =

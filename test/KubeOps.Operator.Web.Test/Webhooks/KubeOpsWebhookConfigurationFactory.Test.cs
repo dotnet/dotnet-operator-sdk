@@ -11,7 +11,8 @@ using KubeOps.Operator.Web.Webhooks;
 
 namespace KubeOps.Operator.Web.Test.Webhooks;
 
-[Trait("Area", "WebhookRegistration")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class KubeOpsWebhookConfigurationFactoryTest
 {
     private static readonly EntityMetadata Metadata = new("TestEntity", "v1", "test.kubeops.dev", "testentities");

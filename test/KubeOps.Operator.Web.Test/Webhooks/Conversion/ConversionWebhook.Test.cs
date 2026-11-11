@@ -14,8 +14,9 @@ using KubeOps.Operator.Web.Webhooks.Conversion;
 
 namespace KubeOps.Operator.Web.Test.Webhooks.Conversion;
 
-[Trait("Area", "ConversionWebhook")]
 [RequiresPreviewFeatures]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class ConversionWebhookTest
 {
     private const string Group = "kubeops.test";

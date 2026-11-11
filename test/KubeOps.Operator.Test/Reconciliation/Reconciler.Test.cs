@@ -26,6 +26,8 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Test.Reconciliation;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Reconciliation)]
 public sealed class ReconcilerTest
 {
     private readonly Mock<ILogger<Reconciler<V1ConfigMap>>> _mockLogger;
@@ -71,7 +73,7 @@ public sealed class ReconcilerTest
     }
 
     [Fact]
-    [Trait("Area", "Otel")]
+    [Trait(TestTrait.Feature, TestFeature.Otel)]
     public async Task Reconcile_Should_Record_Requeue_Metric_When_Enqueue_Is_Scheduled()
     {
         var entity = CreateTestEntity();
@@ -93,7 +95,7 @@ public sealed class ReconcilerTest
     }
 
     [Fact]
-    [Trait("Area", "Otel")]
+    [Trait(TestTrait.Feature, TestFeature.Otel)]
     public async Task Reconcile_Should_Not_Record_Requeue_Metric_When_Enqueue_Is_Dropped()
     {
         // When the queue drops the requeue (intake suspended after leadership loss) Enqueue returns false,

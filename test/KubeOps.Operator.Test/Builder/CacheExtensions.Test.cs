@@ -14,6 +14,8 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Test.Builder;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Watcher)]
 public sealed class CacheExtensionsTest
 {
     [Theory]

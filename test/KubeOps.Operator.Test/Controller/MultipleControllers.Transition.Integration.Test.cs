@@ -23,6 +23,8 @@ namespace KubeOps.Operator.Test.Controller;
 /// including the default <see cref="ReconcileStrategy.ByGeneration"/> where a label-only change does not
 /// bump <c>generation</c>.
 /// </summary>
+[Trait(TestTrait.Area, TestArea.Reconciliation)]
+[Trait(TestTrait.Feature, TestFeature.MultipleControllers)]
 public abstract class MultipleControllersTransitionIntegrationTestBase : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();

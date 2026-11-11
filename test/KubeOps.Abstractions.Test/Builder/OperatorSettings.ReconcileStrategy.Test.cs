@@ -8,6 +8,8 @@ using KubeOps.Abstractions.Builder;
 
 namespace KubeOps.Abstractions.Test.Builder;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Configuration)]
 public sealed class OperatorSettingsReconcileStrategyTest
 {
     [Fact]

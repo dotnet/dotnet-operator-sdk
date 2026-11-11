@@ -17,6 +17,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.Finalizer;
 
+[Trait(TestTrait.Area, TestArea.Finalizers)]
 public sealed class EntityFinalizerAutoAttachIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();

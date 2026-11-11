@@ -13,7 +13,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace KubeOps.Operator.Web.Test.Certificates;
 
-[Trait("Area", "Certificate")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class CertificateWebhookServiceTest : IDisposable
 {
     private readonly CertificateGenerator _certificateProvider = new(Environment.MachineName);

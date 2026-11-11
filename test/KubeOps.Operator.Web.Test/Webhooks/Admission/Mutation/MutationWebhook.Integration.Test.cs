@@ -9,7 +9,7 @@ using KubeOps.Operator.Web.Test.TestApp;
 
 namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Mutation;
 
-[Trait("Area", "AdmissionWebhook")]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class MutationWebhookIntegrationTest : IntegrationTestBase
 {
     [WebhookIntegrationFact]

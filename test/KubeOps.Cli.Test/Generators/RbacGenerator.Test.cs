@@ -21,7 +21,8 @@ using Spectre.Console.Testing;
 
 namespace KubeOps.Cli.Test.Generators;
 
-[Trait("Area", "Rbac")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Rbac)]
 public sealed class RbacGeneratorTest
 {
     [Fact]

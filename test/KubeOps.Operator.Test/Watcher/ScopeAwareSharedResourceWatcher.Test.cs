@@ -29,7 +29,9 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Test.Watcher;
 
-[Trait("Area", "ScopedLeaderElection")]
+[Trait(TestTrait.Feature, TestFeature.ScopedLeaderElection)]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Watcher)]
 public sealed class ScopeAwareSharedResourceWatcherTest
 {
     private readonly Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>> _queue = new();

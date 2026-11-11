@@ -17,8 +17,8 @@ using Spectre.Console.Testing;
 namespace KubeOps.Cli.Test.Commands.Generator;
 
 [Collection(IntegrationTestCollection.Name)]
-[Trait("Category", "Integration")]
-[Trait("Area", "OperatorGeneration")]
+[Trait(TestTrait.Category, TestCategory.IntegrationTest)]
+[Trait(TestTrait.Area, TestArea.Cli)]
 public sealed class OperatorGeneratorIntegrationTest : IAsyncLifetime
 {
     private readonly Kubernetes _client = new(KubernetesClientConfiguration.BuildDefaultConfig());

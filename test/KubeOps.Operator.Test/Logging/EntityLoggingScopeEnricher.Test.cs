@@ -31,7 +31,8 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Test.Logging;
 
-[Trait("Area", "Logging")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Logging)]
 public sealed class EntityLoggingScopeEnricherTest
 {
     private static V1OperatorIntegrationTestEntity Entity => new("name", "username", "ns");

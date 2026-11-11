@@ -9,6 +9,8 @@ using KubeOps.Operator.Test.TestEntities;
 
 namespace KubeOps.Operator.Test.Crds;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Crds)]
 public sealed class KubeOpsCrdResourceFactoryTest
 {
     [Fact]

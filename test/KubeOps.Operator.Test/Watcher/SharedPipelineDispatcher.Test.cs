@@ -18,7 +18,9 @@ using Moq;
 
 namespace KubeOps.Operator.Test.Watcher;
 
-[Trait("Area", "MultipleControllers")]
+[Trait(TestTrait.Feature, TestFeature.MultipleControllers)]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Watcher)]
 public sealed class SharedPipelineDispatcherTest
 {
     private readonly Mock<ITimedEntityQueue<V1OperatorIntegrationTestEntity>> _managedQueue = new();

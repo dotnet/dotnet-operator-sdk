@@ -17,9 +17,10 @@ using KubeOps.Transpiler.Exceptions;
 
 namespace KubeOps.Transpiler.Test;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.CrdSchema)]
 public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
 {
-    [Trait("Area", "General")]
     [Theory]
     [InlineData(typeof(StringTestEntity), "string", null, null)]
     [InlineData(typeof(NullableStringTestEntity), "string", null, true)]
@@ -71,7 +72,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         prop.Nullable.Should().Be(isNullable);
     }
 
-    [Trait("Area", "General")]
     [Theory]
     [InlineData(typeof(StringArrayEntity), "string", null)]
     [InlineData(typeof(NullableStringArrayEntity), "string", null)]
@@ -89,7 +89,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         prop.Nullable.Should().Be(isNullable);
     }
 
-    [Trait("Area", "General")]
     [Theory]
     [InlineData(typeof(DictionaryEntity), "string", null)]
     [InlineData(typeof(EnumerableKeyPairsEntity), "string", null)]
@@ -101,7 +100,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         prop.Nullable.Should().Be(isNullable);
     }
 
-    [Trait("Area", "KubernetesEntity")]
     [Fact]
     public void Should_Ignore_Entity()
     {
@@ -109,7 +107,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crds.Count().Should().Be(0);
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Ignore_NonEntity()
     {
@@ -117,7 +114,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crds.Count().Should().Be(0);
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Ignore_Kubernetes_Entities()
     {
@@ -125,7 +121,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crds.Count().Should().Be(0);
     }
 
-    [Trait("Area", "KubernetesEntity")]
     [Fact]
     public void Should_Set_Highest_Version_As_Storage()
     {
@@ -139,7 +134,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crd.Spec.Versions.First(v => v.Storage).Name.Should().Be("v2");
     }
 
-    [Trait("Area", "KubernetesEntity")]
     [Fact]
     public void Should_Set_Storage_When_Attribute_Is_Set()
     {
@@ -153,7 +147,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crd.Spec.Versions.First(v => v.Storage).Name.Should().Be("v1");
     }
 
-    [Trait("Area", "KubernetesEntity")]
     [Fact]
     public void Should_Add_Multiple_Versions_To_Crd()
     {
@@ -172,7 +165,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
             .HaveCount(2);
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Use_Correct_CRD()
     {
@@ -188,7 +180,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crd.Spec.Scope.Should().Be(scope);
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Add_Status_SubResource_If_Absent()
     {
@@ -196,7 +187,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crd.Spec.Versions[0].Subresources?.Status?.Should().BeNull();
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Add_Status_SubResource_If_Present()
     {
@@ -204,7 +194,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crd.Spec.Versions[0].Subresources.Status.Should().NotBeNull();
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Add_ShortNames_To_Crd()
     {
@@ -215,7 +204,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
             .Contain(["foo", "bar", "baz"]);
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_Description_On_Class()
     {
@@ -225,7 +213,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Description.Should().NotBe("");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_Description()
     {
@@ -235,7 +222,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Description.Should().NotBe("");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_Title()
     {
@@ -245,7 +231,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Title.Should().Be("My Title");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_Title_On_Class()
     {
@@ -255,7 +240,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Title.Should().Be("My Title");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_Default_Value()
     {
@@ -265,7 +249,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.DefaultProperty.Should().Be(42L);
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_Structured_Default_Value_From_Json()
     {
@@ -276,7 +259,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         KubernetesYaml.Serialize(crd).Should().Contain("default: {}");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_Structured_Default_Value_On_Status_Type()
     {
@@ -288,7 +270,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         KubernetesYaml.Serialize(crd).Should().Contain("status:\n            default: {}");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Inherit_Structured_Default_Value_From_Status_Base_Type()
     {
@@ -298,7 +279,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         statusSchema.DefaultProperty.Should().BeEquivalentTo(new Dictionary<string, object?>());
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_Example()
     {
@@ -308,7 +288,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Example.Should().Be("example");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_Structured_Example_From_Json()
     {
@@ -318,7 +297,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Example.Should().BeEquivalentTo(new Dictionary<string, object?> { ["enabled"] = true });
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Reject_Invalid_Structured_Value_Json()
     {
@@ -328,7 +306,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
             .WithMessage("*DefaultValueAttribute*contains invalid JSON*");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Reject_Json_Parsing_For_Non_String_Value()
     {
@@ -338,7 +315,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
             .WithMessage("*DefaultValueAttribute*only enable JSON parsing for string values*");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Override_Format()
     {
@@ -348,7 +324,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Format.Should().Be("uri");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Remove_Inferred_Format()
     {
@@ -358,7 +333,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Format.Should().BeNull();
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Override_Enum_Values()
     {
@@ -368,7 +342,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.EnumProperty.Should().Equal(30L, 60L, 90L);
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_ExternalDocs()
     {
@@ -378,7 +351,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.ExternalDocs.Url.Should().NotBe("");
     }
 
-    [Trait("Area", "SchemaMetadata")]
     [Fact]
     public void Should_Set_ExternalDocs_Description()
     {
@@ -388,7 +360,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.ExternalDocs.Description.Should().NotBe("");
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_Items_Information()
     {
@@ -402,7 +373,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MinItems.Should().Be(13);
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Theory]
     [InlineData(typeof(DefaultItemsAttrEntity))]
     [InlineData(typeof(DefaultItemsListAttrEntity))]
@@ -419,7 +389,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MaxItems.Should().BeNull();
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_MinItemsOnly_Information()
     {
@@ -431,7 +400,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MaxItems.Should().BeNull();
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_MaxItemsOnly_Information()
     {
@@ -443,7 +411,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MaxItems.Should().Be(42);
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_Length_Information()
     {
@@ -455,7 +422,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MaxLength.Should().Be(42);
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_MinLengthOnly_Information()
     {
@@ -467,7 +433,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MaxLength.Should().BeNull();
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_MaxLengthOnly_Information()
     {
@@ -479,7 +444,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MaxLength.Should().Be(42);
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_MultipleOf()
     {
@@ -490,7 +454,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MultipleOf.Should().Be(2);
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_Properties_Information()
     {
@@ -502,7 +465,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MaxProperties.Should().Be(10);
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_MinPropertiesOnly_Information()
     {
@@ -514,7 +476,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MaxProperties.Should().BeNull();
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_MaxPropertiesOnly_Information()
     {
@@ -526,7 +487,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.MaxProperties.Should().Be(10);
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_Pattern()
     {
@@ -537,7 +497,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Pattern.Should().Be(@"/\d*/");
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_RangeMinimum()
     {
@@ -549,7 +508,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.ExclusiveMinimum.Should().BeTrue();
     }
 
-    [Trait("Area", "OpenApiSchema")]
     [Fact]
     public void Should_Set_RangeMaximum()
     {
@@ -561,7 +519,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.ExclusiveMaximum.Should().BeTrue();
     }
 
-    [Trait("Area", "SchemaValidation")]
     [Fact]
     public void Should_Reject_UniqueItems()
     {
@@ -571,7 +528,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
             .WithMessage("*UniqueItemsAttribute*");
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Set_XListType()
     {
@@ -582,7 +538,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesListType.Should().Be("set");
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Set_XMapType()
     {
@@ -593,7 +548,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesMapType.Should().Be("atomic");
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Set_XListMapKeys()
     {
@@ -605,7 +559,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesListMapKeys.Should().BeEquivalentTo("name", "port");
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Set_Required()
     {
@@ -615,7 +568,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Required.Should().Contain("property");
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Set_Spec_As_Required_Via_Auto_Inference_When_Spec_Has_Required_Properties()
     {
@@ -625,7 +577,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         topLevel.Required.Should().Contain("spec");
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Not_Set_Spec_As_Required_When_Required_Property_Is_Under_Optional_Parent()
     {
@@ -634,7 +585,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().BeNullOrEmpty();
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Set_Spec_As_Required_Via_Explicit_Class_Attribute()
     {
@@ -643,7 +593,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().Contain("spec");
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Not_Set_Spec_As_Required_When_Required_Property_Is_Inside_Optional_Collection()
     {
@@ -652,7 +601,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         crd.Spec.Versions.First().Schema.OpenAPIV3Schema.Required.Should().BeNullOrEmpty();
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Not_Set_Spec_As_Required_When_Only_Required_Property_Is_Ignored()
     {
@@ -662,7 +610,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         topLevel.Required.Should().BeNullOrEmpty();
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Not_Set_Spec_As_Required_Without_Required_Properties_Or_Attribute()
     {
@@ -672,7 +619,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         topLevel.Required.Should().BeNullOrEmpty();
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Not_Set_Status_As_Required_Via_Auto_Inference_Even_When_Status_Has_Required_Properties()
     {
@@ -682,7 +628,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         topLevel.Required.Should().BeNullOrEmpty();
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Not_Set_Status_As_Required_Via_Explicit_Class_Attribute()
     {
@@ -692,7 +637,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         topLevel.Required.Should().BeNullOrEmpty();
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Not_Contain_Ignored_Property()
     {
@@ -702,7 +646,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Properties.Should().NotContainKey("property");
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Set_Preserve_Unknown_Fields()
     {
@@ -712,7 +655,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesPreserveUnknownFields.Should().BeTrue();
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Set_EmbeddedResource_Fields()
     {
@@ -722,7 +664,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesEmbeddedResource.Should().BeTrue();
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Set_Preserve_Unknown_Fields_On_Dictionaries()
     {
@@ -732,7 +673,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesPreserveUnknownFields.Should().BeTrue();
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Set_Preserve_Unknown_Fields_On_Classes()
     {
@@ -742,7 +682,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesPreserveUnknownFields.Should().BeTrue();
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Set_Preserve_Unknown_Fields_On_System_Object()
     {
@@ -752,7 +691,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesPreserveUnknownFields.Should().BeTrue();
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Set_Preserve_Unknown_Fields_On_ObjectLists()
     {
@@ -762,7 +700,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesPreserveUnknownFields.Should().BeTrue();
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Not_Set_Preserve_Unknown_Fields_On_Generic_Dictionaries()
     {
@@ -772,7 +709,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesPreserveUnknownFields.Should().BeNull();
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Not_Set_Preserve_Unknown_Fields_On_KeyValuePair_Enumerable()
     {
@@ -782,7 +718,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesPreserveUnknownFields.Should().BeNull();
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Properties_On_Dictionaries()
     {
@@ -792,7 +727,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Properties.Should().BeNull();
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Properties_On_Generic_Dictionaries()
     {
@@ -802,7 +736,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Properties.Should().BeNull();
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Not_Set_Properties_On_KeyValuePair_Enumerable()
     {
@@ -812,7 +745,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Properties.Should().BeNull();
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_AdditionalProperties_On_Dictionaries_For_Value_type()
     {
@@ -822,7 +754,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.AdditionalProperties.Should().NotBeNull();
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Set_AdditionalProperties_On_KeyValuePair_For_Value_type()
     {
@@ -832,7 +763,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.AdditionalProperties.Should().NotBeNull();
     }
 
-    [Trait("Area", "KubernetesSchemaExtensions")]
     [Fact]
     public void Should_Set_IntOrString()
     {
@@ -843,7 +773,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.XKubernetesIntOrString.Should().BeTrue();
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Use_PropertyName_From_JsonPropertyAttribute()
     {
@@ -853,7 +782,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Should().Contain(p => p.Key == "otherName");
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Should_Use_Kubernetes_Json_Property_Naming_For_Acronym_Prefixes()
     {
@@ -868,7 +796,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         itemProperties.Should().NotContainKey("iPAddress");
     }
 
-    [Trait("Area", "General")]
     [Fact]
     public void Must_Not_Contain_Ignored_TopLevel_Properties()
     {
@@ -878,7 +805,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         specProperties.Should().NotContainKeys("metadata", "apiVersion", "kind");
     }
 
-    [Trait("Area", "AdditionalPrinterColumn")]
     [Fact]
     public void Should_Add_AdditionalPrinterColumns()
     {
@@ -887,7 +813,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         apc.Should().ContainSingle(def => def.JsonPath == ".property");
     }
 
-    [Trait("Area", "AdditionalPrinterColumn")]
     [Fact]
     public void Should_Add_AdditionalPrinterColumns_With_Prio()
     {
@@ -896,7 +821,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         apc.Should().ContainSingle(def => def.JsonPath == ".property" && def.Priority == 1);
     }
 
-    [Trait("Area", "AdditionalPrinterColumn")]
     [Fact]
     public void Should_Add_AdditionalPrinterColumns_With_Name()
     {
@@ -905,7 +829,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         apc.Should().ContainSingle(def => def.JsonPath == ".property" && def.Name == "OtherName");
     }
 
-    [Trait("Area", "AdditionalPrinterColumn")]
     [Fact]
     public void Should_Add_GenericAdditionalPrinterColumns()
     {
@@ -916,7 +839,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         apc.Should().ContainSingle(def => def.JsonPath == ".metadata.namespace" && def.Name == "Namespace");
     }
 
-    [Trait("Area", "KubernetesEntity")]
     [Fact]
     public void Should_Correctly_Use_Entity_Scope_Attribute()
     {
@@ -927,7 +849,6 @@ public sealed partial class CrdsMlcTest(MlcProvider provider) : TranspilerTestBa
         clusterCrd.Spec.Scope.Should().Be("Cluster");
     }
 
-    [Trait("Area", "PropertyAttributes")]
     [Fact]
     public void Should_Correctly_Get_Enum_Value_From_JsonStringEnumMemberNameAttribute()
     {

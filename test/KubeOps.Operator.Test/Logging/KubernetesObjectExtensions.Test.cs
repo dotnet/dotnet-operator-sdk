@@ -10,6 +10,8 @@ using KubeOps.Operator.Logging;
 
 namespace KubeOps.Operator.Test.Logging;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Logging)]
 public sealed class KubernetesObjectExtensionsTest
 {
     [Fact]

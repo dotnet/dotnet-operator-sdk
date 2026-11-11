@@ -21,6 +21,8 @@ namespace KubeOps.Operator.Test.Controller;
 /// budget per entity type, shared by all of that entity's controllers. With three controllers and a limit
 /// of one, at most one reconciliation may run at a time — not one per controller.
 /// </summary>
+[Trait(TestTrait.Area, TestArea.Reconciliation)]
+[Trait(TestTrait.Feature, TestFeature.MultipleControllers)]
 public sealed class MultipleControllersParallelismCapIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new() { TargetInvocationCount = 3 };

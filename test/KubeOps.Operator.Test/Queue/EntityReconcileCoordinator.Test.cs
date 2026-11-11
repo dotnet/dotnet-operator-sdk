@@ -10,7 +10,9 @@ using KubeOps.Operator.Test.TestEntities;
 
 namespace KubeOps.Operator.Test.Queue;
 
-[Trait("Area", "MultipleControllers")]
+[Trait(TestTrait.Feature, TestFeature.MultipleControllers)]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Queue)]
 public sealed class EntityReconcileCoordinatorTest
 {
     private static readonly TimeSpan ShortWait = TimeSpan.FromMilliseconds(200);

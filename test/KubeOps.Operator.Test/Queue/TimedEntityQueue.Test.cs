@@ -15,6 +15,8 @@ using Moq;
 
 namespace KubeOps.Operator.Test.Queue;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Queue)]
 public sealed class TimedEntityQueueTest
 {
     // Upper bound for an expected entry to arrive; only reached when something is broken or the runner is busy.
@@ -176,7 +178,7 @@ public sealed class TimedEntityQueueTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task Clear_Should_Remove_Scheduled_And_Ready_Entries()
     {
         using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
@@ -208,7 +210,7 @@ public sealed class TimedEntityQueueTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task Enqueue_Should_Be_Dropped_While_Intake_Is_Suspended()
     {
         using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
@@ -230,7 +232,7 @@ public sealed class TimedEntityQueueTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task Enqueue_Should_Be_Accepted_After_Intake_Is_Resumed()
     {
         using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
@@ -251,7 +253,7 @@ public sealed class TimedEntityQueueTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task Enqueue_Should_Be_Dropped_When_Token_Already_Cancelled()
     {
         using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
@@ -273,7 +275,7 @@ public sealed class TimedEntityQueueTest
     // Stressed over many iterations so that a missing lock reliably surfaces (a single parallel round would
     // be probabilistic). Without the lock in Enqueue/Clear, an entry survives the clear and this fails.
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task Concurrent_Enqueue_With_Suspend_And_Clear_Leaves_Nothing()
     {
         const int iterations = 200;
@@ -327,7 +329,6 @@ public sealed class TimedEntityQueueTest
     // empty keeps the scheduler occupied and the probe never completes; an asynchronous consumer releases the
     // scheduler while it waits, so the probe completes right away.
     [Fact]
-    [Trait("Area", "ThreadPool")]
     public async Task Waiting_For_Entries_Should_Not_Block_The_Consumer_Thread()
     {
         using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
@@ -374,7 +375,6 @@ public sealed class TimedEntityQueueTest
         completed.Should().Be(probe, "the consumer must not block its thread while it waits for entries");
     }
 
-    [Trait("Area", "EntityIdentity")]
     [Fact]
     public async Task Enqueue_Should_Not_Merge_Added_Of_Recreated_Object_Into_Pending_Deleted()
     {
@@ -406,7 +406,6 @@ public sealed class TimedEntityQueueTest
             .Which.Entity.Uid().Should().Be("uid-new");
     }
 
-    [Trait("Area", "EntityIdentity")]
     [Fact]
     public async Task Enqueue_Should_Not_Merge_Deleted_Retry_Of_Previous_Object_Into_Pending_Added()
     {
@@ -438,7 +437,6 @@ public sealed class TimedEntityQueueTest
             .Which.Entity.Uid().Should().Be("uid-old");
     }
 
-    [Trait("Area", "EntityIdentity")]
     [Fact]
     public async Task Enqueue_Should_Merge_Entries_Of_Same_Uid()
     {
@@ -467,7 +465,6 @@ public sealed class TimedEntityQueueTest
             .Which.ReconciliationType.Should().Be(ReconciliationType.Deleted);
     }
 
-    [Trait("Area", "EntityIdentity")]
     [Fact]
     public void GetKey_Should_Use_Uid_And_Fall_Back_To_Namespace_And_Name()
     {
@@ -478,7 +475,6 @@ public sealed class TimedEntityQueueTest
     }
 
     [Fact]
-    [Trait("Area", "TimerLoop")]
     public async Task Timer_Should_Keep_The_Entry_That_Replaced_A_Cancelled_One()
     {
         using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
@@ -509,7 +505,6 @@ public sealed class TimedEntityQueueTest
     }
 
     [Fact]
-    [Trait("Area", "TimerLoop")]
     public async Task Timer_Should_Not_Promote_An_Entry_That_Was_Replaced()
     {
         using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());
@@ -538,7 +533,6 @@ public sealed class TimedEntityQueueTest
     }
 
     [Fact]
-    [Trait("Area", "TimerLoop")]
     public async Task Timer_Should_Promote_The_Scheduled_Entry_Once_It_Is_Due()
     {
         using var queue = new TimedEntityQueue<V1Secret>(Mock.Of<ILogger<TimedEntityQueue<V1Secret>>>());

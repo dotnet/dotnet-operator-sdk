@@ -28,7 +28,8 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Test.Builder;
 
-[Trait("Area", "RegistrationValidation")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Configuration)]
 public sealed class OperatorBuilderRegistrationValidationTest
 {
     [Fact]
@@ -302,7 +303,7 @@ public sealed class OperatorBuilderRegistrationValidationTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task Should_Fail_When_Single_LeaderElection_Queue_Lacks_Suspendable_Capability()
     {
         // LeaderElectionType.Single requires the queue to support the leadership gate
@@ -331,7 +332,7 @@ public sealed class OperatorBuilderRegistrationValidationTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task Should_Fail_When_Single_LeaderElection_Consumer_Is_Not_Leader_Aware()
     {
         // The queue supports the gate (ISuspendableEntityQueue), but a plain consumer never drives it, so
@@ -358,7 +359,7 @@ public sealed class OperatorBuilderRegistrationValidationTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task Should_Pass_For_Single_LeaderElection_With_Suspendable_Queue_And_LeaderAware_Consumer()
     {
         var settings = new OperatorSettingsBuilder
@@ -380,7 +381,7 @@ public sealed class OperatorBuilderRegistrationValidationTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task Should_Recognize_Open_Generic_Queue_Registration()
     {
         // A queue registered as an open generic (AddSingleton(typeof(ITimedEntityQueue<>), typeof(...<>)))
@@ -405,7 +406,7 @@ public sealed class OperatorBuilderRegistrationValidationTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task Should_Fail_When_Single_LeaderElection_Queue_Is_Factory_Registered()
     {
         // A factory-registered queue is resolvable, but its concrete type cannot be inspected, so the gate

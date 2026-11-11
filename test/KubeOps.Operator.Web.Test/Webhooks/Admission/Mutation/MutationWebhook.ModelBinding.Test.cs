@@ -14,10 +14,11 @@ using Microsoft.AspNetCore.TestHost;
 
 namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Mutation;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class MutationWebhookModelBindingTest : WebhookTestBase
 {
     [Fact(DisplayName = "Mutation webhook binds create request when object metadata UID is missing")]
-    [Trait("Area", "MutationWebhookModelBinding")]
     public async Task HandleAsync_CreateRequestWithoutObjectMetadataUid_DoesNotFailModelValidation()
     {
         using var host = await TestHost.Create();
@@ -46,7 +47,6 @@ public sealed class MutationWebhookModelBindingTest : WebhookTestBase
     }
 
     [Theory(DisplayName = "Mutation webhook binds request correctly")]
-    [Trait("Area", "MutationWebhookModelBinding")]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-create-iso-uid", "CREATE", false, "createvalue", "PT10M")]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-update-iso-uid", "UPDATE", false, "newvalue", "PT1H30M")]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-delete-iso-uid", "DELETE", false, "deletedvalue", "PT20M")]

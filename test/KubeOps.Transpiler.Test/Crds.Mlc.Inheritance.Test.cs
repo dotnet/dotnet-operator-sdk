@@ -13,7 +13,6 @@ namespace KubeOps.Transpiler.Test;
 
 public sealed partial class CrdsMlcTest
 {
-    [Trait("Area", "Inheritance")]
     [Fact]
     public void Should_Inherit_GenericPrinterColumn_From_Base_Entity_Class()
     {
@@ -25,7 +24,6 @@ public sealed partial class CrdsMlcTest
             col.JsonPath == ".status.foo" && col.Name == "Foo" && col.Type == "string");
     }
 
-    [Trait("Area", "Inheritance")]
     [Fact]
     public void Should_Accumulate_PrinterColumns_From_All_Hierarchy_Levels()
     {
@@ -37,7 +35,6 @@ public sealed partial class CrdsMlcTest
         apc.Should().Contain(col => col.Name == "Bar");
     }
 
-    [Trait("Area", "Inheritance")]
     [Fact]
     public void Should_Recognize_Inherited_PrinterColumn_Attribute_Type()
     {
@@ -51,7 +48,6 @@ public sealed partial class CrdsMlcTest
             col.Type == "string");
     }
 
-    [Trait("Area", "Inheritance")]
     [Fact]
     public void Should_Support_Multiple_Inherited_PrinterColumn_Attribute_Types()
     {

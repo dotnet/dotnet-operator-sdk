@@ -15,7 +15,8 @@ using OpenTelemetry.Metrics;
 
 namespace KubeOps.Operator.Web.Test.Metrics;
 
-[Trait("Area", "Otel")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Metrics)]
 public sealed class MetricsExtensionsTest
 {
     private const string OperatorName = "test-operator";

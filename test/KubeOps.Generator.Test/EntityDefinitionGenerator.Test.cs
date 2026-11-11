@@ -13,10 +13,11 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace KubeOps.Generator.Test;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.SourceGenerator)]
 public sealed partial class EntityDefinitionGeneratorTest
 {
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Not_Generate_Definitions_Without_Entities()
     {
         var inputCompilation = string.Empty.CreateCompilation();
@@ -32,7 +33,6 @@ public sealed partial class EntityDefinitionGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Generate_Into_Configured_Namespace()
     {
         var inputCompilation = """

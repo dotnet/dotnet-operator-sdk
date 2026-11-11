@@ -21,6 +21,8 @@ namespace KubeOps.Operator.Test.Controller;
 /// selectors. Each controller runs its own watch → queue → reconcile pipeline with an isolated
 /// deduplication cache partition.
 /// </summary>
+[Trait(TestTrait.Area, TestArea.Reconciliation)]
+[Trait(TestTrait.Feature, TestFeature.MultipleControllers)]
 public sealed class MultipleControllersIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();

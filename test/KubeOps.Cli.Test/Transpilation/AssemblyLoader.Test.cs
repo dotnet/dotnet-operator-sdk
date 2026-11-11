@@ -18,7 +18,8 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace KubeOps.Cli.Test.Transpilation;
 
-[Trait("Area", "Transpilation")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Cli)]
 public sealed class AssemblyLoaderTest
 {
     [Fact]

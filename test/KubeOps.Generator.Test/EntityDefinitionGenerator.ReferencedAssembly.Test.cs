@@ -18,7 +18,6 @@ namespace KubeOps.Generator.Test;
 public sealed partial class EntityDefinitionGeneratorTest
 {
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Not_Generate_Definitions_For_Entities_From_Referenced_Assemblies()
     {
         var inputCompilation = """
@@ -51,7 +50,6 @@ public sealed partial class EntityDefinitionGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Only_Generate_Definitions_For_Locally_Declared_Entities()
     {
         var inputCompilation = """

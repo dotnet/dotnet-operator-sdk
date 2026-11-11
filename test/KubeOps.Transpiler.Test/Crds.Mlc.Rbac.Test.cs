@@ -11,9 +11,10 @@ using KubeOps.Abstractions.Rbac;
 
 namespace KubeOps.Transpiler.Test;
 
-public sealed partial class CrdsMlcTest
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Rbac)]
+public sealed class CrdsMlcRbacTest(MlcProvider provider) : TranspilerTestBase(provider)
 {
-    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Create_Generic_Policy()
     {
@@ -27,7 +28,6 @@ public sealed partial class CrdsMlcTest
         role.Verbs.Should().Contain(["get", "delete"]);
     }
 
-    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Calculate_Max_Verbs_For_Types()
     {
@@ -38,7 +38,6 @@ public sealed partial class CrdsMlcTest
         role.Verbs.Should().Contain(["get", "update", "delete"]);
     }
 
-    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Correctly_Calculate_All_Verb()
     {
@@ -49,7 +48,6 @@ public sealed partial class CrdsMlcTest
         role.Verbs.Should().Contain("*").And.HaveCount(1);
     }
 
-    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Group_Same_Types_Together()
     {
@@ -64,7 +62,6 @@ public sealed partial class CrdsMlcTest
         roles.Should().HaveCount(2);
     }
 
-    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Group_Types_With_Same_Verbs_Together()
     {
@@ -84,7 +81,6 @@ public sealed partial class CrdsMlcTest
         roles.Should().HaveCount(2);
     }
 
-    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Not_Mix_ApiGroups()
     {
@@ -93,7 +89,6 @@ public sealed partial class CrdsMlcTest
         roles.Should().HaveCount(5);
     }
 
-    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Correctly_Calculate_All_Verbs_Explicitly()
     {
@@ -103,7 +98,6 @@ public sealed partial class CrdsMlcTest
         role.Verbs.Should().Contain(["get", "list", "watch", "create", "update", "patch", "delete"]);
     }
 
-    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Inherit_EntityRbac_From_Base_Class()
     {
@@ -117,7 +111,6 @@ public sealed partial class CrdsMlcTest
             r.Verbs.Contains("get"));
     }
 
-    [Trait("Area", "Rbac")]
     [Fact]
     public void Should_Merge_EntityRbac_From_Full_Inheritance_Chain()
     {

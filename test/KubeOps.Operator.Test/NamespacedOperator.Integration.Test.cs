@@ -17,6 +17,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test;
 
+[Trait(TestTrait.Area, TestArea.Configuration)]
 public sealed class NamespacedOperatorIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();

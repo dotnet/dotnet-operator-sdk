@@ -17,6 +17,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.LeaderElector;
 
+[Trait(TestTrait.Area, TestArea.LeaderElection)]
 public sealed class LeaderAwarenessIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();

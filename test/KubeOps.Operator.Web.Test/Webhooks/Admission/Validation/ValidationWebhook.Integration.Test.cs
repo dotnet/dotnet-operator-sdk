@@ -11,7 +11,7 @@ using KubeOps.Operator.Web.Test.TestApp;
 
 namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Validation;
 
-[Trait("Area", "AdmissionWebhook")]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class ValidationWebhookIntegrationTest : IntegrationTestBase
 {
     [WebhookIntegrationFact]

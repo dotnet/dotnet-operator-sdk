@@ -8,7 +8,8 @@ using KubeOps.KubernetesClient.Selectors;
 
 namespace KubeOps.KubernetesClient.Test;
 
-public sealed class FieldSelectorTest : IntegrationTestBase
+[Trait(TestTrait.Area, TestArea.Selectors)]
+public sealed class FieldSelectorIntegrationTest : IntegrationTestBase
 {
     [Fact]
     public void Should_Return_Correct_Expression_For_Equals()
