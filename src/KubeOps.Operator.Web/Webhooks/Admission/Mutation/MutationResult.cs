@@ -4,8 +4,6 @@
 
 using System.Text.Json.Nodes;
 
-using Json.Patch;
-
 using k8s;
 using k8s.Models;
 
@@ -68,7 +66,6 @@ public sealed record MutationResult<TEntity>(TEntity? ModifiedObject = default) 
             return;
         }
 
-#pragma warning disable CA2252 // TODO: as soon as patch is fully stable, remove this.
         await response.WriteAsJsonAsync(
             new AdmissionResponse
             {
@@ -84,6 +81,5 @@ public sealed record MutationResult<TEntity>(TEntity? ModifiedObject = default) 
                         : OriginalObject!.CreatePatch(ModifiedObject.ToNode()).ToBase64String(),
                 },
             });
-#pragma warning restore CA2252
     }
 }

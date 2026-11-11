@@ -2,10 +2,6 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Runtime.Versioning;
-
-using Json.Patch;
-
 using k8s;
 using k8s.Models;
 
@@ -83,10 +79,6 @@ public interface IKubernetesClient : IDisposable
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>;
 
-    /// <inheritdoc cref="GetAsync{TEntity}"/>
-    TEntity? Get<TEntity>(string name, string? @namespace = null)
-        where TEntity : IKubernetesObject<V1ObjectMeta>;
-
     /// <summary>
     /// Fetch and return a list of entities from the Kubernetes API.
     /// </summary>
@@ -128,23 +120,6 @@ public interface IKubernetesClient : IDisposable
             labelSelector,
             fieldSelector,
             cancellationToken: cts.Token);
-    }
-
-    /// <inheritdoc cref="ListAsync{TEntity}(string?,string?,string?,CancellationToken)"/>
-    IList<TEntity> List<TEntity>(
-        string? @namespace = null,
-        string? labelSelector = null,
-        string? fieldSelector = null)
-        where TEntity : IKubernetesObject<V1ObjectMeta>;
-
-    /// <inheritdoc cref="ListAsync{TEntity}(string?,KubernetesSelector[])"/>
-    IList<TEntity> List<TEntity>(
-        string? @namespace = null,
-        params KubernetesSelector[] selectors)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-    {
-        var (labelSelector, fieldSelector) = selectors.ToExpressions();
-        return List<TEntity>(@namespace, labelSelector, fieldSelector);
     }
 
     /// <summary>
@@ -196,28 +171,6 @@ public interface IKubernetesClient : IDisposable
         return SaveAsync(entities, cts.Token);
     }
 
-    /// <inheritdoc cref="SaveAsync{TEntity}(TEntity,CancellationToken)"/>
-    TEntity Save<TEntity>(TEntity entity)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        =>
-            Get<TEntity>(entity.Name(), entity.Namespace()) switch
-            {
-                { } e => Update(entity.WithResourceVersion(e)),
-                _ => Create(entity),
-            };
-
-    /// <inheritdoc cref="SaveAsync{TEntity}(IEnumerable{TEntity},CancellationToken)"/>
-    IEnumerable<TEntity> Save<TEntity>(IEnumerable<TEntity> entities)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        =>
-            entities.Select(Save);
-
-    /// <inheritdoc cref="SaveAsync{TEntity}(IEnumerable{TEntity},CancellationToken)"/>
-    IEnumerable<TEntity> Save<TEntity>(params TEntity[] entities)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        =>
-            entities.Select(Save);
-
     /// <summary>
     /// Create the given entity on the Kubernetes API.
     /// </summary>
@@ -254,21 +207,6 @@ public interface IKubernetesClient : IDisposable
     async Task<IEnumerable<TEntity>> CreateAsync<TEntity>(params TEntity[] entities)
         where TEntity : IKubernetesObject<V1ObjectMeta>
         => await Task.WhenAll(entities.Select(entity => CreateAsync(entity)));
-
-    /// <inheritdoc cref="CreateAsync{TEntity}(TEntity,CancellationToken)"/>
-    TEntity Create<TEntity>(TEntity entity)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => CreateAsync(entity).GetAwaiter().GetResult();
-
-    /// <inheritdoc cref="CreateAsync{TEntity}(IEnumerable{TEntity},CancellationToken)"/>
-    IEnumerable<TEntity> Create<TEntity>(IEnumerable<TEntity> entities)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => entities.Select(Create);
-
-    /// <inheritdoc cref="CreateAsync{TEntity}(TEntity[])"/>
-    IEnumerable<TEntity> Create<TEntity>(params TEntity[] entities)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => entities.Select(Create);
 
     /// <summary>
     /// Update (replace) the given entity on the Kubernetes API.
@@ -310,21 +248,6 @@ public interface IKubernetesClient : IDisposable
         return UpdateAsync(entities, cts.Token);
     }
 
-    /// <inheritdoc cref="UpdateAsync{TEntity}(TEntity,CancellationToken)"/>
-    TEntity Update<TEntity>(TEntity entity)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => UpdateAsync(entity).GetAwaiter().GetResult();
-
-    /// <inheritdoc cref="UpdateAsync{TEntity}(IEnumerable{TEntity},CancellationToken)"/>
-    IEnumerable<TEntity> Update<TEntity>(IEnumerable<TEntity> entities)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => entities.Select(Update);
-
-    /// <inheritdoc cref="UpdateAsync{TEntity}(TEntity[])"/>
-    IEnumerable<TEntity> Update<TEntity>(params TEntity[] entities)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => entities.Select(Update);
-
     /// <summary>
     /// Update the status object of a given entity on the Kubernetes API.
     /// </summary>
@@ -333,10 +256,6 @@ public interface IKubernetesClient : IDisposable
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>The entity with the updated status.</returns>
     Task<TEntity> UpdateStatusAsync<TEntity>(TEntity entity, CancellationToken cancellationToken = default)
-        where TEntity : IKubernetesObject<V1ObjectMeta>;
-
-    /// <inheritdoc cref="UpdateStatusAsync{TEntity}"/>
-    TEntity UpdateStatus<TEntity>(TEntity entity)
         where TEntity : IKubernetesObject<V1ObjectMeta>;
 
     /// <summary>
@@ -354,11 +273,7 @@ public interface IKubernetesClient : IDisposable
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the entity to be patched does not exist on the API.</exception>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
-    Task<TEntity> PatchAsync<TEntity>(
+    async Task<TEntity> PatchAsync<TEntity>(
         TEntity entity,
         Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>>? operationsFilter = null,
         string? fieldManager = null,
@@ -367,14 +282,14 @@ public interface IKubernetesClient : IDisposable
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
-        var currentEntity = Get<TEntity>(entity.Name(), entity.Namespace());
+        var currentEntity = await GetAsync<TEntity>(entity.Name(), entity.Namespace(), cancellationToken);
         if (currentEntity is null)
         {
             throw new InvalidOperationException(
                 $"Cannot patch entity {typeof(TEntity).Name} with name {entity.Name()} in namespace {entity.Namespace()}: Entity does not exist.");
         }
 
-        return PatchAsync(
+        return await PatchAsync(
             currentEntity,
             entity,
             operationsFilter,
@@ -399,10 +314,6 @@ public interface IKubernetesClient : IDisposable
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
     Task<TEntity> PatchAsync<TEntity>(
         TEntity from,
         TEntity to,
@@ -430,10 +341,6 @@ public interface IKubernetesClient : IDisposable
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
     Task<TEntity> PatchAsync<TEntity>(
         TEntity entity,
         JsonPatch patch,
@@ -488,111 +395,32 @@ public interface IKubernetesClient : IDisposable
         where TEntity : IKubernetesObject<V1ObjectMeta>;
 
     /// <summary>
-    /// Patch a given entity on the Kubernetes API by calculating the diff between the current entity and the provided entity.
+    /// Delete a given entity from the Kubernetes API.
     /// </summary>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <param name="entity">The entity containing the desired updates.</param>
-    /// <returns>The patched entity.</returns>
-    /// <exception cref="InvalidOperationException">Thrown if the entity to be patched does not exist on the API.</exception>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
-    TEntity Patch<TEntity>(TEntity entity)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => PatchAsync(entity, operationsFilter: null, cancellationToken: default).GetAwaiter().GetResult();
-
-    /// <summary>
-    /// Patch a given entity on the Kubernetes API by calculating the diff between two provided entities.
-    /// </summary>
-    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <param name="from">The current/original entity.</param>
-    /// <param name="to">The updated entity with desired changes.</param>
-    /// <returns>The patched entity.</returns>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
-    TEntity Patch<TEntity>(TEntity from, TEntity to)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => PatchAsync(from, to).GetAwaiter().GetResult();
-
-    /// <summary>
-    /// Patch a given entity on the Kubernetes API using a <see cref="JsonPatch"/> object.
-    /// </summary>
-    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <param name="entity">The entity to patch.</param>
-    /// <param name="patch">The <see cref="JsonPatch"/> representing the changes to apply.</param>
-    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
-    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
-    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
-    /// <returns>The patched entity.</returns>
-    [RequiresPreviewFeatures("This method is using the JsonPatch feature which is in preview." +
-                             "Return values may change (e.g. if the patch was actually applied" +
-                             "when no changes were detected. Also, the filtering may not include" +
-                             "all volatile properties yet.")]
-    TEntity Patch<TEntity>(
-        TEntity entity,
-        JsonPatch patch,
-        string? fieldManager = null,
-        bool? force = null,
-        string? dryRun = null)
-        where TEntity : IKubernetesObject<V1ObjectMeta> =>
-        PatchAsync(entity, patch, fieldManager, force, dryRun).GetAwaiter().GetResult();
-
-    /// <summary>
-    /// Patch a given entity on the Kubernetes API using a <see cref="V1Patch"/> object.
-    /// </summary>
-    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <param name="entity">The entity to patch.</param>
-    /// <param name="patch">The <see cref="V1Patch"/> representing the changes to apply.</param>
-    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
-    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
-    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
-    /// <returns>The patched entity.</returns>
-    TEntity Patch<TEntity>(
-        TEntity entity,
-        V1Patch patch,
-        string? fieldManager = null,
-        bool? force = null,
-        string? dryRun = null)
-        where TEntity : IKubernetesObject<V1ObjectMeta> =>
-        PatchAsync(entity, patch, fieldManager, force, dryRun).GetAwaiter().GetResult();
-
-    /// <summary>
-    /// Patch a given entity on the Kubernetes API by name and namespace using a <see cref="V1Patch"/> object.
-    /// </summary>
-    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <param name="patch">The <see cref="V1Patch"/> representing the changes to apply.</param>
-    /// <param name="name">The name of the entity to patch.</param>
-    /// <param name="namespace">The namespace of the entity to patch (if applicable).</param>
-    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
-    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
-    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
-    /// <returns>The patched entity.</returns>
-    TEntity Patch<TEntity>(
-        V1Patch patch,
-        string name,
-        string? @namespace = null,
-        string? fieldManager = null,
-        bool? force = null,
-        string? dryRun = null)
-        where TEntity : IKubernetesObject<V1ObjectMeta> =>
-        PatchAsync<TEntity>(patch, name, @namespace, fieldManager, force, dryRun).GetAwaiter().GetResult();
-
-    /// <inheritdoc cref="Delete{TEntity}(TEntity)"/>
+    /// <param name="entity">The entity in question.</param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>A task that completes when the call was made.</returns>
     Task DeleteAsync<TEntity>(TEntity entity, CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
         => DeleteAsync<TEntity>(entity.Name(), entity.Namespace(), cancellationToken);
 
-    /// <inheritdoc cref="Delete{TEntity}(IEnumerable{TEntity})"/>
+    /// <summary>
+    /// Delete a given list of entities from the Kubernetes API.
+    /// </summary>
+    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
+    /// <param name="entities">The entities in question.</param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>A task that completes when the call was made.</returns>
     Task DeleteAsync<TEntity>(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
         => Task.WhenAll(entities.Select(entity => DeleteAsync(entity, cancellationToken)));
 
-    /// <inheritdoc cref="Delete{TEntity}(TEntity[])"/>
+    /// <summary>
+    /// Delete a given list of entities from the Kubernetes API.
+    /// </summary>
+    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
+    /// <param name="entities">The entities in question.</param>
     /// <remarks>
     /// This is invoking the API without any cancellation support. In order to pass a <see cref="CancellationToken"/>,
     /// you need to use the <see cref="DeleteAsync{TEntity}(IEnumerable{TEntity},CancellationToken)"/> overload.
@@ -602,58 +430,16 @@ public interface IKubernetesClient : IDisposable
         where TEntity : IKubernetesObject<V1ObjectMeta>
         => DeleteAsync(entities, CancellationToken.None);
 
-    /// <inheritdoc cref="Delete{TEntity}(string,string?)"/>
-    /// <returns>A task that completes when the call was made.</returns>
-    Task DeleteAsync<TEntity>(string name, string? @namespace = null, CancellationToken cancellationToken = default)
-        where TEntity : IKubernetesObject<V1ObjectMeta>;
-
-    /// <summary>
-    /// Delete a given entity from the Kubernetes API.
-    /// </summary>
-    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <param name="entity">The entity in question.</param>
-    void Delete<TEntity>(TEntity entity)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        =>
-            Delete<TEntity>(entity.Name(), entity.Namespace());
-
-    /// <summary>
-    /// Delete a given list of entities from the Kubernetes API.
-    /// </summary>
-    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <param name="entities">The entities in question.</param>
-    void Delete<TEntity>(IEnumerable<TEntity> entities)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-    {
-        foreach (var entity in entities)
-        {
-            Delete(entity);
-        }
-    }
-
-    /// <summary>
-    /// Delete a given list of entities from the Kubernetes API.
-    /// </summary>
-    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
-    /// <param name="entities">The entities in question.</param>
-    void Delete<TEntity>(params TEntity[] entities)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-    {
-        foreach (var entity in entities)
-        {
-            Delete(entity);
-        }
-    }
-
     /// <summary>
     /// Delete a given entity by name from the Kubernetes API.
     /// </summary>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="name">The name of the entity.</param>
     /// <param name="namespace">The optional namespace of the entity.</param>
-    void Delete<TEntity>(string name, string? @namespace = null)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-        => DeleteAsync<TEntity>(name, @namespace).GetAwaiter().GetResult();
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>A task that completes when the call was made.</returns>
+    Task DeleteAsync<TEntity>(string name, string? @namespace = null, CancellationToken cancellationToken = default)
+        where TEntity : IKubernetesObject<V1ObjectMeta>;
 
     /// <summary>
     /// Create an entity watcher on the Kubernetes API.

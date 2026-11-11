@@ -271,3 +271,29 @@ Every breaking change is also listed in the
 [release notes](https://github.com/dotnet/dotnet-operator-sdk/releases). Check the notes for the
 version you are upgrading to when something does not match this guide.
 :::
+
+## Upgrading from v13 to v14
+
+### `JsonPatch.Net` removed
+
+KubeOps no longer references `JsonPatch.Net`, because its releases since 5.0.0 ship under the
+[Open Source Maintenance Fee EULA](https://www.nuget.org/packages/JsonPatch.Net/5.0.3/License). The
+JSON Patch API is now part of `KubeOps.Abstractions` and no longer requires preview features.
+
+- `JsonPatch`, `PatchOperation` and `OperationType` moved from `Json.Patch` to
+  `KubeOps.Abstractions.Entities`. Generated patches are unchanged.
+- `PatchOperation.Path` is a `string` (JSON Pointer) instead of a `JsonPointer`.
+- `OperationType` only has `Add`, `Remove` and `Replace`, and `PatchOperation.From` is gone. For
+  `move`, `copy` or `test` operations, pass the JSON text to `PatchAsync` as a `V1Patch`.
+- `JsonPatch.Net`, `JsonPointer.Net` and `Json.More.Net` are no longer transitive dependencies.
+  Reference them yourself if your code uses them. Importing both `Json.Patch` and
+  `KubeOps.Abstractions.Entities` in one file makes the shared type names ambiguous.
+- Removed without replacement: applying a patch (`JsonPatch.Apply`), `CreatePatch` for arbitrary
+  objects, and `System.Text.Json` serialization of the patch types. Use `entity.CreateJsonPatch(other)`
+  or `node.CreatePatch(otherNode)` to create a patch and `patch.ToJsonString()` to serialize it.
+
+### Synchronous `IKubernetesClient` methods removed
+
+`Get`, `List`, `Save`, `Create`, `Update`, `UpdateStatus`, `Patch` and `Delete` are gone. They blocked a
+thread on the API call. Use the `...Async` variants, which also accept a `CancellationToken`.
+`GetCurrentNamespace` stays, because it does not call the API, and so does `Watch`.

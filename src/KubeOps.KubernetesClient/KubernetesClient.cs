@@ -146,35 +146,6 @@ public class KubernetesClient : IKubernetesClient
     }
 
     /// <inheritdoc />
-    public TEntity? Get<TEntity>(string name, string? @namespace = null)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-    {
-        ThrowIfDisposed();
-
-        var metadata = GetMetadata<TEntity>();
-
-        try
-        {
-            return string.IsNullOrWhiteSpace(@namespace)
-                ? ApiClient.CustomObjects.GetClusterCustomObject<TEntity>(
-                    metadata.Group ?? string.Empty,
-                    metadata.Version,
-                    metadata.PluralName,
-                    name)
-                : ApiClient.CustomObjects.GetNamespacedCustomObject<TEntity>(
-                    metadata.Group ?? string.Empty,
-                    metadata.Version,
-                    @namespace,
-                    metadata.PluralName,
-                    name);
-        }
-        catch (HttpOperationException e) when (e.Response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return default;
-        }
-    }
-
-    /// <inheritdoc />
     public async Task<IList<TEntity>> ListAsync<TEntity>(
         string? @namespace = null,
         string? labelSelector = null,
@@ -202,34 +173,6 @@ public class KubernetesClient : IKubernetesClient
                 fieldSelector: fieldSelector,
                 labelSelector: labelSelector,
                 cancellationToken: cancellationToken),
-        }).Items;
-    }
-
-    /// <inheritdoc />
-    public IList<TEntity> List<TEntity>(
-        string? @namespace = null,
-        string? labelSelector = null,
-        string? fieldSelector = null)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-    {
-        ThrowIfDisposed();
-
-        var metadata = GetMetadata<TEntity>();
-        return (@namespace switch
-        {
-            null => ApiClient.CustomObjects.ListClusterCustomObject<EntityList<TEntity>>(
-                metadata.Group ?? string.Empty,
-                metadata.Version,
-                metadata.PluralName,
-                fieldSelector: fieldSelector,
-                labelSelector: labelSelector),
-            _ => ApiClient.CustomObjects.ListNamespacedCustomObject<EntityList<TEntity>>(
-                metadata.Group ?? string.Empty,
-                metadata.Version,
-                @namespace,
-                metadata.PluralName,
-                fieldSelector: fieldSelector,
-                labelSelector: labelSelector),
         }).Items;
     }
 
@@ -285,31 +228,6 @@ public class KubernetesClient : IKubernetesClient
                 metadata.PluralName,
                 entity.Name(),
                 cancellationToken: cancellationToken),
-        };
-    }
-
-    /// <inheritdoc />
-    public TEntity UpdateStatus<TEntity>(TEntity entity)
-        where TEntity : IKubernetesObject<V1ObjectMeta>
-    {
-        ThrowIfDisposed();
-
-        var metadata = GetMetadata<TEntity>();
-        return entity.Namespace() switch
-        {
-            { } ns => ApiClient.CustomObjects.ReplaceNamespacedCustomObjectStatus<TEntity>(
-                entity,
-                metadata.Group ?? string.Empty,
-                metadata.Version,
-                ns,
-                metadata.PluralName,
-                entity.Name()),
-            _ => ApiClient.CustomObjects.ReplaceClusterCustomObjectStatus<TEntity>(
-                entity,
-                metadata.Group ?? string.Empty,
-                metadata.Version,
-                metadata.PluralName,
-                entity.Name()),
         };
     }
 

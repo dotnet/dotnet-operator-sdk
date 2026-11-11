@@ -8,9 +8,7 @@ using k8s.Models;
 
 namespace KubeOps.KubernetesClient.Test;
 
-#pragma warning disable CA2252 // Opt in to preview features before using them
-
-public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
+public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IAsyncDisposable
 {
     private readonly IKubernetesClient _client =
         new KubernetesClient();
@@ -21,6 +19,13 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
     public async Task Should_Return_Namespace()
     {
         var ns = await _client.GetCurrentNamespaceAsync(cancellationToken: TestContext.Current.CancellationToken);
+        ns.Should().Be("default");
+    }
+
+    [Fact]
+    public void Should_Return_Namespace_Synchronously()
+    {
+        var ns = _client.GetCurrentNamespace();
         ns.Should().Be("default");
     }
 
@@ -316,9 +321,9 @@ public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IDisposable
         patched.Metadata.ManagedFields.Should().Contain(f => f.Manager == "test-patch-controller");
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        _client.Delete(_objects);
+        await _client.DeleteAsync(_objects);
     }
 
     private static string RandomName()

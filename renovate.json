@@ -71,10 +71,6 @@
       "allowedVersions": "<11.0.0"
     },
     {
-      "matchPackageNames": ["JsonPatch.Net"],
-      "allowedVersions": "<=4.0.1"
-    },
-    {
       "description": ["Keep conventional-changelog-conventionalcommits pinned to 9.3.1."],
       "matchManagers": ["npm"],
       "matchPackageNames": ["conventional-changelog-conventionalcommits"],
