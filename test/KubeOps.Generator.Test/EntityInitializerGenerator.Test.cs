@@ -15,13 +15,14 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace KubeOps.Generator.Test;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.SourceGenerator)]
 public sealed class EntityInitializerGeneratorTest
 {
     private const string EntityInitializerGeneratorFileName = "EntityInitializer.g.cs";
     private const string EntityInitGeneratorFileName = "V1TestEntity.init.g.cs";
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Not_Generate_Initializer_Without_Input()
     {
         var inputCompilation = string.Empty.CreateCompilation();
@@ -37,7 +38,6 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Generate_Static_Initializer_Into_Configured_Namespace()
     {
         var inputCompilation = """
@@ -173,7 +173,6 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "Partial")]
     public void Should_Generate_Static_Initializer_For_Partial_Entity_With_Default_Ctor()
     {
         var inputCompilation = """
@@ -215,7 +214,6 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "Partial")]
     public void Should_Not_Generate_Static_Initializer_For_Partial_Entity()
     {
         var inputCompilation = """
@@ -237,7 +235,6 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "Partial")]
     public void Should_Generate_Default_Ctor_For_FileNamespaced_Partial_Entity()
     {
         var inputCompilation = """
@@ -278,7 +275,6 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "Partial")]
     public void Should_Generate_Default_Ctor_For_ScopeNamespaced_Partial_Entity()
     {
         var inputCompilation = """
@@ -324,7 +320,6 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "Partial")]
     public void Should_Generate_Default_Ctor_For_Global_Partial_Entity()
     {
         var inputCompilation = """
@@ -363,7 +358,6 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "Partial")]
     public void Should_Generate_Default_Ctor_For_Partial_Entity_With_Ctor()
     {
         var inputCompilation = """
@@ -403,7 +397,6 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "Partial")]
     public void Should_Generate_Default_Ctor_For_Partial_Entity_With_Controller_In_Same_Assembly()
     {
         var inputCompilation = """
@@ -451,7 +444,6 @@ public sealed class EntityInitializerGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "FromReferencedAssembly")]
     public void Should_Generate_Static_Initializer_For_Referenced_Entity()
     {
         var inputCompilation = """

@@ -8,7 +8,8 @@ using k8s.Models;
 
 namespace KubeOps.KubernetesClient.Test;
 
-public sealed class KubernetesClientAsyncTest : IntegrationTestBase, IAsyncDisposable
+[Trait(TestTrait.Area, TestArea.KubernetesClient)]
+public sealed class KubernetesClientAsyncIntegrationTest : IntegrationTestBase, IAsyncDisposable
 {
     private readonly IKubernetesClient _client =
         new KubernetesClient();

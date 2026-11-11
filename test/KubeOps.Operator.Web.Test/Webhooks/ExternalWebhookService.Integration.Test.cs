@@ -11,7 +11,7 @@ using KubeOps.Operator.Web.Webhooks;
 
 namespace KubeOps.Operator.Web.Test.Webhooks;
 
-[Trait("Area", "ExternalWebhookEndpoint")]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class ExternalWebhookServiceIntegrationTest : IntegrationTestBase
 {
     [WebhookIntegrationFact]

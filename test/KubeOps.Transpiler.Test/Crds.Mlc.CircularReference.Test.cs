@@ -17,7 +17,6 @@ namespace KubeOps.Transpiler.Test;
 public sealed partial class CrdsMlcTest
 {
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Short_Circuit_Circular_Type_With_PreserveUnknownFields()
     {
         var crd = _mlc.Transpile(typeof(CircularPreserveUnknownFieldsEntity));
@@ -29,7 +28,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Throw_Descriptive_Exception_On_Unannotated_Circular_Type()
     {
         var act = () => _mlc.Transpile(typeof(CircularEntity));
@@ -41,7 +39,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Not_Throw_For_Shared_NonCircular_Type_Used_By_Siblings()
     {
         // Cycle detection is per recursion path: a non-recursive type referenced by two sibling
@@ -53,7 +50,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Transpile_Circular_Type_When_Back_Reference_Is_Ignored()
     {
         var crd = _mlc.Transpile(typeof(IgnoredBackReferenceEntity));
@@ -64,7 +60,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Throw_On_Circular_Type_Through_Collection()
     {
         var act = () => _mlc.Transpile(typeof(CircularThroughCollectionEntity));
@@ -73,7 +68,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Throw_On_Circular_Type_Through_Dictionary_Value()
     {
         var act = () => _mlc.Transpile(typeof(CircularThroughDictionaryEntity));
@@ -82,7 +76,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Emit_Printer_Columns_For_Shared_Type_Under_Multiple_Paths()
     {
         // The printer-column cycle guard is path-scoped: a non-circular type reused under two
@@ -95,7 +88,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Keep_Known_Properties_For_NonCircular_PreserveUnknownFields()
     {
         // PreserveUnknownFields on a fully transpilable type keeps the structural schema of known
@@ -109,7 +101,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Fall_Back_To_Opaque_For_NonRepresentable_PreserveUnknownFields()
     {
         // A non-representable member (here JsonElement) would normally throw; PreserveUnknownFields
@@ -125,7 +116,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Keep_Known_Properties_For_NonCircular_ClassLevel_PreserveUnknownFields()
     {
         // Class-level [PreserveUnknownFields] keeps structural mapping of known fields plus the flag
@@ -138,7 +128,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Fall_Back_To_Opaque_For_Circular_ClassLevel_PreserveUnknownFields()
     {
         // Class-level [PreserveUnknownFields] opts the whole type out, consistent with property-level:
@@ -152,7 +141,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Throw_On_Type_That_Is_A_Collection_Of_Itself()
     {
         // The ancestor set only grows in MapObjectType, so a type that *is* a collection of itself never
@@ -163,7 +151,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Throw_On_Type_That_Is_A_Dictionary_Of_Itself()
     {
         var act = () => _mlc.Transpile(typeof(SelfDictionaryEntity));
@@ -172,7 +159,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Throw_On_Mutually_Recursive_Collection_Types()
     {
         var act = () => _mlc.Transpile(typeof(MutualCollectionEntity));
@@ -181,7 +167,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Throw_On_Recursively_Constructed_Generic()
     {
         // Every expansion of Wrapper<Wrapper<T>> yields a previously unseen Type, so the identity-based
@@ -194,7 +179,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Not_Walk_Ignored_Property_When_Mapping_Printer_Columns()
     {
         // Printer-column discovery must respect [Ignore]: a column below an ignored property would point
@@ -206,7 +190,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Transpile_Entity_Whose_Recursive_Generic_Is_Ignored()
     {
         // The schema walk skips ignored properties; before printer-column discovery did the same, this
@@ -217,7 +200,6 @@ public sealed partial class CrdsMlcTest
     }
 
     [Fact]
-    [Trait("Area", "CircularReferences")]
     public void Should_Not_Throw_For_Legitimately_Nested_Generics()
     {
         // Guards against a false positive of the depth limit: nested collections are finite and must map.

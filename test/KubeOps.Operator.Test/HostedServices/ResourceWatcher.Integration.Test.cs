@@ -11,6 +11,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.HostedServices;
 
+[Trait(TestTrait.Area, TestArea.Watcher)]
 public class HostedServiceDisposeIntegrationTest : IntegrationTestBase
 {
     [Fact]

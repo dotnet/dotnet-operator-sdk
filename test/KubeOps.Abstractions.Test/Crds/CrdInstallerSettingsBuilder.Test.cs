@@ -8,6 +8,8 @@ using KubeOps.Abstractions.Crds;
 
 namespace KubeOps.Abstractions.Test.Crds;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Crds)]
 public sealed class CrdInstallerSettingsBuilderTest
 {
     [Fact]

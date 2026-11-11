@@ -12,7 +12,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace KubeOps.Operator.Web.Test.Webhooks;
 
-[Trait("Area", "ExternalWebhookEndpoint")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class ExternalWebhookServiceTest
 {
     private static readonly Uri TunnelUri = new("https://my-tunnel-5000.euw.devtunnels.ms");

@@ -14,7 +14,8 @@ using Microsoft.AspNetCore.Http;
 
 namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Validation;
 
-[Trait("Area", "AdmissionResult")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class ValidationResultTest
 {
     [Fact]

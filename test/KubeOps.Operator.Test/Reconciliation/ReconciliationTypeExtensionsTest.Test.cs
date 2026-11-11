@@ -11,6 +11,8 @@ using KubeOps.Operator.Reconciliation;
 
 namespace KubeOps.Operator.Test.Reconciliation;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Reconciliation)]
 public sealed class ReconciliationTypeExtensionsTest
 {
     [Theory]

@@ -11,6 +11,8 @@ using KubeOps.Abstractions.Entities;
 
 namespace KubeOps.Abstractions.Test.Entities;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.JsonPatch)]
 public sealed class JsonPatchExtensionsTest
 {
     [Fact]

@@ -22,7 +22,6 @@ public sealed partial class CrdsMlcTest
     private const string Rule2 = "has(self.workflow) || self.kind != 'my-workflow";
     private const string Message2 = "workflow must be specified if handling is workflow";
 
-    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_Validations()
     {
@@ -37,7 +36,6 @@ public sealed partial class CrdsMlcTest
         specProperties.XKubernetesValidations[0].Reason.Should().BeNull();
     }
 
-    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_MultipleValidations()
     {
@@ -57,7 +55,6 @@ public sealed partial class CrdsMlcTest
         specProperties.XKubernetesValidations[1].Reason.Should().BeNull();
     }
 
-    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Omit_Validations()
     {
@@ -67,7 +64,6 @@ public sealed partial class CrdsMlcTest
         specProperties.XKubernetesValidations.Should().BeNull();
     }
 
-    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_Validations_On_Root_Class()
     {
@@ -82,7 +78,6 @@ public sealed partial class CrdsMlcTest
         schema.XKubernetesValidations[0].Reason.Should().BeNull();
     }
 
-    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_Multiple_Validations_On_Root_Class()
     {
@@ -94,7 +89,6 @@ public sealed partial class CrdsMlcTest
         schema.XKubernetesValidations[1].Rule.Should().Be(Rule2);
     }
 
-    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_Validations_On_Nested_Class()
     {
@@ -106,7 +100,6 @@ public sealed partial class CrdsMlcTest
         nestedSchema.XKubernetesValidations[0].Message.Should().Be(Message1);
     }
 
-    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Merge_Class_And_Property_Validations()
     {
@@ -118,7 +111,6 @@ public sealed partial class CrdsMlcTest
         nestedSchema.XKubernetesValidations[1].Rule.Should().Be(Rule2);
     }
 
-    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Inherit_And_Merge_Class_Validations_From_Base_Entity()
     {
@@ -129,7 +121,6 @@ public sealed partial class CrdsMlcTest
         schema.XKubernetesValidations.Select(v => v.Rule).Should().Contain([Rule1, Rule2]);
     }
 
-    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Inherit_And_Merge_Class_Validations_On_Nested_Class()
     {
@@ -140,7 +131,6 @@ public sealed partial class CrdsMlcTest
         nestedSchema.XKubernetesValidations.Select(v => v.Rule).Should().Contain([Rule1, Rule2]);
     }
 
-    [Trait("Area", "ValidationRule")]
     [Fact]
     public void Should_Set_ValidationFields()
     {

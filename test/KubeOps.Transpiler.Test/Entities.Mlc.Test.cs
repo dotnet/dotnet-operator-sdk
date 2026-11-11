@@ -11,12 +11,13 @@ using KubeOps.Abstractions.Entities.Attributes;
 
 namespace KubeOps.Transpiler.Test;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.CrdSchema)]
 public sealed class EntitiesMlcTest(MlcProvider provider) : TranspilerTestBase(provider)
 {
     [Theory]
     [InlineData(typeof(NamespaceEntity), "Namespaced", "namespaceentity", "namespaceentities", "testing.dev/v1")]
     [InlineData(typeof(ClusterEntity), "Cluster", "clusterentity", "clusterentities", "testing.dev/v1")]
-    [Trait("Area", "KubernetesEntity")]
     public void Should_Correctly_Parse_Metadata(
         Type entityType,
         string expectedScope,

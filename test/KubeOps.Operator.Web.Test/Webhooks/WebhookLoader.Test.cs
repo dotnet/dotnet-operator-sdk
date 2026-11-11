@@ -15,8 +15,9 @@ using KubeOps.Operator.Web.Webhooks.Conversion;
 
 namespace KubeOps.Operator.Web.Test.Webhooks;
 
-[Trait("Area", "WebhookRegistration")]
 [RequiresPreviewFeatures]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class WebhookLoaderTest
 {
     [Fact]

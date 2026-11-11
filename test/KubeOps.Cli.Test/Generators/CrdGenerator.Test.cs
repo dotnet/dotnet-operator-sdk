@@ -10,7 +10,8 @@ using KubeOps.Cli.Generators;
 
 namespace KubeOps.Cli.Test.Generators;
 
-[Trait("Area", "General")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Crds)]
 public sealed class CrdGeneratorTest
 {
     [Fact]

@@ -23,7 +23,9 @@ using Moq;
 
 namespace KubeOps.Operator.Test.Queue;
 
-[Trait("Area", "ScopedLeaderElection")]
+[Trait(TestTrait.Feature, TestFeature.ScopedLeaderElection)]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Queue)]
 public sealed class ScopeAwareEntityQueueBackgroundServiceTest
 {
     private readonly Mock<ILeadershipScope> _scope = new();

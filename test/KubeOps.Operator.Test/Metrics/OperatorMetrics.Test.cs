@@ -8,7 +8,8 @@ using KubeOps.Operator.Metrics;
 
 namespace KubeOps.Operator.Test.Metrics;
 
-[Trait("Area", "Otel")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Metrics)]
 public sealed class OperatorMetricsTest
 {
     [Fact]

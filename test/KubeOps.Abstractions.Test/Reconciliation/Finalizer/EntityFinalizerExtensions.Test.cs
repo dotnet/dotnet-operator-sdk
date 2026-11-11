@@ -12,6 +12,8 @@ using KubeOps.Abstractions.Reconciliation.Finalizer;
 
 namespace KubeOps.Abstractions.Test.Finalizer;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Finalizers)]
 public sealed class EntityFinalizerExtensions
 {
     private const string Group = "finalizer.test";

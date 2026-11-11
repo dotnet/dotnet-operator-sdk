@@ -17,6 +17,8 @@ using Moq;
 
 namespace KubeOps.Operator.Test.Events;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Events)]
 public sealed class EventPublisherCustomResourceFactoryTest
 {
     [Fact]

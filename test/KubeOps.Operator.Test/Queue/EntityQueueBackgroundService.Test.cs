@@ -22,6 +22,8 @@ using Moq;
 
 namespace KubeOps.Operator.Test.Queue;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Queue)]
 public sealed class EntityQueueBackgroundServiceTest
 {
     // A controllable async-enumerable queue that allows tests to push entries on demand.
@@ -173,7 +175,7 @@ public sealed class EntityQueueBackgroundServiceTest
         return service;
     }
 
-    [Trait("Area", "Otel")]
+    [Trait(TestTrait.Feature, TestFeature.Otel)]
     [Fact]
     public async Task Throwing_Reconciler_Records_Failure_Reconciliation_Metric()
     {
@@ -249,7 +251,7 @@ public sealed class EntityQueueBackgroundServiceTest
         }
     }
 
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     [Fact]
     public async Task StartAsync_Can_Restart_After_The_Loop_Exits_Without_A_Stop_Request()
     {
@@ -274,7 +276,7 @@ public sealed class EntityQueueBackgroundServiceTest
         queue.GetAsyncEnumeratorCallCount.Should().Be(2);
     }
 
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     [Fact]
     public async Task StartAsync_Is_Idempotent_And_Starts_Only_One_Processing_Loop()
     {
@@ -298,7 +300,7 @@ public sealed class EntityQueueBackgroundServiceTest
         queue.GetAsyncEnumeratorCallCount.Should().Be(1);
     }
 
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     [Fact]
     public async Task Restart_Does_Not_Dispose_CancellationTokenSource_Still_Used_By_Previous_Loop()
     {
@@ -344,7 +346,7 @@ public sealed class EntityQueueBackgroundServiceTest
         await service.DisposeAsync();
     }
 
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     [Fact]
     public async Task Stop_Does_Not_Dispose_Token_While_A_Reconciliation_Is_Still_In_Flight()
     {
@@ -398,7 +400,7 @@ public sealed class EntityQueueBackgroundServiceTest
         tokenDisposedWhileInFlight.Should().BeFalse();
     }
 
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     [Fact]
     public async Task StopAsync_Awaits_The_Drain_Of_In_Flight_Reconciliations()
     {
@@ -527,7 +529,6 @@ public sealed class EntityQueueBackgroundServiceTest
             Times.Once);
     }
 
-    [Trait("Area", "EntityIdentity")]
     [Fact]
     public async Task Stale_Entry_Is_Skipped_When_Object_Was_Recreated_With_Same_Name()
     {
@@ -669,7 +670,7 @@ public sealed class EntityQueueBackgroundServiceTest
         queue.EnqueueCallCount.Should().BeGreaterThan(0);
     }
 
-    [Trait("Area", "Otel")]
+    [Trait(TestTrait.Feature, TestFeature.Otel)]
     [Fact]
     public async Task Conflict_Requeue_Metric_Is_Not_Recorded_When_Enqueue_Is_Dropped()
     {
@@ -742,7 +743,7 @@ public sealed class EntityQueueBackgroundServiceTest
         requeued.Should().Be(0);
     }
 
-    [Trait("Area", "Otel")]
+    [Trait(TestTrait.Feature, TestFeature.Otel)]
     [Fact]
     public async Task ErrorRetry_Requeue_Metric_Is_Not_Recorded_When_Enqueue_Is_Dropped()
     {
@@ -803,7 +804,7 @@ public sealed class EntityQueueBackgroundServiceTest
         requeued.Should().Be(0);
     }
 
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     [Fact]
     public async Task ErrorRetry_Enqueue_Receives_Processing_Token_So_It_Is_Rejected_After_Stop()
     {

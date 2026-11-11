@@ -8,7 +8,9 @@ using FluentAssertions;
 
 namespace KubeOps.Operator.Test;
 
-[Trait("Area", "LeaderLoss")]
+[Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.LeaderElection)]
 public sealed class RestartableHostedServiceTest
 {
     [Fact]

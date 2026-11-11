@@ -10,6 +10,8 @@ using KubeOps.Abstractions.Reconciliation;
 
 namespace KubeOps.Abstractions.Test.Reconciliation;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Reconciliation)]
 public sealed class ReconciliationResultTest
 {
     [Fact]

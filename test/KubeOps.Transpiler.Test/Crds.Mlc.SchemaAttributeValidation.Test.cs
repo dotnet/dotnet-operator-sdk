@@ -14,7 +14,6 @@ namespace KubeOps.Transpiler.Test;
 
 public sealed partial class CrdsMlcTest
 {
-    [Trait("Area", "SchemaValidation")]
     [Theory]
     [InlineData(typeof(XListTypeOnStringEntity), "XListTypeAttribute")]
     [InlineData(typeof(XMapTypeOnStringEntity), "XMapTypeAttribute")]
@@ -61,7 +60,6 @@ public sealed partial class CrdsMlcTest
             .WithMessage($"*{expectedMessage}*");
     }
 
-    [Trait("Area", "SchemaValidation")]
     [Theory]
     [InlineData(typeof(ItemsOnStringEntity))]
     [InlineData(typeof(ItemsWithNegativeLimitEntity))]

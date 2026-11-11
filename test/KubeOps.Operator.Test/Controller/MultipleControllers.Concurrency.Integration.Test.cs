@@ -22,6 +22,8 @@ namespace KubeOps.Operator.Test.Controller;
 /// a per-entity-type coordinator must serialize reconciliation and finalization per object UID, so an
 /// entity-global finalizer runs exactly once (and never concurrently) even when two controllers match.
 /// </summary>
+[Trait(TestTrait.Area, TestArea.Reconciliation)]
+[Trait(TestTrait.Feature, TestFeature.MultipleControllers)]
 public sealed class MultipleControllersFinalizerIntegrationTest : IntegrationTestBase
 {
     // Must equal IEntityFinalizer.GetIdentifierName for TrackedFinalizer ("{group}/{typename}"), because

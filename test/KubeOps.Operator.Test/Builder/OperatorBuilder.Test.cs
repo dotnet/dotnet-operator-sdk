@@ -30,6 +30,8 @@ using Moq;
 
 namespace KubeOps.Operator.Test.Builder;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Configuration)]
 public sealed class OperatorBuilderTest
 {
     private readonly IOperatorBuilder _builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder().Build());
@@ -275,7 +277,7 @@ public sealed class OperatorBuilderTest
     }
 
     [Fact]
-    [Trait("Area", "ScopedLeaderElection")]
+    [Trait(TestTrait.Feature, TestFeature.ScopedLeaderElection)]
     public void Should_Add_ScopeAware_Services_For_Scoped_Leader_Election()
     {
         var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Scoped }.Build());
@@ -292,7 +294,7 @@ public sealed class OperatorBuilderTest
     }
 
     [Fact]
-    [Trait("Area", "ScopedLeaderElection")]
+    [Trait(TestTrait.Feature, TestFeature.ScopedLeaderElection)]
     public void Should_Support_Multiple_Controllers_With_ScopeAware_Shared_Watcher()
     {
         var builder = new OperatorBuilder(
@@ -314,7 +316,7 @@ public sealed class OperatorBuilderTest
     }
 
     [Fact]
-    [Trait("Area", "ScopedLeaderElection")]
+    [Trait(TestTrait.Feature, TestFeature.ScopedLeaderElection)]
     public void Should_Not_Add_Leader_Elector_For_Scoped_Leader_Election()
     {
         var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Scoped }.Build());

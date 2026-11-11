@@ -8,6 +8,8 @@ using KubeOps.Operator.Retry;
 
 namespace KubeOps.Operator.Test.Retry;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Retry)]
 public sealed class ExponentialRetryBackoffTest
 {
     [Fact]

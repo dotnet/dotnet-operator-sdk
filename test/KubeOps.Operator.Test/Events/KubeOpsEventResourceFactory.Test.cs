@@ -11,6 +11,8 @@ using KubeOps.Operator.Test.TestEntities;
 
 namespace KubeOps.Operator.Test.Events;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Events)]
 public sealed class KubeOpsEventResourceFactoryTest
 {
     private readonly OperatorSettings _settings = new OperatorSettingsBuilder { Name = "test-operator" }.Build();

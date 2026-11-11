@@ -13,7 +13,6 @@ namespace KubeOps.Transpiler.Test;
 
 public sealed partial class CrdsMlcTest
 {
-    [Trait("Area", "Scale")]
     [Fact]
     public void Should_Not_Add_Scale_SubResource_If_Absent()
     {
@@ -25,7 +24,6 @@ public sealed partial class CrdsMlcTest
         subresources.Scale.Should().BeNull();
     }
 
-    [Trait("Area", "Scale")]
     [Fact]
     public void Should_Add_Scale_SubResource_With_Required_Paths()
     {
@@ -39,7 +37,6 @@ public sealed partial class CrdsMlcTest
         subresources.Scale.LabelSelectorPath.Should().BeNull();
     }
 
-    [Trait("Area", "Scale")]
     [Fact]
     public void Should_Add_Scale_Without_Status_SubResource()
     {
@@ -50,7 +47,6 @@ public sealed partial class CrdsMlcTest
         subresources.Status.Should().BeNull();
     }
 
-    [Trait("Area", "Scale")]
     [Fact]
     public void Should_Add_Scale_SubResource_With_Label_Selector_Path()
     {
@@ -64,7 +60,6 @@ public sealed partial class CrdsMlcTest
         subresources.Scale.LabelSelectorPath.Should().Be(".status.selector");
     }
 
-    [Trait("Area", "Scale")]
     [Fact]
     public void Should_Add_Both_Scale_And_Status_SubResources()
     {

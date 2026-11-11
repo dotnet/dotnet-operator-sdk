@@ -21,6 +21,8 @@ using OperatorCrdInstaller = KubeOps.Operator.Crds.CrdInstaller;
 
 namespace KubeOps.Operator.Test.Crds;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Crds)]
 public sealed class CrdInstallerTest
 {
     [Fact]

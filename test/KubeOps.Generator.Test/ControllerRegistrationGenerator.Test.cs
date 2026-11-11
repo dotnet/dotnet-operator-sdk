@@ -13,10 +13,11 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace KubeOps.Generator.Test;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.SourceGenerator)]
 public sealed partial class ControllerRegistrationGeneratorTest
 {
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Not_Generate_Registrations_Without_Controllers()
     {
         var inputCompilation = string.Empty.CreateCompilation();
@@ -32,7 +33,6 @@ public sealed partial class ControllerRegistrationGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Generate_Into_Configured_Namespace()
     {
         var inputCompilation = """
@@ -85,7 +85,6 @@ public sealed partial class ControllerRegistrationGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Sanitize_Configured_Namespace()
     {
         // Segments starting with a digit or matching a reserved keyword are prefixed with an
@@ -383,7 +382,6 @@ public sealed partial class ControllerRegistrationGeneratorTest
     }
 
     [Theory]
-    [Trait("Area", "Partial")]
     [InlineData(
         """
                 using k8s;

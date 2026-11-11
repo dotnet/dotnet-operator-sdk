@@ -14,6 +14,8 @@ using OpenTelemetry.Trace;
 
 namespace KubeOps.Aspire.Test;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Aspire)]
 public sealed class KubeOpsServiceDefaultsTest
 {
     [Fact]

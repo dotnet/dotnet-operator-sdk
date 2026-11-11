@@ -6,7 +6,8 @@ using KubeOps.KubernetesClient.Selectors;
 
 namespace KubeOps.KubernetesClient.Test;
 
-public sealed class LabelSelectorTest : IntegrationTestBase
+[Trait(TestTrait.Area, TestArea.Selectors)]
+public sealed class LabelSelectorIntegrationTest : IntegrationTestBase
 {
     [Fact]
     public void Should_Return_Correct_Expression()

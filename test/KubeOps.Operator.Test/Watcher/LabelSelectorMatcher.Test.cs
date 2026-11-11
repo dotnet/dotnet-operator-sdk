@@ -8,6 +8,8 @@ using KubeOps.Operator.Watcher;
 
 namespace KubeOps.Operator.Test.Watcher;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Selectors)]
 public sealed class LabelSelectorMatcherTest
 {
     [Theory]

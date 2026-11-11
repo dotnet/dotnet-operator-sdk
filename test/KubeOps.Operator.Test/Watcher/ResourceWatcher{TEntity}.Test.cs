@@ -26,6 +26,8 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Test.Watcher;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Watcher)]
 public sealed class ResourceWatcherTest
 {
     [Fact]
@@ -534,7 +536,7 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task OnEvent_Should_Not_Update_Cache_When_Enqueue_Dropped_And_Strategy_Is_ByGeneration()
     {
         // Arrange – generation changed, but the queue dropped the entry (intake suspended on leadership loss)
@@ -566,7 +568,7 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task OnEvent_Should_Not_Update_Cache_When_Enqueue_Dropped_And_Strategy_Is_ByResourceVersion()
     {
         // Arrange – resourceVersion changed, but the queue dropped the entry
@@ -599,7 +601,7 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task OnEvent_Should_Not_Update_DeletionTracking_When_Enqueue_Dropped_And_Strategy_Is_ByGeneration()
     {
         // Arrange – deletion fingerprint changed, but the queue dropped the entry
@@ -635,7 +637,7 @@ public sealed class ResourceWatcherTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public async Task OnEvent_Should_Not_Remove_From_Cache_When_Enqueue_Dropped_On_Deleted()
     {
         // Arrange – delete event, but the queue dropped the entry

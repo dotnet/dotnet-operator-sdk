@@ -13,12 +13,13 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace KubeOps.Generator.Test;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.SourceGenerator)]
 public sealed class OperatorBuilderGeneratorTest
 {
     private const string OperatorBuilderFileName = "OperatorBuilder.g.cs";
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Not_Generate_RegisterComponents_Without_Components_Or_Operator_Reference()
     {
         var inputCompilation = string.Empty.CreateCompilation();
@@ -34,7 +35,6 @@ public sealed class OperatorBuilderGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Generate_Empty_RegisterComponents_When_Operator_Is_Referenced()
     {
         var operatorReference = string.Empty.CreateCompilation("KubeOps.Operator").EmitToImageReference();
@@ -61,7 +61,6 @@ public sealed class OperatorBuilderGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Generate_Own_Registrations_With_Assembly_Marker()
     {
         var inputCompilation = """
@@ -108,7 +107,6 @@ public sealed class OperatorBuilderGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Only_Register_Existing_Component_Kinds()
     {
         var inputCompilation = """
@@ -149,7 +147,6 @@ public sealed class OperatorBuilderGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Register_Referenced_Assembly_Registrations()
     {
         var libCompilation = """
@@ -180,7 +177,6 @@ public sealed class OperatorBuilderGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Register_Own_And_Referenced_Assembly_Registrations()
     {
         var libCompilation = """
@@ -225,7 +221,6 @@ public sealed class OperatorBuilderGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Generate_Into_Configured_Namespace()
     {
         var inputCompilation = """
@@ -267,7 +262,6 @@ public sealed class OperatorBuilderGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Report_Diagnostic_And_Skip_Conflicting_Referenced_Registrations()
     {
         var libCompilation = """
@@ -318,7 +312,6 @@ public sealed class OperatorBuilderGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Skip_Platform_Signed_Referenced_Assemblies()
     {
         // Discovery prunes assemblies carrying a .NET platform public key token without decoding
@@ -345,7 +338,6 @@ public sealed class OperatorBuilderGeneratorTest
     }
 
     [Fact]
-    [Trait("Area", "ReferencedRegistration")]
     public void Should_Ignore_Foreign_Attribute_Without_Abstractions_Reference()
     {
         // Discovery only decodes attributes of assemblies that reference KubeOps.Abstractions.

@@ -21,7 +21,7 @@ public class IntegrationTestCollection : ICollectionFixture<CrdInstaller>
 }
 
 [Collection(IntegrationTestCollection.Name)]
-[Trait("Category", "Integration")]
+[Trait(TestTrait.Category, TestCategory.IntegrationTest)]
 public abstract class IntegrationTestBase : IAsyncLifetime
 {
     private IHost? _host;

@@ -35,7 +35,9 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Operator.Test.Watcher;
 
-[Trait("Area", "ScopedLeaderElection")]
+[Trait(TestTrait.Feature, TestFeature.ScopedLeaderElection)]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Watcher)]
 public sealed class ScopeAwareResourceWatcherTest
 {
     private readonly Mock<ILeadershipScope> _scope = new();
@@ -540,7 +542,7 @@ public sealed class ScopeAwareResourceWatcherTest
     }
 
     [Fact]
-    [Trait("Area", "Otel")]
+    [Trait(TestTrait.Feature, TestFeature.Otel)]
     public async Task Should_Record_Resync_Attempts_In_Metrics()
     {
         using var harness = new MetricHarness();

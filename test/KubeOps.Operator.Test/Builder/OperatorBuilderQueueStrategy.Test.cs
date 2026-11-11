@@ -23,6 +23,8 @@ using Moq;
 
 namespace KubeOps.Operator.Test.Builder;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Configuration)]
 public sealed class OperatorBuilderQueueStrategyTest
 {
     [Fact]
@@ -41,7 +43,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     }
 
     [Fact]
-    [Trait("Area", "LeaderLoss")]
+    [Trait(TestTrait.Feature, TestFeature.LeaderLoss)]
     public void Should_Register_LeaderAware_BackgroundService_For_Single_LeaderElection()
     {
         var builder = new OperatorBuilder(
@@ -117,7 +119,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     }
 
     [Fact]
-    [Trait("Area", "MultipleControllers")]
+    [Trait(TestTrait.Feature, TestFeature.MultipleControllers)]
     public void Should_Register_Reconciler_For_Custom_Strategy_So_A_Custom_Consumer_Resolves()
     {
         // Regression: with QueueStrategy.Custom under normal (non-custom) leader election the user supplies
@@ -140,7 +142,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     }
 
     [Fact]
-    [Trait("Area", "MultipleControllers")]
+    [Trait(TestTrait.Feature, TestFeature.MultipleControllers)]
     public void Should_Reject_Multiple_Controllers_Per_Entity_For_Custom_Queue_Strategy()
     {
         // The custom paths share a single user-owned queue and one unkeyed reconciler with no per-pipeline
@@ -155,7 +157,7 @@ public sealed class OperatorBuilderQueueStrategyTest
     }
 
     [Fact]
-    [Trait("Area", "MultipleControllers")]
+    [Trait(TestTrait.Feature, TestFeature.MultipleControllers)]
     public void Should_Reject_Multiple_Controllers_Per_Entity_For_Custom_Leader_Election()
     {
         var builder = new OperatorBuilder(new ServiceCollection(), new OperatorSettingsBuilder { LeaderElectionType = LeaderElectionType.Custom }.Build());

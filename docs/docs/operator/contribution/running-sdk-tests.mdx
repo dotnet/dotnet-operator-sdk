@@ -32,8 +32,11 @@ dotnet test
 dotnet test --project test/KubeOps.Operator.Test/KubeOps.Operator.Test.csproj
 
 # Run only unit tests (skip integration tests) — no cluster required
-dotnet test --project test/KubeOps.Operator.Test/KubeOps.Operator.Test.csproj \
-  --filter-not-trait "Category=Integration"
+dotnet test --filter-trait "Category=UnitTest"
+
+# Run the tests of one area, or of a feature across areas (see Test Traits below)
+dotnet test --filter-trait "Area=Queue"
+dotnet test --filter-trait "Feature=LeaderLoss"
 
 # Run a single test by name
 dotnet test --filter "FullyQualifiedName~MyTestClass.MyTestMethod"
@@ -69,7 +72,51 @@ when it stops.
   `ConfigureHost(HostApplicationBuilder)` to wire up the operator under test, and use
   `TestNamespaceProvider` for namespace isolation. The shared integration collection disables
   parallelization and installs the required CRDs once per run. `IntegrationTestBase` also applies
-  the `Category=Integration` trait so integration tests can be excluded consistently.
+  the `Category=IntegrationTest` trait.
 
 When you add a feature, cover it with unit tests; if it changes the watch → queue → reconcile
 behavior against a real API server, add an integration test as well.
+
+## Test Traits
+
+Every test carries traits in three dimensions. The names and values are constants in
+`test/TestTraits.cs`, which every test project includes, so write `[Trait(TestTrait.Area, TestArea.Queue)]`
+instead of string literals.
+
+| Trait | Required | Values | Where |
+|---|---|---|---|
+| `Category` | exactly one | `UnitTest`, `IntegrationTest` (matches the class suffix) | on the class; `IntegrationTestBase` sets `IntegrationTest` |
+| `Area` | exactly one | the part of the SDK, see below | on the class, on the method only in classes that span several areas |
+| `Feature` | optional, several allowed | `LeaderLoss`, `MultipleControllers`, `Otel`, `ScopedLeaderElection` | on the class or the method |
+
+| Area | Covers |
+|---|---|
+| `Aspire` | `KubeOps.Aspire` service defaults and `KubeOps.Aspire.Hosting` |
+| `Cli` | CLI commands that are not covered by `Crds` or `Rbac`, e.g. operator generation and assembly loading |
+| `Configuration` | operator settings, `OperatorBuilder` registration and validation, namespaced operators |
+| `CrdSchema` | CRD schema transpilation (`KubeOps.Transpiler`) |
+| `Crds` | CRD installation and management, CRD generation in the CLI |
+| `Events` | Kubernetes event publishing |
+| `Finalizers` | finalizer registration and execution |
+| `JsonPatch` | the JSON Patch API in `KubeOps.Abstractions` |
+| `KubernetesClient` | `IKubernetesClient` operations |
+| `LeaderElection` | leader election and leader-aware hosted services |
+| `Logging` | logging scopes and entity log helpers |
+| `Metrics` | operator and webhook metrics |
+| `Queue` | entity queue and queue background services |
+| `Rbac` | RBAC transpilation and generation |
+| `Reconciliation` | reconciler, reconciliation results and controller behavior, including requeues |
+| `Retry` | retry backoff and API error classification |
+| `Selectors` | label and field selectors |
+| `SourceGenerator` | `KubeOps.Generator` |
+| `TestSuite` | checks of the test suite itself |
+| `Watcher` | resource watchers, shared pipelines and watcher caching |
+| `Webhooks` | admission and conversion webhooks, webhook registration and certificates |
+
+A `Feature` marks a capability that spans several areas, e.g. leader-loss handling in the queue, the
+watcher and the builder. Do not add more specific traits: the class name already describes the subject and
+can be selected with `--filter "FullyQualifiedName~..."`.
+
+`TestTraitsTest`, which runs in every test project, fails when a test has no or more than one `Category` or
+`Area`, when the `Category` does not match the class suffix, or when a value is not defined in
+`test/TestTraits.cs`. Add new areas or features there.

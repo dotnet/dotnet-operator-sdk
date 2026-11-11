@@ -17,8 +17,9 @@ using Microsoft.AspNetCore.Http;
 
 namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Mutation;
 
-[Trait("Area", "AdmissionResult")]
 [RequiresPreviewFeatures]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class MutationResultTest
 {
     [Fact]

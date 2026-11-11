@@ -14,10 +14,11 @@ using Microsoft.AspNetCore.TestHost;
 
 namespace KubeOps.Operator.Web.Test.Webhooks.Admission.Validation;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class ValidationWebhookModelBindingTest : WebhookTestBase
 {
     [Fact(DisplayName = "Validation webhook binds create request when object metadata UID is missing")]
-    [Trait("Area", "ModelBinding")]
     public async Task HandleAsync_CreateRequestWithoutObjectMetadataUid_DoesNotFailModelValidation()
     {
         using var host = await TestHost.Create();
@@ -46,7 +47,6 @@ public sealed class ValidationWebhookModelBindingTest : WebhookTestBase
     }
 
     [Theory(DisplayName = "Validation webhook binds request correctly")]
-    [Trait("Area", "ModelBinding")]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-create-iso-uid", "CREATE", false, "createvalue", "PT10M", true)]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-update-iso-uid", "UPDATE", false, "same", "PT1H30M", true)]
     [InlineData(nameof(TestEntityWithISODurationTimeSpan), "test-update-iso-uid-fail", "UPDATE", false, "new", "PT1H30M", false)]

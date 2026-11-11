@@ -27,6 +27,8 @@ using ILock = k8s.LeaderElection.ILock;
 
 namespace KubeOps.Operator.Test.Watcher;
 
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Watcher)]
 public sealed class LeaderAwareResourceWatcherTest
 {
     [Fact]

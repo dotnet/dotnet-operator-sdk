@@ -17,6 +17,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace KubeOps.Operator.Test.Controller;
 
+[Trait(TestTrait.Area, TestArea.Reconciliation)]
 public sealed class DeletedEntityRequeueIntegrationTest : IntegrationTestBase
 {
     private readonly MethodInvocationObserver<V1OperatorIntegrationTestEntity> _observer = new();

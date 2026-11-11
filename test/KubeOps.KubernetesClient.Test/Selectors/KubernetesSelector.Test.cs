@@ -8,7 +8,8 @@ using KubeOps.KubernetesClient.Selectors;
 
 namespace KubeOps.KubernetesClient.Test;
 
-[Trait("Area", "Selectors")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Selectors)]
 public sealed class KubernetesSelectorTest
 {
     [Fact]

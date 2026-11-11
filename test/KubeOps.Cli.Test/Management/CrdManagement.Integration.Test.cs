@@ -17,8 +17,8 @@ using Spectre.Console.Testing;
 namespace KubeOps.Cli.Test.Management;
 
 [Collection(IntegrationTestCollection.Name)]
-[Trait("Category", "Integration")]
-[Trait("Area", "CrdManagement")]
+[Trait(TestTrait.Category, TestCategory.IntegrationTest)]
+[Trait(TestTrait.Area, TestArea.Crds)]
 public sealed class CrdManagementIntegrationTest : IAsyncLifetime
 {
     private readonly Kubernetes _client = new(KubernetesClientConfiguration.BuildDefaultConfig());

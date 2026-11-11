@@ -13,7 +13,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace KubeOps.Cli.Test.Transpilation;
 
-[Trait("Area", "Rbac")]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Rbac)]
 public sealed class OperatorWatchScopeDiscoveryTest
 {
     [Fact]

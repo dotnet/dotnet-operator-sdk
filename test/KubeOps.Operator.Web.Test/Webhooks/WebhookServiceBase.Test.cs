@@ -19,8 +19,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace KubeOps.Operator.Web.Test.Webhooks;
 
-[Trait("Area", "WebhookRegistration")]
 [RequiresPreviewFeatures]
+[Trait(TestTrait.Category, TestCategory.UnitTest)]
+[Trait(TestTrait.Area, TestArea.Webhooks)]
 public sealed class WebhookServiceBaseTest
 {
     private const string CrdName = "weboperatorintegrationtests.weboperator.test";
