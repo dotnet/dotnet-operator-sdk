@@ -55,13 +55,16 @@
       "allowedVersions": "<18.10.0"
     },
     {
-      "description": ["Keep .NET runtime packages on the 10.0 line for net10.0 TFMs; the 11.0 line targets net11.0."],
+      "description": ["Keep .NET-aligned packages on the 10.x line for net10.0 TFMs; the 11.x line targets net11.0."],
       "matchManagers": ["nuget"],
       "matchPackageNames": [
         "Microsoft.AspNetCore.Mvc.Testing",
         "Microsoft.Extensions.Diagnostics.HealthChecks",
         "Microsoft.Extensions.Hosting",
         "Microsoft.Extensions.Hosting.Abstractions",
+        "Microsoft.Extensions.Http.Resilience",
+        "Microsoft.Extensions.ServiceDiscovery",
+        "Microsoft.Extensions.TimeProvider.Testing",
         "System.Reflection.MetadataLoadContext"
       ],
       "matchCurrentValue": "/^10\\./",
