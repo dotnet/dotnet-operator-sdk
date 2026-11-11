@@ -42,9 +42,9 @@
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
         <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="11.0.0" />
-        <PackageVersion Include="Microsoft.Build.Framework" Version="18.11.0" />
+        <PackageVersion Include="Microsoft.Build.Framework" Version="18.12.2" />
         <PackageVersion Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
         <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="11.0.0" />
-        <PackageVersion Include="Microsoft.NET.StringTools" Version="18.11.0" />
+        <PackageVersion Include="Microsoft.NET.StringTools" Version="18.12.2" />
     </ItemGroup>
 </Project>
