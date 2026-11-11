@@ -17,6 +17,7 @@
 
     <ItemGroup>
         <PackageReference Include="Aspire.Hosting" Version="13.6.5" />
+        <PackageReference Include="Aspire.Hosting.DevTunnels" Version="13.6.5" />
         <!-- Aspire.Hosting.Kubernetes is only published as a prerelease package.
              Allow this stable package to depend on it (NU5104). -->
         <PackageReference Include="Aspire.Hosting.Kubernetes" Version="13.6.5-preview.1.26559.7" NoWarn="NU5104" />

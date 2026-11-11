@@ -263,7 +263,11 @@ With the KubeOps.Cli package, you can generate the required resources or let the
 
 ## Webhook Development
 
-The Operator Web package can be configured to generate self-signed certificates on startup and create/update your webhooks in the Kubernetes cluster to point to your development machine. To use this feature, use the `CertificateGenerator` class and `UseCertificateProvider()` operator builder extension method:
+During development, the operator runs on your machine and the Kubernetes API server must reach its webhooks via HTTPS. The Operator Web package registers your webhooks in the cluster on startup and points them to your machine, either directly with a generated certificate or through a tunnel. See [Local Development Considerations](https://dotnet.github.io/dotnet-operator-sdk/docs/operator/building-blocks/webhooks#local-development-considerations) for when to use which option, tunnel setup and security notes.
+
+### Certificate provider
+
+If the API server can reach your machine directly, the package can generate self-signed certificates on startup. Use the `CertificateGenerator` class and `UseCertificateProvider()` operator builder extension method:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -290,3 +294,22 @@ builder.Services
 ```
 
 The `UseCertificateProvider` method takes an `ICertificateProvider` interface, so it can be used to implement your own certificate generator/loader for development if necessary.
+
+### Tunnel
+
+If the API server cannot reach your machine (for example a cloud cluster), expose the operator through a tunnel such as Microsoft Dev Tunnels, cloudflared or ngrok and register the webhooks against its public HTTPS URL with `UseExternalWebhookEndpoint()`. The tunnel terminates TLS, so the operator can listen on plain HTTP:
+
+```bash
+devtunnel host -p 5000 --allow-anonymous
+```
+
+```csharp
+builder.Services
+    .AddKubernetesOperator()
+    // Reads KubeOps:Webhooks:ExternalUrl (environment variable KubeOps__Webhooks__ExternalUrl) ...
+    .UseExternalWebhookEndpoint()
+    // ... or pass the URL directly: .UseExternalWebhookEndpoint(new Uri("https://my-tunnel-5000.euw.devtunnels.ms"))
+    .RegisterComponents();
+```
+
+In an Aspire AppHost, `WithWebhookDevTunnel()` from `KubeOps.Aspire.Hosting` starts the Dev Tunnel and passes its URL to the operator.

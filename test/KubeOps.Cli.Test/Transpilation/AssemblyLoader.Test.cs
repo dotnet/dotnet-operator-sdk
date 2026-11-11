@@ -8,8 +8,10 @@ using FluentAssertions;
 
 using k8s.Models;
 
+using KubeOps.Abstractions.Entities;
 using KubeOps.Cli.Generators;
 using KubeOps.Cli.Transpilation;
+using KubeOps.Operator.Web.Webhooks.Admission.Validation;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -22,7 +24,12 @@ public sealed class AssemblyLoaderTest
     [Fact]
     public void Should_Not_Inspect_Assemblies_Loaded_From_The_Cli_Directory()
     {
-        using var parser = CreateParser();
+        using var parser = CreateParser("""
+            using k8s.Models;
+
+            [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "AssemblyLoaderTestEntity")]
+            internal sealed class AssemblyLoaderTestEntity;
+            """);
 
         // Utilities.GetContextType falls back to LoadFromAssemblyPath for types that only exist in the CLI.
         parser.LoadFromAssemblyPath(typeof(RbacGenerator).Assembly.Location);
@@ -39,15 +46,56 @@ public sealed class AssemblyLoaderTest
         parser.GetEntities().Should().ContainSingle().Which.Name.Should().Be("AssemblyLoaderTestEntity");
     }
 
-    private static MetadataLoadContext CreateParser()
+    [Fact]
+    public void Should_Find_Webhooks_Derived_From_An_Intermediate_Base_Class()
     {
-        const string source = """
+        using var parser = CreateParser("""
+            using k8s;
             using k8s.Models;
 
-            [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "AssemblyLoaderTestEntity")]
-            internal sealed class AssemblyLoaderTestEntity;
-            """;
-        var syntaxTree = CSharpSyntaxTree.ParseText(source, path: "AssemblyLoaderTestEntity.cs");
+            using KubeOps.Abstractions.Entities;
+            using KubeOps.Operator.Web.Webhooks.Admission.Mutation;
+            using KubeOps.Operator.Web.Webhooks.Admission.Validation;
+
+            [KubernetesEntity(Group = "testing.dev", ApiVersion = "v1", Kind = "WebhookTestEntity")]
+            public sealed class V1WebhookTestEntity : CustomKubernetesEntity;
+
+            public abstract class AuditedValidationWebhook<TEntity> : ValidationWebhook<TEntity>
+                where TEntity : IKubernetesObject<V1ObjectMeta>;
+
+            public sealed class IndirectValidator : AuditedValidationWebhook<V1WebhookTestEntity>
+            {
+                public override ValidationResult Create(V1WebhookTestEntity entity, bool dryRun) => Success();
+            }
+
+            public abstract class AuditedMutationWebhook<TEntity> : MutationWebhook<TEntity>
+                where TEntity : IKubernetesObject<V1ObjectMeta>;
+
+            public sealed class IndirectMutator : AuditedMutationWebhook<V1WebhookTestEntity>
+            {
+                public override MutationResult<V1WebhookTestEntity> Update(
+                    V1WebhookTestEntity oldEntity,
+                    V1WebhookTestEntity newEntity,
+                    bool dryRun) => NoChanges();
+            }
+            """);
+
+        var validator = parser.GetValidatedEntities().Should().ContainSingle().Subject;
+        validator.Webhook.Name.Should().Be("IndirectValidator");
+        validator.Metadata.Kind.Should().Be("WebhookTestEntity");
+        validator.WebhookPath.Should().Be("/validate/v1webhooktestentity");
+        validator.GetOperations().Should().Equal("CREATE");
+
+        var mutator = parser.GetMutatedEntities().Should().ContainSingle().Subject;
+        mutator.Webhook.Name.Should().Be("IndirectMutator");
+        mutator.Metadata.Kind.Should().Be("WebhookTestEntity");
+        mutator.WebhookPath.Should().Be("/mutate/v1webhooktestentity");
+        mutator.GetOperations().Should().Equal("UPDATE");
+    }
+
+    private static MetadataLoadContext CreateParser(string source)
+    {
+        var syntaxTree = CSharpSyntaxTree.ParseText(source, path: "AssemblyLoaderTest.cs");
         var referencePaths = GetReferencePaths().ToList();
         var compilation = CSharpCompilation.Create(
             $"AssemblyLoaderTestAssembly-{Guid.NewGuid():N}",
@@ -73,7 +121,11 @@ public sealed class AssemblyLoaderTest
             ?? throw new InvalidOperationException("Trusted platform assemblies are unavailable.");
 
         return trustedPlatformAssemblies.Split(Path.PathSeparator)
-            .Concat([typeof(V1Namespace).Assembly.Location])
+            .Concat([
+                typeof(V1Namespace).Assembly.Location,
+                typeof(CustomKubernetesEntity).Assembly.Location,
+                typeof(ValidationWebhook<>).Assembly.Location,
+            ])
             .Distinct(StringComparer.OrdinalIgnoreCase);
     }
 }

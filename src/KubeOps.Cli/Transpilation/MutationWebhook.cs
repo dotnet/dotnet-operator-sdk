@@ -8,8 +8,8 @@ using KubeOps.Abstractions.Entities;
 
 namespace KubeOps.Cli.Transpilation;
 
-internal record MutationWebhook(TypeInfo Validator, EntityMetadata Metadata) : BaseWebhook(Validator, Metadata)
+internal record MutationWebhook(TypeInfo Webhook, Type Entity, EntityMetadata Metadata)
+    : BaseWebhook(Webhook, Metadata)
 {
-    public override string WebhookPath =>
-        $"/mutate/{Validator.BaseType!.GenericTypeArguments[0].Name.ToLowerInvariant()}";
+    public override string WebhookPath => $"/mutate/{Entity.Name.ToLowerInvariant()}";
 }
