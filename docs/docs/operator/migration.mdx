@@ -271,3 +271,84 @@ Every breaking change is also listed in the
 [release notes](https://github.com/dotnet/dotnet-operator-sdk/releases). Check the notes for the
 version you are upgrading to when something does not match this guide.
 :::
+
+## Upgrading from v13 to v14
+
+v14 follows the .NET release cycle: it adds .NET 11 and drops the .NET versions that went out of
+support. It also replaces the LocalTunnel-based development tunnel, registers webhooks derived through
+base classes of your own, and removes `JsonPatch.Net` together with the synchronous client API.
+
+### .NET 8 and .NET 9 no longer supported
+
+KubeOps no longer ships `net8.0` and `net9.0` assets, because .NET 8 and .NET 9 went out of support on
+November 10, 2026. The runtime libraries and `KubeOps.Cli` target `net10.0` (LTS) and `net11.0` (STS);
+see [Supported Target Frameworks](../packages/index.mdx#supported-target-frameworks).
+
+**Migration:** set the `TargetFramework` of your operator to `net10.0` or `net11.0` and build it with the
+.NET 10 SDK or later. If your project references `Microsoft.Extensions.*` or ASP.NET Core packages
+directly, raise them to at least the version KubeOps references for your target framework; a lower
+version fails the restore with `NU1605`. Projects that have to stay on .NET 8 or .NET 9 need to remain on
+KubeOps v13.
+
+### `AddDevelopmentTunnel` removed
+
+`AddDevelopmentTunnel` and the transitive `Localtunnel` dependency are gone, because LocalTunnel was
+unstable and deprecated. A locally running operator now registers its webhooks against the HTTPS URL of a
+tunnel that you start yourself, for example a Microsoft Dev Tunnel, a Cloudflare Tunnel or ngrok.
+
+**Migration:** start a tunnel that forwards to the HTTP port of the operator and replace
+`AddDevelopmentTunnel(port)` with `UseExternalWebhookEndpoint(...)`:
+
+```csharp
+// v13
+builder.Services
+    .AddKubernetesOperator()
+    .AddDevelopmentTunnel(5000)
+    .RegisterComponents();
+
+// v14
+builder.Services
+    .AddKubernetesOperator()
+    .UseExternalWebhookEndpoint(new Uri("https://my-tunnel-5000.euw.devtunnels.ms"))
+    .RegisterComponents();
+```
+
+`UseExternalWebhookEndpoint()` without arguments reads the URL from `KubeOps:Webhooks:ExternalUrl`. In an
+Aspire AppHost, `WithWebhookDevTunnel()` starts a Dev Tunnel and passes its URL to the operator. See
+[Tunnel](./building-blocks/webhooks.mdx#tunnel) and [Aspire](./building-blocks/webhooks.mdx#aspire) for
+the setup.
+
+### Webhooks derived through a base class of your own are registered
+
+Webhooks that derive from `ValidationWebhook<T>`, `MutationWebhook<T>` or `ConversionWebhook<T>` through an
+intermediate class of your own are now registered at runtime and included in the manifests the CLI
+generates. Before, they were skipped without notice. Abstract classes are still not registered.
+
+**Migration:** check such webhook classes before upgrading, because they become active with the update.
+A second validation or mutation webhook for the same entity kind, group and version now fails the start
+of the operator and names the duplicate webhook; see
+[Webhook classes](./building-blocks/webhooks.mdx#webhook-classes).
+
+### `JsonPatch.Net` removed
+
+KubeOps no longer references `JsonPatch.Net`, because its releases since 5.0.0 ship under the
+[Open Source Maintenance Fee EULA](https://www.nuget.org/packages/JsonPatch.Net/5.0.3/License). The
+JSON Patch API is now part of `KubeOps.Abstractions` and no longer requires preview features.
+
+- `JsonPatch`, `PatchOperation` and `OperationType` moved from `Json.Patch` to
+  `KubeOps.Abstractions.Entities`. Generated patches are unchanged.
+- `PatchOperation.Path` is a `string` (JSON Pointer) instead of a `JsonPointer`.
+- `OperationType` only has `Add`, `Remove` and `Replace`, and `PatchOperation.From` is gone. For
+  `move`, `copy` or `test` operations, pass the JSON text to `PatchAsync` as a `V1Patch`.
+- `JsonPatch.Net`, `JsonPointer.Net` and `Json.More.Net` are no longer transitive dependencies.
+  Reference them yourself if your code uses them. Importing both `Json.Patch` and
+  `KubeOps.Abstractions.Entities` in one file makes the shared type names ambiguous.
+- Removed without replacement: applying a patch (`JsonPatch.Apply`), `CreatePatch` for arbitrary
+  objects, and `System.Text.Json` serialization of the patch types. Use `entity.CreateJsonPatch(other)`
+  or `node.CreatePatch(otherNode)` to create a patch and `patch.ToJsonString()` to serialize it.
+
+### Synchronous `IKubernetesClient` methods removed
+
+`Get`, `List`, `Save`, `Create`, `Update`, `UpdateStatus`, `Patch` and `Delete` are gone. They blocked a
+thread on the API call. Use the `...Async` variants, which also accept a `CancellationToken`.
+`GetCurrentNamespace` stays, because it does not call the API, and so does `Watch`.

@@ -51,21 +51,119 @@ The sequence shows that:
 
 ## Local Development Considerations
 
-For local development, your operator must be accessible from the Kubernetes cluster via HTTPS. There are several ways to achieve this:
+The Kubernetes API server calls webhooks over HTTPS. When the operator runs on your machine, the API server must be able to reach it. Which option fits depends on whether it can reach your machine directly:
 
-1. Certificate Provider (Recommended):
+| Situation | Option | Method |
+| --- | --- | --- |
+| The API server reaches your machine directly (kind, Docker Desktop, minikube, a cluster in the same network) | Certificate provider: the operator serves HTTPS itself with a generated certificate | `UseCertificateProvider` |
+| The API server cannot reach your machine (cloud cluster, NAT, VPN) | Tunnel: a tunnel service exposes a public HTTPS URL and forwards to the operator | `UseExternalWebhookEndpoint` |
+| The operator runs in an Aspire AppHost | Aspire starts a Microsoft Dev Tunnel and passes its URL to the operator | `WithWebhookDevTunnel` |
 
-   - Uses a certificate manager to generate valid certificates
-   - Most reliable and secure option
-   - Requires proper certificate configuration
+All options register the `dev-validators` and `dev-mutators` webhook configurations (and the conversion webhook of each CRD) when the operator starts, pointing to the chosen URL.
 
-2. Local Development Tools:
-   - ngrok
-   - Telepresence
-   - Custom reverse proxy solutions
+### Certificate provider
 
-:::danger[LocalTunnel `Deprecated`]
-The LocalTunnel option is deprecated due to stability issues. It's recommended to use the certificate provider or other more reliable solutions.
+`UseCertificateProvider` serves the webhooks via HTTPS with a certificate from an `ICertificateProvider`. `CertificateGenerator` creates a self-signed CA and a server certificate for the given IP address or host name; the CA is registered as `caBundle`, so the API server trusts the certificate.
+
+```csharp
+#if DEBUG
+const string ip = "192.168.1.100"; // an address of your machine that the API server can reach
+const ushort port = 443;
+using var generator = new CertificateGenerator(ip);
+var cert = generator.Server.CopyServerCertWithPrivateKey();
+
+builder.WebHost.ConfigureKestrel(o => o.Listen(IPAddress.Any, port, l => l.UseHttps(cert)));
+
+builder.Services
+    .AddKubernetesOperator()
+    .UseCertificateProvider(port, ip, generator)
+    .RegisterComponents();
+#endif
+```
+
+:::note[Clusters in containers]
+With kind, Docker Desktop or minikube, the API server runs inside a container or VM, so `localhost` is not your machine. Use an address of your machine that is reachable from there, for example its LAN IP or the gateway of the container network.
+:::
+
+### Tunnel
+
+`UseExternalWebhookEndpoint` registers the webhooks against the public HTTPS URL of a tunnel that forwards to the operator. The tunnel terminates TLS with a publicly trusted certificate, so the operator listens on plain HTTP and no `caBundle` is needed. The SDK does not start the tunnel; use the CLI of a maintained tunnel service.
+
+```csharp
+#if DEBUG
+builder.Services
+    .AddKubernetesOperator()
+    .UseExternalWebhookEndpoint(new Uri("https://my-tunnel-5000.euw.devtunnels.ms"))
+    .RegisterComponents();
+#endif
+```
+
+To keep the URL out of the code, call `UseExternalWebhookEndpoint()` without arguments. It reads the URL from the configuration key `KubeOps:Webhooks:ExternalUrl` (environment variable `KubeOps__Webhooks__ExternalUrl`, e.g. in `launchSettings.json` or `appsettings.Development.json`) and fails the start if the value is missing. If your endpoint uses a certificate that is not publicly trusted, pass its CA as `caBundle`: `UseExternalWebhookEndpoint(uri, caBundle)`.
+
+If the URL contains a path, the webhook routes are appended to it: `https://proxy.example.com/my-operator` registers `https://proxy.example.com/my-operator/validate/v1demoentity`. The operator serves the routes at the root, so the proxy must strip the path prefix before it forwards a request.
+
+The following examples forward to an operator listening on `http://localhost:5000`. A persistent URL saves you from updating the configuration on every run.
+
+**Microsoft Dev Tunnels**
+
+```bash
+devtunnel user login                      # once; Microsoft or GitHub account (-g)
+
+# once: create a persistent tunnel with a stable URL
+devtunnel create kubeops-dev --allow-anonymous
+devtunnel port create kubeops-dev -p 5000 --protocol http
+
+# every session
+devtunnel host kubeops-dev
+# → https://<tunnel-id>-5000.<region>.devtunnels.ms
+```
+
+For a one-off session without a persistent tunnel, run `devtunnel host -p 5000 --allow-anonymous`; the URL changes on every start.
+
+**Cloudflare Tunnel**
+
+```bash
+cloudflared tunnel --url http://localhost:5000
+# → https://<random>.trycloudflare.com
+```
+
+Quick tunnels need no account, but the URL changes on every start. A stable URL requires a named tunnel with a Cloudflare account and your own domain.
+
+**ngrok**
+
+```bash
+ngrok config add-authtoken <token>               # once; account required
+ngrok http 5000 --url=<name>.ngrok-free.app      # free static domain
+```
+
+### Aspire
+
+When the operator runs in an Aspire AppHost, `WithWebhookDevTunnel` from `KubeOps.Aspire.Hosting` starts a Microsoft Dev Tunnel for the operator's `http` endpoint and passes its URL to the operator as `KubeOps__Webhooks__ExternalUrl`. The operator starts once the tunnel is running.
+
+```csharp
+// AppHost
+builder.AddKubeOps<Projects.WebhookOperator>("operator")
+    .RunWithKubernetes(k8s)
+    .WithWebhookDevTunnel();
+
+// Operator
+builder.Services
+    .AddKubernetesOperator()
+    .UseExternalWebhookEndpoint()
+    .RegisterComponents();
+```
+
+The `devtunnel` CLI must be installed; Aspire asks you to sign in when needed. The tunnel ID is derived from the resource name and the AppHost, so the URL stays the same across runs. Pass another endpoint name or configure the tunnel with the optional parameters, e.g. `WithWebhookDevTunnel("webhooks", tunnel => tunnel.WithExpiration(24))`. In publish mode, `WithWebhookDevTunnel` adds nothing.
+
+### Security and shared clusters
+
+- **Anonymous public endpoint**: The API server cannot authenticate against a tunnel service, so the tunnel must allow anonymous access. Anyone who knows the URL can send requests to your webhooks while the tunnel runs. Your organization's policy may restrict anonymous tunnels.
+- **Webhook configurations are cluster-wide**: The registered webhooks intercept the requests of everyone who changes the resource type in that cluster, not only your own. On a shared cluster, use a dedicated CRD group or restrict the webhooks with a `NamespaceSelector` via a [custom webhook configuration factory](../configuration/generation-customization#customizing-webhook-configuration-generation).
+- **Stopped operator**: With `FailurePolicy: Fail`, every create, update or delete of the resource is rejected while the webhooks are registered and the operator is not running. With `UseExternalWebhookEndpoint` and `WithWebhookDevTunnel`, the operator removes `dev-validators` and `dev-mutators` when it stops, as long as they still point to its URL. They remain when the process is killed or crashes, and with `UseCertificateProvider`, which can also serve an operator inside the cluster, where a stopping pod must not remove the configurations of its successor. The conversion webhooks stay in the CRDs. Remove leftover configurations with `kubectl delete validatingwebhookconfiguration dev-validators` and `kubectl delete mutatingwebhookconfiguration dev-mutators`.
+- **Cloud clusters**: The API server calls the tunnel from the control plane. If its outbound traffic is routed through your network (for example with API server VNet integration on AKS), the tunnel domain must be allowed there. The tunnel client on your machine needs outbound HTTPS to the tunnel service.
+
+:::info[Migration from `AddDevelopmentTunnel`]
+`AddDevelopmentTunnel` and the LocalTunnel dependency have been removed. Start a tunnel as shown above and replace `AddDevelopmentTunnel(port)` with `UseExternalWebhookEndpoint(...)`, or use `WithWebhookDevTunnel` in an Aspire AppHost.
 :::
 
 ## Endpoint Routing
@@ -113,6 +211,16 @@ For **conversion** webhooks, the route uses the entity's Kubernetes metadata ins
 A conversion webhook for an entity annotated with
 `[KubernetesEntity(Group = "webhook.dev", ApiVersion = "v2", Kind = "TestEntity")]`
 registers the route `/convert/webhook.dev/testentities`.
+
+### Webhook classes
+
+A webhook class may derive from its webhook base class directly or through an intermediate class of your own,
+for example an abstract generic base that adds logging. Abstract classes are not registered. This applies to
+the registration at runtime and to the manifests that the CLI generates.
+
+Each entity kind, group and version can have only one validation and one mutation webhook, because the webhook
+names in the API server are derived from the entity. With a second one the operator fails to start and names the
+duplicate webhook.
 
 ## Validation Webhooks
 

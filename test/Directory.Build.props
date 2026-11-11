@@ -1,6 +1,6 @@
 <Project>
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
@@ -9,18 +9,18 @@
     </PropertyGroup>
 
     <ItemGroup Condition="'$(IsTestProject)' == 'true'">
-        <PackageReference Include="FluentAssertions" Version="8.11.0" />
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
-        <PackageReference Include="xunit.v3" Version="4.0.2" />
-        <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
+        <PackageReference Include="FluentAssertions" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" />
+        <PackageReference Include="xunit.v3" />
+        <PackageReference Include="xunit.runner.visualstudio">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="xunit.analyzers" Version="2.2.0">
+        <PackageReference Include="xunit.analyzers">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="coverlet.collector" Version="10.1.0">
+        <PackageReference Include="coverlet.collector">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
@@ -34,12 +34,11 @@
 
     <!--
         Microsoft.Build.Locator fails the build (MSBL001) when MSBuild assemblies are copied to the output,
-        so projects that load MSBuild reference them without runtime assets. 18.9.x is the last line that
-        still ships net10.0 assets.
+        so projects that load MSBuild reference them without runtime assets.
     -->
     <ItemGroup Condition="'$(UsesMSBuildLocator)' == 'true'">
-        <PackageReference Include="Microsoft.Build.Framework" Version="18.9.6" ExcludeAssets="runtime" PrivateAssets="all" />
-        <PackageReference Include="Microsoft.NET.StringTools" Version="18.9.6" ExcludeAssets="runtime" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.Build.Framework" ExcludeAssets="runtime" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.NET.StringTools" ExcludeAssets="runtime" PrivateAssets="all" />
     </ItemGroup>
 
 </Project>

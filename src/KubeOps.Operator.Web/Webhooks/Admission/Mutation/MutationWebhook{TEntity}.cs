@@ -106,13 +106,11 @@ public abstract class MutationWebhook<TEntity> : ControllerBase
         [ModelBinder<AdmissionRequestModelBinder>][FromBody] AdmissionRequest<TEntity> request,
         CancellationToken cancellationToken)
     {
-#pragma warning disable CA2252 // TODO: remove this once the patch is stable.
         var original = request.Request.Operation switch
         {
             AdmissionOperation.Create or AdmissionOperation.Update => request.Request.Object!.ToNode(),
             _ => request.Request.OldObject!.ToNode(),
         };
-#pragma warning restore CA2252
 
         var result = request.Request.Operation switch
         {

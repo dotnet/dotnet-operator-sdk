@@ -114,11 +114,11 @@ public sealed class V1TestEntityController : IEntityController<V1TestEntity>
 
         // Update status to indicate reconciliation in progress
         entity.Status.Status = "Reconciling";
-        entity = await _client.UpdateStatus(entity);
+        entity = await _client.UpdateStatusAsync(entity);
 
         // Update status to indicate reconciliation complete
         entity.Status.Status = "Reconciled";
-        await _client.UpdateStatus(entity);
+        await _client.UpdateStatusAsync(entity);
         
         return ReconciliationResult<V1TestEntity>.Success(entity);
     }

@@ -19,7 +19,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.x
+          dotnet-version: |
+            10.x
+            11.x
 
       - name: Linting
         run: dotnet format --verify-no-changes
@@ -27,6 +29,17 @@ jobs:
       - name: Create Kubernetes Cluster
         uses: helm/kind-action@v1.15.2
 
+      # The admission webhook integration tests serve HTTPS on the runner. The kind API server reaches
+      # the runner through the IPv4 gateway of the kind Docker network.
+      - name: Configure Webhook Test Host
+        run: |
+          gateway=$(docker network inspect kind \
+            --format '{{range .IPAM.Config}}{{println .Gateway}}{{end}}' | grep -m1 -E '^[0-9]+(\.[0-9]+){3}$')
+          test -n "$gateway"
+          echo "KUBEOPS_TEST_WEBHOOK_HOST=$gateway" >> "$GITHUB_ENV"
+
+      # Test projects target net10.0 and net11.0. Both test modules install the same cluster-scoped CRDs,
+      # so they must not run in parallel against the shared kind cluster.
       - name: Execute Tests
         env:
           # A crashing test host (e.g. exit code 139, see #1311) leaves no failed test behind. Capture a
@@ -37,7 +50,7 @@ jobs:
           DOTNET_EnableCrashReport: "1"
         run: |
           mkdir -p "$RUNNER_TEMP/crash-dumps"
-          dotnet test --configuration ${{ runner.debug == '1' && 'Debug' || 'Release' }}
+          dotnet test --configuration ${{ runner.debug == '1' && 'Debug' || 'Release' }} --max-parallel-test-modules 1
 
       - name: Upload Crash Dumps
         if: failure()
