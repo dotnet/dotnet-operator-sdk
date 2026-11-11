@@ -40,12 +40,17 @@ with [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summa
 in the PR description. The review process will be faster when
 breaking changes are well documented.
 
+Mark a breaking change with `!` in the PR title (e.g. `feat(core)!: ...`) or
+with a `BREAKING CHANGE: ...` line in the PR description. The footer must be
+written in upper case; other spellings do not count as breaking. PRs are
+squash-merged, so the title and description become the commit that decides the
+release. The `PR Title` check validates the title.
+
 Breaking changes must also be documented in the
 [Migration Guide](docs/docs/operator/migration.mdx), in the section for the
 next major version (e.g. "Upgrading from v13 to v14"). The `Migration Guide`
-check fails for a PR whose title is marked with `!` or whose description
-contains `BREAKING CHANGE` but does not update that file, and the release notes
-of every breaking release link the section.
+check fails for a breaking PR that does not update that file, and the release
+notes of every breaking release link the section.
 
 A few examples:
 

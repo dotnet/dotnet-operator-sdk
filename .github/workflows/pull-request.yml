@@ -1,4 +1,4 @@
-name: Migration Guide
+name: Pull Request
 
 on:
   pull_request:
@@ -15,10 +15,33 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: migration-guide-${{ github.event.pull_request.number }}
+  group: pull-request-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
+  title:
+    name: PR Title
+    runs-on: ubuntu-latest
+    steps:
+      # PRs are squash-merged, so the title becomes the commit header that semantic-release analyzes.
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          types: |
+            feat
+            fix
+            perf
+            deps
+            revert
+            docs
+            style
+            chore
+            refactor
+            test
+            build
+            ci
+
   migration-guide:
     name: Migration Guide
     runs-on: ubuntu-latest
@@ -31,11 +54,15 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          breaking_title='^[a-z]+(\([^)]*\))?!:'
-          breaking_body='^(#+[[:space:]]*)?BREAKING[ -]CHANGES?'
+          # Same rules as the commit parser in .release/release.base.mjs: "!" in the header, or a
+          # BREAKING CHANGE footer in upper case (the description becomes the squash commit body).
+          breaking_title='^[[:alnum:]_]*(\(.*\))?!: '
+          breaking_footer='^[[:space:]|*]*(BREAKING CHANGE|BREAKING-CHANGE)[:[:space:]]+'
+          breaking_heading='^#+[[:space:]]*BREAKING[ -]CHANGES?'
           guide='docs/docs/operator/migration.mdx'
 
-          if ! grep -qE "$breaking_title" <<< "$PR_TITLE" && ! grep -qE "$breaking_body" <<< "$PR_BODY"; then
+          if ! grep -qE "$breaking_title" <<< "$PR_TITLE" \
+            && ! grep -qE "$breaking_footer|$breaking_heading" <<< "$PR_BODY"; then
             echo "No breaking change in the PR title or description."
             exit 0
           fi

@@ -44,10 +44,13 @@ working on the project are volunteers.
   - `docs: Add docs about KubeOps core`
 - **State breaking changes in the PR description.** The review process is faster when breaking
   changes are well documented.
-- **Document breaking changes in the [Migration Guide](../migration.mdx).** A PR whose title is marked
-  with `!` or whose description contains `BREAKING CHANGE` must update the section for the next major
-  version, e.g. "Upgrading from v13 to v14". The `Migration Guide` check fails otherwise, and the
-  release notes of every breaking release link that section.
+- **Mark breaking changes** with `!` in the PR title (e.g. `feat(core)!: ...`) or with a
+  `BREAKING CHANGE: ...` line in the PR description. The footer must be written in upper case; other
+  spellings do not count as breaking. The title and description become the squash commit that decides
+  the release, and the `PR Title` check validates the title.
+- **Document breaking changes in the [Migration Guide](../migration.mdx)**, in the section for the next
+  major version, e.g. "Upgrading from v13 to v14". The `Migration Guide` check fails for a breaking PR
+  that does not update it, and the release notes of every breaking release link that section.
 
 PRs are squashed and merged into the default branch.
 

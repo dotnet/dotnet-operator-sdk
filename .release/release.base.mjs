@@ -1,6 +1,13 @@
 const isStableRelease = process.env.SEMANTIC_RELEASE_STABLE === "true";
 const migrationGuideUrl = "https://dotnet.github.io/dotnet-operator-sdk/docs/operator/migration";
 
+// Conventional Commits requires the BREAKING CHANGE footer in upper case, but the parser default ignores case,
+// so a description line starting with "Breaking change" would trigger a major release.
+// .github/workflows/pull-request.yml uses the same pattern.
+const parserOpts = {
+  notesPattern: (keywords) => new RegExp(`^[\\s|*]*(${keywords})[:\\s]+(.*)`),
+};
+
 // Every release with breaking changes links the migration guide section of its major version.
 const linkMigrationGuide = (context) => {
   const breakingChanges = context.noteGroups?.find((group) => group.title === "BREAKING CHANGES");
@@ -23,6 +30,7 @@ export default {
       "@semantic-release/commit-analyzer",
       {
         preset: "conventionalcommits",
+        parserOpts,
         releaseRules: [{ type: "deps", scope: "core", release: "patch" }],
       },
     ],
@@ -46,6 +54,7 @@ export default {
             { type: "ci", section: "Continuous Integration", hidden: true },
           ],
         },
+        parserOpts,
         writerOpts: {
           finalizeContext: linkMigrationGuide,
         },
