@@ -20,50 +20,46 @@ jobs:
   title:
     name: PR Title
     runs-on: ubuntu-latest
+    outputs:
+      breaking: ${{ steps.check.outputs.breaking }}
     steps:
-      # PRs are squash-merged, so the title becomes the commit header that semantic-release analyzes.
-      - uses: amannn/action-semantic-pull-request@v6
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/checkout@v7
         with:
-          types: |
-            feat
-            fix
-            perf
-            deps
-            revert
-            docs
-            style
-            chore
-            refactor
-            test
-            build
-            ci
+          sparse-checkout: .release
 
-  migration-guide:
-    name: Migration Guide
-    runs-on: ubuntu-latest
-    steps:
-      - name: Require a migration guide update for breaking changes
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: .release/package-lock.json
+
+      - name: Install Release Tooling
         env:
-          GH_TOKEN: ${{ github.token }}
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+        run: npm ci --ignore-scripts
+        working-directory: ./.release
+
+      - name: Check Title and Release Type
+        id: check
+        env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          # Title and footer follow the commit parser in .release/release.base.mjs ("!" in the header, upper-case
-          # BREAKING CHANGE footer in the description, which becomes the squash commit body). The heading is
-          # stricter than the parser: it does not cause a major release, but still asks for the guide.
-          breaking_title='^[[:alnum:]_]*(\(.*\))?!: '
-          breaking_footer='^[[:space:]|*]*(BREAKING CHANGE|BREAKING-CHANGE)[:[:space:]]+'
-          breaking_heading='^#+[[:space:]]*BREAKING[ -]CHANGES?'
-          guide='docs/docs/operator/migration.mdx'
+        run: node .release/check-pull-request.mjs
 
-          if ! grep -qE "$breaking_title" <<< "$PR_TITLE" \
-            && ! grep -qE "$breaking_footer|$breaking_heading" <<< "$PR_BODY"; then
-            echo "No breaking change in the PR title or description."
-            exit 0
-          fi
+  migration-guide:
+    name: Migration Guide
+    needs: title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a migration guide update for breaking changes
+        if: needs.title.outputs.breaking == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          guide='docs/docs/operator/migration.mdx'
 
           if gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" --jq '.[].filename' \
             | grep -qxF "$guide"; then

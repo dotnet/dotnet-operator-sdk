@@ -47,7 +47,8 @@ working on the project are volunteers.
 - **Mark breaking changes** with `!` in the PR title (e.g. `feat(core)!: ...`) or with a
   `BREAKING CHANGE: ...` line in the PR description. The footer must be written in upper case; other
   spellings do not count as breaking. The title and description become the squash commit that decides
-  the release, and the `PR Title` check validates the title.
+  the release. The `PR Title` check evaluates both with the release configuration and shows in its
+  summary which release the PR results in.
 - **Document breaking changes in the [Migration Guide](../migration.mdx)**, in the section for the next
   major version, e.g. "Upgrading from v13 to v14". The `Migration Guide` check fails for a breaking PR
   that does not update it.
