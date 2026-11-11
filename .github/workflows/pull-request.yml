@@ -1,0 +1,71 @@
+name: Pull Request
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    name: PR Title
+    runs-on: ubuntu-latest
+    outputs:
+      breaking: ${{ steps.check.outputs.breaking }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .release
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: .release/package-lock.json
+
+      - name: Install Release Tooling
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+        run: npm ci --ignore-scripts
+        working-directory: ./.release
+
+      - name: Check Title and Release Type
+        id: check
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node .release/check-pull-request.mjs
+
+  migration-guide:
+    name: Migration Guide
+    needs: title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a migration guide update for breaking changes
+        if: needs.title.outputs.breaking == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          guide='docs/docs/operator/migration.mdx'
+
+          if gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" --jq '.[].filename' \
+            | grep -qxF "$guide"; then
+            echo "Breaking change with an update of $guide."
+            exit 0
+          fi
+
+          echo "::error file=$guide::Breaking changes must be documented in $guide, in the section for the next major version (e.g. \"Upgrading from v13 to v14\")."
+          exit 1
