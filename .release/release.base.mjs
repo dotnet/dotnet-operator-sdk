@@ -3,7 +3,7 @@ const migrationGuideUrl = "https://dotnet.github.io/dotnet-operator-sdk/docs/ope
 
 // Conventional Commits requires the BREAKING CHANGE footer in upper case, but the parser default ignores case,
 // so a description line starting with "Breaking change" would trigger a major release.
-// .github/workflows/pull-request.yml uses the same pattern.
+// The Migration Guide check in .github/workflows/pull-request.yml mirrors this pattern.
 const parserOpts = {
   notesPattern: (keywords) => new RegExp(`^[\\s|*]*(${keywords})[:\\s]+(.*)`),
 };
@@ -13,7 +13,7 @@ const linkMigrationGuide = (context) => {
   const breakingChanges = context.noteGroups?.find((group) => group.title === "BREAKING CHANGES");
   const major = Number.parseInt(context.version, 10);
 
-  if (breakingChanges && major > 0) {
+  if (breakingChanges) {
     const section = `upgrading-from-v${major - 1}-to-v${major}`;
     breakingChanges.notes.unshift({
       text: `See the [migration guide](${migrationGuideUrl}#${section}) for upgrading from v${major - 1} to v${major}.`,

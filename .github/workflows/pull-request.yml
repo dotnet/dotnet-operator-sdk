@@ -2,8 +2,6 @@ name: Pull Request
 
 on:
   pull_request:
-    branches:
-      - "**"
     types:
       - opened
       - edited
@@ -49,13 +47,13 @@ jobs:
       - name: Require a migration guide update for breaking changes
         env:
           GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          # Same rules as the commit parser in .release/release.base.mjs: "!" in the header, or a
-          # BREAKING CHANGE footer in upper case (the description becomes the squash commit body).
+          # Title and footer follow the commit parser in .release/release.base.mjs ("!" in the header, upper-case
+          # BREAKING CHANGE footer in the description, which becomes the squash commit body). The heading is
+          # stricter than the parser: it does not cause a major release, but still asks for the guide.
           breaking_title='^[[:alnum:]_]*(\(.*\))?!: '
           breaking_footer='^[[:space:]|*]*(BREAKING CHANGE|BREAKING-CHANGE)[:[:space:]]+'
           breaking_heading='^#+[[:space:]]*BREAKING[ -]CHANGES?'
@@ -67,7 +65,8 @@ jobs:
             exit 0
           fi
 
-          if gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' | grep -qxF "$guide"; then
+          if gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files?per_page=100" --jq '.[].filename' \
+            | grep -qxF "$guide"; then
             echo "Breaking change with an update of $guide."
             exit 0
           fi
