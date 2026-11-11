@@ -99,7 +99,7 @@ kubeops generate operator MyOperator ./MyOperator.csproj --out ./k8s --format ya
 Common options:
 
 - `--out`: Specify output directory
-- `--format`: Choose output format (yaml/json)
+- `--format`: Choose output format (yaml/json). `kustomization.yaml` is always written as YAML, because kustomize does not find its configuration under another file name.
 - `--clear-out`: Clear output directory before generation
 - `--docker-image`: Specify Docker image name
 - `--docker-image-tag`: Specify Docker image tag

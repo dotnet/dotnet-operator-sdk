@@ -43,6 +43,7 @@
     <File Path="src\Directory.Build.props" />
   </Folder>
   <Folder Name="/test/">
+    <Project Path="test/KubeOps.Cli.Test.Operator/KubeOps.Cli.Test.Operator.csproj" />
     <Project Path="test/KubeOps.Generator.Test.Entities/KubeOps.Generator.Test.Entities.csproj" />
     <Project Path="test\KubeOps.Abstractions.Test\KubeOps.Abstractions.Test.csproj" />
     <Project Path="test\KubeOps.Aspire.Hosting.Test\KubeOps.Aspire.Hosting.Test.csproj" />
