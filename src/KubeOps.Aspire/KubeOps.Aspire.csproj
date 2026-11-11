@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     </PropertyGroup>
 
     <PropertyGroup>
@@ -16,11 +16,21 @@
         </PackageDescription>
     </PropertyGroup>
 
-    <ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.15" />
         <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.15" />
         <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="10.11.0" />
         <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="11.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0" />
+        <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="11.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="11.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
         <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
         <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
         <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.20.2" />
