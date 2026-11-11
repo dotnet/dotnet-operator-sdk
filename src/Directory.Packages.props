@@ -51,13 +51,13 @@
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
-        <PackageVersion Include="Microsoft.Build.Framework" Version="18.11.0" />
+        <PackageVersion Include="Microsoft.Build.Framework" Version="18.12.2" />
         <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0" />
         <PackageVersion Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
         <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="11.0.0" />
         <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="11.0.0" />
         <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="11.0.0" />
-        <PackageVersion Include="Microsoft.NET.StringTools" Version="18.11.0" />
+        <PackageVersion Include="Microsoft.NET.StringTools" Version="18.12.2" />
         <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="11.0.0" />
     </ItemGroup>
 </Project>
