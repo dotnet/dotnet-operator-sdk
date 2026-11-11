@@ -7,11 +7,11 @@
         <ProjectReference Include="..\..\src\KubeOps.Cli\KubeOps.Cli.csproj" />
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Include="KubernetesClient" Version="21.0.8" />
-        <PackageReference Include="Microsoft.CodeAnalysis" Version="5.9.0" />
-        <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="5.9.0" />
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
-        <PackageReference Include="Spectre.Console.Testing" Version="0.57.2" />
+        <PackageReference Include="KubernetesClient" />
+        <PackageReference Include="Microsoft.CodeAnalysis" />
+        <PackageReference Include="Microsoft.CodeAnalysis.Common" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
+        <PackageReference Include="Spectre.Console.Testing" />
     </ItemGroup>
 </Project>
