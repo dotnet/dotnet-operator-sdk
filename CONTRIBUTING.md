@@ -40,6 +40,13 @@ with [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summa
 in the PR description. The review process will be faster when
 breaking changes are well documented.
 
+Breaking changes must also be documented in the
+[Migration Guide](docs/docs/operator/migration.mdx), in the section for the
+next major version (e.g. "Upgrading from v13 to v14"). The `Migration Guide`
+check fails for a PR whose title is marked with `!` or whose description
+contains `BREAKING CHANGE` but does not update that file, and the release notes
+of every breaking release link the section.
+
 A few examples:
 
 - "fix: Null exception during watcher process"

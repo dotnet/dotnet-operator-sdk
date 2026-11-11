@@ -1,4 +1,20 @@
 const isStableRelease = process.env.SEMANTIC_RELEASE_STABLE === "true";
+const migrationGuideUrl = "https://dotnet.github.io/dotnet-operator-sdk/docs/operator/migration";
+
+// Every release with breaking changes links the migration guide section of its major version.
+const linkMigrationGuide = (context) => {
+  const breakingChanges = context.noteGroups?.find((group) => group.title === "BREAKING CHANGES");
+  const major = Number.parseInt(context.version, 10);
+
+  if (breakingChanges && major > 0) {
+    const section = `upgrading-from-v${major - 1}-to-v${major}`;
+    breakingChanges.notes.unshift({
+      text: `See the [migration guide](${migrationGuideUrl}#${section}) for upgrading from v${major - 1} to v${major}.`,
+    });
+  }
+
+  return context;
+};
 
 export default {
   debug: true,
@@ -29,6 +45,9 @@ export default {
             { type: "build", section: "Build System", hidden: true },
             { type: "ci", section: "Continuous Integration", hidden: true },
           ],
+        },
+        writerOpts: {
+          finalizeContext: linkMigrationGuide,
         },
       },
     ],

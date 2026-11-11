@@ -1,0 +1,49 @@
+name: Migration Guide
+
+on:
+  pull_request:
+    branches:
+      - "**"
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: migration-guide-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  migration-guide:
+    name: Migration Guide
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a migration guide update for breaking changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          breaking_title='^[a-z]+(\([^)]*\))?!:'
+          breaking_body='^(#+[[:space:]]*)?BREAKING[ -]CHANGES?'
+          guide='docs/docs/operator/migration.mdx'
+
+          if ! grep -qE "$breaking_title" <<< "$PR_TITLE" && ! grep -qE "$breaking_body" <<< "$PR_BODY"; then
+            echo "No breaking change in the PR title or description."
+            exit 0
+          fi
+
+          if gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' | grep -qxF "$guide"; then
+            echo "Breaking change with an update of $guide."
+            exit 0
+          fi
+
+          echo "::error file=$guide::Breaking changes must be documented in $guide, in the section for the next major version (e.g. \"Upgrading from v13 to v14\")."
+          exit 1
