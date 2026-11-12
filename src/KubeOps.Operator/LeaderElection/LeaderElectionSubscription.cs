@@ -27,7 +27,7 @@ namespace KubeOps.Operator.LeaderElection;
 internal sealed class LeaderElectionSubscription(
     LeaderElector elector, Action onStartedLeading, Action onStoppedLeading)
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private bool _subscribed;
 
     /// <summary>Gets a value indicating whether this instance currently holds leadership.</summary>

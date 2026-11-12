@@ -64,7 +64,7 @@ public sealed class TimedEntityQueue<TEntity> : ITimedEntityQueue<TEntity>, ISus
     // gate check (Enqueue scheduling, Clear, and timer promotion). Without this, a leadership transition has
     // a TOCTOU race: Enqueue passes the gate check, SuspendIntake + Clear run, and Enqueue then re-adds an
     // entry after the clear.
-    private readonly object _gateLock = new();
+    private readonly Lock _gateLock = new();
 
     // Task that runs the timer loop.
     private readonly Task _timerTask;

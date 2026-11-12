@@ -34,7 +34,7 @@ namespace KubeOps.Operator.Builder;
 internal sealed class ControllerPipeline<TEntity>(Type controllerType, Type? labelSelectorType, Type? fieldSelectorType)
     where TEntity : IKubernetesObject<V1ObjectMeta>
 {
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
     private ITimedEntityQueue<TEntity>? _queue;
     private IReconciler<TEntity>? _reconciler;
