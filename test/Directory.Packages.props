@@ -18,7 +18,7 @@
         <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
         <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
         <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
-        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.1" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
         <PackageVersion Include="Moq" Version="4.21.0" />
         <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.20.1" />
         <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
