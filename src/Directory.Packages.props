@@ -14,11 +14,11 @@
         <PackageVersion Include="KubernetesClient" Version="21.0.8" />
         <PackageVersion Include="MessagePack" Version="3.1.12" />
         <PackageVersion Include="Microsoft.Build.Locator" Version="1.11.2" />
-        <PackageVersion Include="Microsoft.CodeAnalysis" Version="5.9.0" />
-        <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="5.9.0" />
-        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
-        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
-        <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
+        <PackageVersion Include="Microsoft.CodeAnalysis" Version="5.12.0" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="5.12.0" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.12.0" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.12.0" />
+        <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.12.0" />
         <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="11.0.100" />
         <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.21.0" />
         <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.21.0-beta.1" />
