@@ -9,7 +9,7 @@
 
     <ItemGroup>
         <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.5" />
-        <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+        <PackageVersion Include="coverlet.collector" Version="10.1.1" />
         <PackageVersion Include="FluentAssertions" Version="8.11.0" />
         <PackageVersion Include="KubernetesClient" Version="21.0.8" />
         <PackageVersion Include="Microsoft.Build.Locator" Version="1.11.2" />
