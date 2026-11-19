@@ -29,7 +29,7 @@
         <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.36.0.15337" />
         <PackageVersion Include="Spectre.Console" Version="0.57.2" />
         <PackageVersion Include="Spectre.Console.Analyzer" Version="1.0.0" />
-        <PackageVersion Include="StyleCop.Analyzers" Version="1.3.180" />
+        <PackageVersion Include="StyleCop.Analyzers" Version="1.4.26-beta" />
         <PackageVersion Include="System.CommandLine" Version="3.0.0" />
         <PackageVersion Include="YamlDotNet" Version="18.1.0" />
         <PackageVersion Include="ZiggyCreatures.FusionCache" Version="2.9.0" />
