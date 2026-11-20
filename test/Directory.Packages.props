@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.5" />
+        <PackageVersion Include="Aspire.Hosting.Testing" Version="17.0.0" />
         <PackageVersion Include="coverlet.collector" Version="10.1.1" />
         <PackageVersion Include="FluentAssertions" Version="8.11.0" />
         <PackageVersion Include="KubernetesClient" Version="21.0.8" />
