@@ -142,7 +142,7 @@ When the operator runs in an Aspire AppHost, `WithWebhookDevTunnel` from `KubeOp
 
 ```csharp
 // AppHost
-builder.AddKubeOps<Projects.WebhookOperator>("operator")
+builder.AddKubeOps("operator", "../WebhookOperator")
     .RunWithKubernetes(k8s)
     .WithWebhookDevTunnel();
 

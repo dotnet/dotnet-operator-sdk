@@ -5,7 +5,7 @@
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.DevTunnels;
-using Aspire.Hosting.Testing;
+using Aspire.Hosting.Dotnet;
 
 using FluentAssertions;
 
@@ -15,15 +15,41 @@ namespace KubeOps.Aspire.Hosting.Test;
 [Trait(TestTrait.Area, TestArea.Aspire)]
 public class KubeOpsHostingTest
 {
+    private const string OperatorName = "operator-test";
+    private const string OperatorProjectPath = "../AspireOperator";
+
     [Fact]
     public void AddKubeOps_Adds_Named_Project_Resource()
     {
         var builder = CreateBuilder();
 
-        builder.AddKubeOps<TestProjectMetadata>("operator-test");
+        builder.AddKubeOps(OperatorName, OperatorProjectPath);
 
-        builder.Resources.OfType<ProjectResource>()
-            .Should().ContainSingle(resource => resource.Name == "operator-test");
+        builder.Resources.OfType<DotnetProjectResource>()
+            .Should().ContainSingle(resource => resource.Name == OperatorName);
+    }
+
+    [Fact]
+    public void AddKubeOps_Resolves_Project_Path_Relative_To_AppHost()
+    {
+        var builder = CreateBuilder();
+
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath);
+
+        resourceBuilder.Resource.Annotations.OfType<KubeOpsPublishAnnotation>()
+            .Should().ContainSingle()
+            .Which.ProjectPath.Should().Be(
+                Path.GetFullPath(Path.Combine(builder.AppHostDirectory, OperatorProjectPath, "AspireOperator.csproj")));
+    }
+
+    [Fact]
+    public void AddKubeOps_Rejects_Missing_Project()
+    {
+        var builder = CreateBuilder();
+
+        var act = () => builder.AddKubeOps(OperatorName, "../DoesNotExist");
+
+        act.Should().Throw<DistributedApplicationException>();
     }
 
     [Fact]
@@ -31,10 +57,10 @@ public class KubeOpsHostingTest
     {
         var builder = CreateBuilder();
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test");
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath);
 
         resourceBuilder.Should().NotBeNull();
-        resourceBuilder.Resource.Name.Should().Be("operator-test");
+        resourceBuilder.Resource.Name.Should().Be(OperatorName);
     }
 
     [Fact]
@@ -42,7 +68,7 @@ public class KubeOpsHostingTest
     {
         var builder = CreateBuilder();
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test");
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath);
 
         resourceBuilder.Resource.Annotations
             .Should().Contain(annotation => annotation is ExplicitStartupAnnotation);
@@ -53,7 +79,7 @@ public class KubeOpsHostingTest
     {
         var builder = CreateBuilder();
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test");
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath);
 
         resourceBuilder.Resource.Annotations
             .Should().Contain(annotation => annotation.GetType().FullName == "Aspire.Hosting.Pipelines.PipelineStepAnnotation");
@@ -65,7 +91,7 @@ public class KubeOpsHostingTest
         var builder = CreateBuilder();
         var kubernetes = builder.AddKubernetesEnvironment("test-k8s");
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .RunWithKubernetes(kubernetes);
 
         resourceBuilder.Resource.Annotations
@@ -81,7 +107,7 @@ public class KubeOpsHostingTest
         var builder = CreateBuilder();
         var kubernetes = builder.AddKubernetesEnvironment("test-k8s");
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .RunWithKubernetes(kubernetes, run => run.WithPersistentCrds());
 
         resourceBuilder.Resource.Annotations.OfType<KubeOpsRunAnnotation>()
@@ -95,7 +121,7 @@ public class KubeOpsHostingTest
         var builder = CreateBuilder();
         var cluster = builder.AddResource(new FakeClusterResource("fake-k3s"));
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .RunWithKubernetes(cluster);
 
         resourceBuilder.Resource.Annotations
@@ -113,7 +139,7 @@ public class KubeOpsHostingTest
         var builder = CreateBuilder();
         var cluster = builder.AddResource(new FakeClusterResource("fake-k3s"));
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .RunWithKubernetes(cluster);
 
         resourceBuilder.Resource.Annotations
@@ -127,7 +153,7 @@ public class KubeOpsHostingTest
         var builder = CreateBuilder();
         var cluster = builder.AddResource(new FakeClusterResource("fake-k3s"));
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .RunWithKubernetes(cluster, run => run.WithPersistentCrds());
 
         resourceBuilder.Resource.Annotations.OfType<KubeOpsRunAnnotation>()
@@ -140,7 +166,7 @@ public class KubeOpsHostingTest
     {
         var builder = CreateBuilder();
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .PublishAsKubernetesOperator(publish => publish.WithServiceAccount("operator-sa"));
 
         resourceBuilder.Resource.Annotations.OfType<KubeOpsPublishAnnotation>()
@@ -153,11 +179,11 @@ public class KubeOpsHostingTest
     {
         var builder = CreateBuilder();
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test");
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath);
 
         resourceBuilder.Resource.Annotations.OfType<KubeOpsPublishAnnotation>()
             .Should().ContainSingle()
-            .Which.Options.ServiceAccountName.Should().Be("operator-test");
+            .Which.Options.ServiceAccountName.Should().Be(OperatorName);
     }
 
     [Fact]
@@ -166,7 +192,7 @@ public class KubeOpsHostingTest
         var builder = CreateBuilder();
         var kubernetes = builder.AddKubernetesEnvironment("publish-k8s");
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .PublishAsKubernetesOperator(kubernetes);
 
         resourceBuilder.Resource.GetComputeEnvironment()
@@ -178,7 +204,7 @@ public class KubeOpsHostingTest
     {
         var builder = CreateBuilder();
 
-        builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .WithHttpEndpoint(name: "http")
             .WithWebhookDevTunnel();
 
@@ -195,7 +221,7 @@ public class KubeOpsHostingTest
     {
         var builder = CreateBuilder();
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .WithHttpEndpoint(name: "http")
             .WithWebhookDevTunnel();
 
@@ -220,7 +246,7 @@ public class KubeOpsHostingTest
     {
         var builder = CreateBuilder();
 
-        builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .WithHttpsEndpoint(name: "webhooks")
             .WithWebhookDevTunnel("webhooks", tunnel => tunnel.WithExpiration(24));
 
@@ -234,9 +260,9 @@ public class KubeOpsHostingTest
     [Fact]
     public void WithWebhookDevTunnel_Adds_Nothing_In_Publish_Mode()
     {
-        var builder = DistributedApplication.CreateBuilder(["--operation", "publish", "--publisher", "manifest"]);
+        var builder = CreateBuilder("--operation", "publish", "--publisher", "manifest");
 
-        var resourceBuilder = builder.AddKubeOps<TestProjectMetadata>("operator-test")
+        var resourceBuilder = builder.AddKubeOps(OperatorName, OperatorProjectPath)
             .WithHttpEndpoint(name: "http")
             .WithWebhookDevTunnel();
 
@@ -245,16 +271,16 @@ public class KubeOpsHostingTest
         resourceBuilder.Resource.Annotations.OfType<WaitAnnotation>().Should().BeEmpty();
     }
 
-    private static IDistributedApplicationTestingBuilder CreateBuilder()
-        => DistributedApplicationTestingBuilder
-            .CreateAsync<Projects.AspireAppHost>()
-            .GetAwaiter()
-            .GetResult();
-
-    private sealed class TestProjectMetadata : IProjectMetadata
-    {
-        public string ProjectPath => typeof(TestProjectMetadata).Assembly.Location;
-    }
+    // A plain builder rooted at the example AppHost, so relative operator project paths resolve like in an AppHost.
+    // DistributedApplicationTestingBuilder would also run the example's Program, whose AddDotnetProject call makes
+    // every further AddDotnetProject fail with a duplicate '__dotnet-project-build' resource.
+    private static IDistributedApplicationBuilder CreateBuilder(params string[] args)
+        => DistributedApplication.CreateBuilder(
+            new DistributedApplicationOptions
+            {
+                Args = args,
+                ProjectDirectory = Projects.AspireAppHost.ProjectPath,
+            });
 
     // Mimics CommunityToolkit's K3sClusterResource: a non-KubernetesEnvironmentResource cluster that exposes its
     // kubeconfig path as a connection string injected as KUBECONFIG.
