@@ -18,9 +18,8 @@
     <ItemGroup>
         <PackageReference Include="Aspire.Hosting" />
         <PackageReference Include="Aspire.Hosting.DevTunnels" />
-        <!-- Aspire.Hosting.Kubernetes is only published as a prerelease package.
-             Allow this stable package to depend on it (NU5104). -->
-        <PackageReference Include="Aspire.Hosting.Kubernetes" NoWarn="NU5104" />
+        <PackageReference Include="Aspire.Hosting.Dotnet" />
+        <PackageReference Include="Aspire.Hosting.Kubernetes" />
         <PackageReference Include="YamlDotNet" />
     </ItemGroup>
 

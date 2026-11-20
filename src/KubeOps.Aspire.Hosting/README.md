@@ -22,26 +22,26 @@ var k8s = builder.AddKubernetesEnvironment("k8s")
         helm.WithNamespace("operator-system");
     });
 
-var apiService = builder.AddProject<Projects.ApiService>("apiservice");
+var apiService = builder.AddDotnetProject("apiservice", "../ApiService");
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(k8s)
     .PublishAsKubernetesOperator(k8s)
     .WithReference(apiService);
 ```
 
-`AddKubeOps<TProject>` behaves like a KubeOps-flavoured wrapper around the built-in `AddProject<TProject>` and returns the standard `IResourceBuilder<ProjectResource>`, so every Aspire extension (`WithReference`, `WithEnvironment`, `WaitFor`, ...) works as usual.
+`AddKubeOps` behaves like a KubeOps-flavoured wrapper around Aspire's `AddDotnetProject`: it takes the path of the operator project (the `.csproj` file or its directory, relative to the AppHost) and returns the standard `IResourceBuilder<DotnetProjectResource>`, so every Aspire extension (`WithReference`, `WithEnvironment`, `WaitFor`, ...) works as usual.
 
 To complete the loop, add `AddKubeOpsServiceDefaults()` from the `KubeOps.Aspire` package in the operator project. This enables OpenTelemetry export to the Aspire dashboard and service discovery for the references wired up above.
 
 ## Run and publish behavior
 
-`AddKubeOps<TProject>` does not start the operator during local Aspire runs unless you opt in with `RunWithKubernetes(...)`. This prevents an operator from accidentally using the developer's current kube context. With the default run options, missing CRDs are created before startup and only CRDs created by that AppHost run are removed on shutdown.
+`AddKubeOps` does not start the operator during local Aspire runs unless you opt in with `RunWithKubernetes(...)`. This prevents an operator from accidentally using the developer's current kube context. With the default run options, missing CRDs are created before startup and only CRDs created by that AppHost run are removed on shutdown.
 
 ```csharp
 var dev = builder.AddKubernetesEnvironment("dev");
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(dev, run => run.WithPersistentCrds());
 ```
 
@@ -50,14 +50,14 @@ builder.AddKubeOps<Projects.AspireOperator>("operator")
 ```csharp
 var k3s = builder.AddK3sCluster("k3s");
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(k3s);
 ```
 
 When the AppHost uses Aspire's Kubernetes publishing support, `PublishAsKubernetesOperator(k8s)` invokes `kubeops generate operator` and appends the generated CRDs, RBAC resources, and service account to the Aspire-generated Helm chart. The operator deployment itself remains Aspire-owned, but KubeOps' generated deployment settings are merged into that workload so the chart deploys one correctly wired operator deployment.
 
 ```csharp
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .PublishAsKubernetesOperator(k8s, publish =>
     {
         publish.Namespace = "operator-system";
@@ -68,7 +68,7 @@ builder.AddKubeOps<Projects.AspireOperator>("operator")
 If there is no Aspire Kubernetes environment, `PublishAsKubernetesOperator(...)` still participates in `aspire publish` by writing raw KubeOps YAML for the operator resource. This standalone path does not require Helm or a live Kubernetes cluster.
 
 ```csharp
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .PublishAsKubernetesOperator(publish =>
     {
         publish.Namespace = "operator-system";
@@ -79,7 +79,7 @@ builder.AddKubeOps<Projects.AspireOperator>("operator")
 For operators with webhooks, `WithWebhookDevTunnel()` exposes the operator's `http` endpoint through a [Microsoft Dev Tunnel](https://learn.microsoft.com/azure/developer/dev-tunnels/) and passes the public URL to the operator as `KubeOps__Webhooks__ExternalUrl`. The operator registers its webhooks against that URL with `UseExternalWebhookEndpoint()` from `KubeOps.Operator.Web`, so a cluster that cannot reach your machine can still call them. The operator starts once the tunnel is running; nothing is added in publish mode. It requires the `devtunnel` CLI, and the tunnel allows anonymous access because the API server cannot authenticate against it.
 
 ```csharp
-builder.AddKubeOps<Projects.WebhookOperator>("operator")
+builder.AddKubeOps("operator", "../WebhookOperator")
     .RunWithKubernetes(k8s)
     .WithWebhookDevTunnel();
 ```
@@ -90,7 +90,7 @@ Use Azure and local targets independently when the development loop and deployme
 var dev = builder.AddKubernetesEnvironment("dev");
 var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(dev)
     .PublishAsKubernetesOperator(aks, publish => publish.WithServiceAccount("operator"));
 ```

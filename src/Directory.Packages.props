@@ -10,6 +10,7 @@
     <ItemGroup>
         <PackageVersion Include="Aspire.Hosting" Version="17.0.0" />
         <PackageVersion Include="Aspire.Hosting.DevTunnels" Version="17.0.0" />
+        <PackageVersion Include="Aspire.Hosting.Dotnet" Version="17.0.0" />
         <PackageVersion Include="Aspire.Hosting.Kubernetes" Version="17.0.0" />
         <PackageVersion Include="KubernetesClient" Version="21.0.8" />
         <PackageVersion Include="Microsoft.Build.Locator" Version="1.11.2" />
