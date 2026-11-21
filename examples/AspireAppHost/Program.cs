@@ -12,7 +12,7 @@ var k8s = builder.AddKubernetesEnvironment("k8s")
         helm.WithNamespace("operator-system");
     });
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(k8s, run => run.WithPersistentCrds())
     .PublishAsKubernetesOperator(
         k8s,
@@ -23,7 +23,7 @@ builder.AddKubeOps<Projects.AspireOperator>("operator")
                 "dotnet",
                 "run",
                 "--project",
-                "..\\..\\src\\KubeOps.Cli\\KubeOps.Cli.csproj",
+                "../../src/KubeOps.Cli/KubeOps.Cli.csproj",
                 "--framework",
                 "net10.0",
                 "--");

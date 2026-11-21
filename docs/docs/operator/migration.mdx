@@ -352,3 +352,46 @@ JSON Patch API is now part of `KubeOps.Abstractions` and no longer requires prev
 `Get`, `List`, `Save`, `Create`, `Update`, `UpdateStatus`, `Patch` and `Delete` are gone. They blocked a
 thread on the API call. Use the `...Async` variants, which also accept a `CancellationToken`.
 `GetCurrentNamespace` stays, because it does not call the API, and so does `Watch`.
+
+## Upgrading from v14 to v15
+
+v15 moves `KubeOps.Aspire.Hosting` to Aspire 17. Aspire 17 deprecates `AddProject<TProject>` and the
+`Aspire.AppHost.Sdk` in favour of path-based projects, so `AddKubeOps` now takes the path of the operator
+project. The other packages have no breaking changes.
+
+### `KubeOps.Aspire.Hosting` requires Aspire 17
+
+`KubeOps.Aspire.Hosting` references `Aspire.Hosting`, `Aspire.Hosting.Dotnet`, `Aspire.Hosting.DevTunnels`
+and the now stable `Aspire.Hosting.Kubernetes` in version 17.
+
+**Migration:** update the AppHost to Aspire 17; see
+[Aspire 17 breaking changes](https://aspire.dev/whats-new/aspire-17/#breaking-changes). The AppHost becomes
+a plain `Microsoft.NET.Sdk` project with a package reference to `Aspire.Hosting.AppHost` instead of the
+obsolete `Aspire.AppHost.Sdk`, and no longer needs a project reference to the operator; see
+[AppHost project](./aspire/index.mdx#apphost-project).
+
+### `AddKubeOps<TProject>` replaced by `AddKubeOps(name, projectPath)`
+
+`AddKubeOps<TProject>(name)` and `AddKubeOps<TProject>(name, configureManifests)` are gone, because they
+were built on the deprecated `AddProject<TProject>`. `AddKubeOps(name, projectPath)` and
+`AddKubeOps(name, projectPath, configureManifests)` build on `AddDotnetProject` and take the operator's
+`.csproj` file or its directory, relative to the AppHost directory.
+
+They return `IResourceBuilder<DotnetProjectResource>` instead of `IResourceBuilder<ProjectResource>`, and
+`PublishAsKubernetesOperator`, `RunWithKubernetes` and `WithWebhookDevTunnel` extend
+`IResourceBuilder<DotnetProjectResource>`. `DotnetProjectResource` does not derive from `ProjectResource`.
+
+**Migration:** pass the project path instead of the generated `Projects` type, and change variables or
+own extension methods that are typed to `IResourceBuilder<ProjectResource>`:
+
+```csharp
+// v14
+builder.AddKubeOps<Projects.MyOperator>("operator")
+    .RunWithKubernetes(k8s)
+    .PublishAsKubernetesOperator(k8s);
+
+// v15
+builder.AddKubeOps("operator", "../MyOperator")
+    .RunWithKubernetes(k8s)
+    .PublishAsKubernetesOperator(k8s);
+```
