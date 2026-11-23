@@ -12,7 +12,6 @@
         <PackageVersion Include="Aspire.Hosting.DevTunnels" Version="13.6.5" />
         <PackageVersion Include="Aspire.Hosting.Kubernetes" Version="13.6.5-preview.1.26559.7" />
         <PackageVersion Include="KubernetesClient" Version="21.0.8" />
-        <PackageVersion Include="MessagePack" Version="3.1.12" />
         <PackageVersion Include="Microsoft.Build.Locator" Version="1.11.2" />
         <PackageVersion Include="Microsoft.CodeAnalysis" Version="5.12.0" />
         <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="5.12.0" />
