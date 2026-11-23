@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Diagnostics.CodeAnalysis;
+
 using ZiggyCreatures.Caching.Fusion;
 
 namespace KubeOps.Abstractions.Builder;
@@ -17,6 +19,34 @@ public sealed record OperatorSettings
     /// The name of the operator that appears in logs and other elements.
     /// </summary>
     public required string Name { get; init; }
+
+    /// <summary>
+    /// The field manager the operator sends with every write (<c>POST</c>, <c>PUT</c> and <c>PATCH</c>) to the
+    /// Kubernetes API server. The API server records the written fields under this name in
+    /// <c>metadata.managedFields</c>, so the operator's writes can be told apart from those of other clients.
+    /// A request that already carries a <c>fieldManager</c> (e.g. a server-side apply) keeps it.
+    /// </summary>
+    /// <value>
+    /// The configured field manager, or <see cref="Name"/> if none is set (<c>null</c>).
+    /// </value>
+    /// <exception cref="ArgumentException">
+    /// The value is empty, longer than <see cref="FieldManagerName.MaxLength"/> bytes or contains
+    /// non-printable characters.
+    /// </exception>
+    [AllowNull]
+    public string FieldManager
+    {
+        get => field ?? Name;
+        init
+        {
+            if (value is not null)
+            {
+                FieldManagerName.ThrowIfInvalid(value);
+            }
+
+            field = value;
+        }
+    }
 
     /// <summary>
     /// <para>

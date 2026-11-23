@@ -20,6 +20,7 @@ public sealed class OperatorSettingsBuilderTest
         var settings = new OperatorSettingsBuilder().Build();
 
         settings.Name.Should().Be("kubernetesoperator");
+        settings.FieldManager.Should().Be("kubernetesoperator");
         settings.Namespace.Should().BeNull();
         settings.LeaderElectionType.Should().Be(LeaderElectionType.None);
         settings.QueueStrategy.Should().Be(QueueStrategy.InMemory);
@@ -42,6 +43,7 @@ public sealed class OperatorSettingsBuilderTest
         var settings = new OperatorSettingsBuilder
         {
             Name = "my-op",
+            FieldManager = "my-field-manager",
             Namespace = "my-ns",
             LeaderElectionType = LeaderElectionType.Single,
             QueueStrategy = QueueStrategy.Custom,
@@ -56,6 +58,7 @@ public sealed class OperatorSettingsBuilderTest
         }.Build();
 
         settings.Name.Should().Be("my-op");
+        settings.FieldManager.Should().Be("my-field-manager");
         settings.Namespace.Should().Be("my-ns");
         settings.LeaderElectionType.Should().Be(LeaderElectionType.Single);
         settings.QueueStrategy.Should().Be(QueueStrategy.Custom);
@@ -76,6 +79,7 @@ public sealed class OperatorSettingsBuilderTest
 
         var settings = new OperatorSettingsBuilder()
             .WithName("fluent-op")
+            .WithFieldManager("fluent-field-manager")
             .WithNamespace("fluent-ns")
             .WithLeaderElection(LeaderElectionType.Single)
             .WithQueueStrategy(QueueStrategy.Custom)
@@ -91,6 +95,7 @@ public sealed class OperatorSettingsBuilderTest
             .Build();
 
         settings.Name.Should().Be("fluent-op");
+        settings.FieldManager.Should().Be("fluent-field-manager");
         settings.Namespace.Should().Be("fluent-ns");
         settings.LeaderElectionType.Should().Be(LeaderElectionType.Single);
         settings.QueueStrategy.Should().Be(QueueStrategy.Custom);

@@ -34,7 +34,7 @@ internal static class Uninstall
             cmd.Aliases.Add("u");
             cmd.SetAction(result => Handler(
                 AnsiConsole.Console,
-                new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig()),
+                CliKubernetesClient.Create(),
                 result));
 
             return cmd;

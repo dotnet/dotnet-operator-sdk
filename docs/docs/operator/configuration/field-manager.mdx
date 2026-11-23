@@ -1,0 +1,111 @@
+---
+title: Field Manager
+description: The name under which the operator's writes are recorded in managedFields
+sidebar_position: 12
+---
+
+# Field Manager
+
+The Kubernetes API server records, for every object, which client last wrote which fields. These entries
+are kept in `metadata.managedFields`, and each entry names a _field manager_. A client sets the field
+manager with the `fieldManager` query parameter of a write request. Without the parameter, the API server
+derives the manager from the user agent, so every client built on the official C# client shows up as
+`kubernetes-csharp`.
+
+KubeOps sends every write (`POST`, `PUT` and `PATCH`) with an explicit field manager. It defaults to the
+operator name and is configured with `WithFieldManager`:
+
+```csharp
+builder.Services
+    .AddKubernetesOperator(settings => settings
+        .WithName("my-operator")
+        .WithFieldManager("my-operator")); // optional, defaults to the operator name
+```
+
+The writes of the operator then appear under that name:
+
+```yaml
+metadata:
+  managedFields:
+    - manager: my-operator
+      operation: Update
+      apiVersion: demo.kubeops.dev/v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:finalizers: {}
+```
+
+This tells the writes of the operator apart from those of other clients, for example when tooling looks
+for clients that still write through a deprecated API version of a CRD.
+
+## Covered Writes
+
+The operator registers the default `IKubernetes` with a `FieldManagerHandler`. `IKubernetesClient`, the
+leader elector and all internal services write through that instance, so the field manager covers:
+
+- attaching and detaching finalizers
+- Kubernetes events
+- CRD installation by the [CRD Installer](./crd-installer)
+- webhook configurations and the CRD `caBundle`
+- the leader election lease
+- every create, update, status update and patch your controllers send through `IKubernetesClient` or
+  its `ApiClient`
+
+Requests to the connect subresources `proxy`, `exec`, `attach` and `portforward` stay unchanged: they do not
+write an object, and the API server forwards the query of a proxy request to the backend.
+
+A request that already carries a `fieldManager` keeps it. A server-side apply, which requires an explicit
+field manager, still writes under the name you pass to `PatchAsync`:
+
+```csharp
+await client.PatchAsync(
+    entity,
+    new V1Patch(applyConfiguration, V1Patch.PatchType.ApplyPatch),
+    fieldManager: "my-operator-apply",
+    force: true);
+```
+
+## Valid Field Managers
+
+The API server accepts field managers of at most 128 bytes (UTF-8) that contain only printable characters.
+`WithFieldManager`, the `OperatorSettingsBuilder.FieldManager` property and `OperatorSettings.FieldManager`
+reject other values with an `ArgumentException`.
+
+Without an explicit field manager, the operator name is used as it is. If the name is not a valid field
+manager, `OperatorSettingsBuilder.Build()` throws an `InvalidOperationException`; set a field manager with
+`WithFieldManager` in that case.
+
+## Registering an Own `IKubernetes`
+
+An `IKubernetes` that you register yourself replaces the default one, including its handler. Add the handler
+yourself to keep the field manager:
+
+```csharp
+builder.Services.AddSingleton<IKubernetes>(services => new Kubernetes(
+    services.GetRequiredService<KubernetesClientConfiguration>(),
+    new FieldManagerHandler(services.GetRequiredService<OperatorSettings>().FieldManager)));
+```
+
+Pass a new `FieldManagerHandler` to every `Kubernetes` instance; like every `DelegatingHandler`, it must not
+be shared between clients.
+
+## Outside the Operator
+
+CLIs, migration jobs and other tools that use `KubernetesClient` directly pass the field manager to the
+constructor:
+
+```csharp
+using var client = new KubernetesClient(KubernetesClientConfiguration.BuildDefaultConfig(), "my-migration");
+```
+
+The KubeOps CLI writes as `kubeops-cli`, e.g. when `kubeops install` creates or replaces CRDs.
+
+## Upgrading
+
+Only the name in `managedFields` changes. Writes after the upgrade are recorded under the operator name
+instead of `kubernetes-csharp`. Existing entries keep their old manager until the fields they own are
+written again.
+
+Update operations never conflict on field ownership, and server-side apply already requires an explicit
+field manager, so the new name does not change which write wins a conflict.

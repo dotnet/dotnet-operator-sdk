@@ -34,7 +34,7 @@ internal static class Install
             cmd.Aliases.Add("i");
             cmd.SetAction(result => Handler(
                 AnsiConsole.Console,
-                new Kubernetes(KubernetesClientConfiguration.BuildDefaultConfig()),
+                CliKubernetesClient.Create(),
                 result));
 
             return cmd;

@@ -331,10 +331,17 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         //
         // The missing ability to inject a custom HTTP client and therefore the possibility to use the .AddHttpClient()
         // functionalities led us choosing Singleton as the lifetime.
+        //
+        // The FieldManagerHandler sends every write with the configured field manager. A custom IKubernetes has to add
+        // the handler itself.
         Services.TryAddSingleton(_ => KubernetesClientConfiguration.BuildDefaultConfig());
         Services.TryAddSingleton<IKubernetes>(services =>
-            new Kubernetes(services.GetRequiredService<KubernetesClientConfiguration>()));
-        Services.TryAddSingleton<IKubernetesClient, KubernetesClient.KubernetesClient>();
+            new Kubernetes(
+                services.GetRequiredService<KubernetesClientConfiguration>(),
+                new FieldManagerHandler(Settings.FieldManager)));
+        Services.TryAddSingleton<IKubernetesClient>(services => new KubernetesClient.KubernetesClient(
+            services.GetRequiredService<KubernetesClientConfiguration>(),
+            services.GetRequiredService<IKubernetes>()));
 
         Services.TryAddSingleton<ICrdResourceFactory, KubeOpsCrdResourceFactory>();
         Services.TryAddSingleton<IEventResourceFactory, KubeOpsEventResourceFactory>();
