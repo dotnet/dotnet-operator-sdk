@@ -88,7 +88,9 @@ builder.AddKubeOps("operator", "../AspireOperator")
 builder.Build().Run();
 ```
 
-`AddKubeOps` is a thin, KubeOps-flavoured wrapper around Aspire's `AddDotnetProject`. It takes the path of the operator project (the `.csproj` file or the directory that contains it, relative to the AppHost directory) and returns the standard `IResourceBuilder<DotnetProjectResource>`, so every Aspire extension works as usual:
+`AddKubeOps` is a thin, KubeOps-flavoured wrapper around Aspire's `AddDotnetProject`. It takes the path of the operator project (the `.csproj` file or the directory that contains it, relative to the AppHost directory) and returns the standard `IResourceBuilder<DotnetProjectResource>`, so every Aspire extension works as usual. Other project types that `AddDotnetProject` accepts (F#, Visual Basic, file-based apps) are rejected with an `ArgumentException`, because the KubeOps CLI generates CRDs and manifests for C# projects only.
+
+The returned builder supports, among others:
 
 - `WithReference(apiService)` injects the service-discovery configuration so the operator can call `apiservice` by name.
 - `WithEnvironment(...)`, `WaitFor(...)`, `WithReplicas(...)` and friends all apply unchanged.
@@ -107,11 +109,14 @@ builder.Build().Run();
 
     <ItemGroup>
         <PackageReference Include="Aspire.Hosting.AppHost" Version="17.0.0" />
+        <PackageReference Include="KubeOps.Aspire.Hosting" Version="15.0.0" />
     </ItemGroup>
 </Project>
 ```
 
 When the AppHost references `KubeOps.Aspire.Hosting` as a project instead of a package, as the repository sample does, mark it as a normal code reference so Aspire does not treat it as a resource: `IsAspireProjectResource="false"`.
+
+Building an Aspire 17 AppHost needs the Aspire CLI bundle. On the first build on a machine, `Aspire.Hosting.AppHost` downloads it for its version into `~/.aspire` via `dnx`; without network access that build fails with `ASPIRE009`. Only the AppHost needs the bundle, the operator project itself builds without it.
 :::
 
 ## Running locally

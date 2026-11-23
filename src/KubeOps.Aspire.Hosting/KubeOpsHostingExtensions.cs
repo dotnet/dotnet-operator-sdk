@@ -45,6 +45,10 @@ public static class KubeOpsHostingExtensions
     /// (e.g. <c>../MyOperator</c>).
     /// </param>
     /// <returns>An <see cref="IResourceBuilder{DotnetProjectResource}"/> for further configuration.</returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="projectPath"/> does not resolve to a C# project (<c>.csproj</c>), the only project type the
+    /// KubeOps CLI generates CRDs and manifests for.
+    /// </exception>
     public static IResourceBuilder<DotnetProjectResource> AddKubeOps(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -55,9 +59,15 @@ public static class KubeOpsHostingExtensions
 
         var project = builder.AddDotnetProject(name, projectPath)
             .WithExplicitStart();
-        var resolvedProjectPath = project.Resource.TryGetLastAnnotation<IProjectMetadata>(out var metadata)
-            ? metadata.ProjectPath
-            : throw new InvalidOperationException($"Aspire did not resolve a project for resource '{name}'.");
+        var resolvedProjectPath = project.Resource.GetProjectMetadata().ProjectPath;
+        if (!string.Equals(Path.GetExtension(resolvedProjectPath), ".csproj", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"The KubeOps operator '{name}' must be a C# project (.csproj), but '{resolvedProjectPath}' " +
+                "was resolved. The KubeOps CLI only generates CRDs and manifests for C# projects.",
+                nameof(projectPath));
+        }
+
         var options = CreateDefaultManifestOptions(name);
 
         project.Resource.Annotations.Add(new KubeOpsPublishAnnotation(resolvedProjectPath, options));

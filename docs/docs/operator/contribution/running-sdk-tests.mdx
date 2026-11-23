@@ -17,6 +17,11 @@ The SDK's test projects live under `test/`, one per package. Two kinds of tests 
   `test/KubeOps.Cli.Test.Operator` and validate the generated manifests with `kubectl kustomize` and a
   server-side dry run.
 
+Building the solution or running all tests also builds the Aspire AppHost in `examples/AspireAppHost`, which
+`KubeOps.Aspire.Hosting.Test` references. Aspire 17 AppHosts need the Aspire CLI bundle: the first build on a machine
+downloads it for the referenced Aspire version into `~/.aspire` via `dnx`, so that build needs network access and
+fails with `ASPIRE009` without it. Later builds reuse the downloaded bundle.
+
 :::caution
 Integration tests create and delete resources (CRDs, namespaces, custom resources) in the cluster
 of your **current kubeconfig context**. Only run them against a disposable development cluster.

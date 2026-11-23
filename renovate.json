@@ -17,6 +17,13 @@
       "enabled": false
     },
     {
+      "description": ["Keep the example AppHost's Aspire.Hosting.AppHost in step with the Aspire packages in src/; it joins their aspire monorepo update."],
+      "matchManagers": ["nuget"],
+      "matchFileNames": ["examples/AspireAppHost/AspireAppHost.csproj"],
+      "matchPackageNames": ["Aspire.Hosting.AppHost"],
+      "enabled": true
+    },
+    {
       "matchManagers": ["nuget"],
       "matchDepNames": ["Microsoft.CodeAnalysis.CSharp"],
       "matchFileNames": ["**/KubeOps.Generator.csproj"],

@@ -5,7 +5,6 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <IsAspireHost>true</IsAspireHost>
         <IsPackable>false</IsPackable>
         <GenerateDocumentationFile>false</GenerateDocumentationFile>
         <UserSecretsId>kubeops-aspire-apphost</UserSecretsId>

@@ -52,6 +52,31 @@ public class KubeOpsHostingTest
         act.Should().Throw<DistributedApplicationException>();
     }
 
+    [Theory]
+    [InlineData("Operator.fsproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />")]
+    [InlineData("Operator.vbproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />")]
+    [InlineData("Operator.cs", "Console.WriteLine();")]
+    public void AddKubeOps_Rejects_Projects_That_Are_No_CSharp_Project(string fileName, string content)
+    {
+        var directory = Directory.CreateTempSubdirectory("kubeops-aspire-");
+        try
+        {
+            var projectFile = Path.Combine(directory.FullName, fileName);
+            File.WriteAllText(projectFile, content);
+            var builder = CreateBuilder();
+
+            var act = () => builder.AddKubeOps(OperatorName, projectFile);
+
+            act.Should().Throw<ArgumentException>()
+                .WithParameterName("projectPath")
+                .WithMessage("*.csproj*");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void AddKubeOps_Returns_Builder_For_Chaining()
     {
@@ -272,8 +297,8 @@ public class KubeOpsHostingTest
     }
 
     // A plain builder rooted at the example AppHost, so relative operator project paths resolve like in an AppHost.
-    // DistributedApplicationTestingBuilder would also run the example's Program, whose AddDotnetProject call makes
-    // every further AddDotnetProject fail with a duplicate '__dotnet-project-build' resource.
+    // Not DistributedApplicationTestingBuilder: it runs the example's Program first, and on the builder it returns,
+    // every further AddDotnetProject fails with a duplicate '__dotnet-project-build' resource.
     private static IDistributedApplicationBuilder CreateBuilder(params string[] args)
         => DistributedApplication.CreateBuilder(
             new DistributedApplicationOptions
