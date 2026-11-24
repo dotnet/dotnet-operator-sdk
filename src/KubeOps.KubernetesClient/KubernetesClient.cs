@@ -48,6 +48,23 @@ public class KubernetesClient : IKubernetesClient
     }
 
     /// <summary>
+    /// Create a new Kubernetes client for the given entity with a custom client configuration that sends
+    /// every write (<c>POST</c>, <c>PUT</c> and <c>PATCH</c>) with the given field manager.
+    /// </summary>
+    /// <remarks>
+    /// Use this outside an operator (e.g. in CLIs or migration tools) to record the writes under an own name in
+    /// <c>metadata.managedFields</c>. A request that already carries a <c>fieldManager</c> keeps it.
+    /// See <see cref="FieldManagerHandler"/>.
+    /// </remarks>
+    /// <param name="clientConfig">The config for the underlying Kubernetes client.</param>
+    /// <param name="fieldManager">The field manager to write with.</param>
+    /// <exception cref="ArgumentException"><paramref name="fieldManager"/> is not a valid field manager.</exception>
+    public KubernetesClient(KubernetesClientConfiguration clientConfig, string fieldManager)
+        : this(clientConfig, new Kubernetes(clientConfig, new FieldManagerHandler(fieldManager)))
+    {
+    }
+
+    /// <summary>
     /// Create a new Kubernetes client for the given entity with a custom client configuration and client.
     /// </summary>
     /// <remarks>

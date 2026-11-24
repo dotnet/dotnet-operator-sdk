@@ -22,4 +22,8 @@
         <ProjectReference Include="..\..\src\KubeOps.Operator\KubeOps.Operator.csproj"/>
         <ProjectReference Include="..\..\src\KubeOps.Transpiler\KubeOps.Transpiler.csproj"/>
     </ItemGroup>
+    <ItemGroup>
+        <!-- Shared with the other test projects that check the handler chain of the Kubernetes client. -->
+        <Compile Include="..\KubernetesHandlerChain.cs" Link="KubernetesHandlerChain.cs" />
+    </ItemGroup>
 </Project>

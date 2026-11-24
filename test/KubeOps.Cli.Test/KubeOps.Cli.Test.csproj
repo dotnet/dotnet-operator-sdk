@@ -26,4 +26,8 @@
                  Properties="Configuration=Debug"
                  RemoveProperties="CurrentSolutionConfigurationContents;BuildingSolutionFile;TargetFramework" />
     </Target>
+    <ItemGroup>
+        <!-- Shared with the other test projects that check the handler chain of the Kubernetes client. -->
+        <Compile Include="..\KubernetesHandlerChain.cs" Link="KubernetesHandlerChain.cs" />
+    </ItemGroup>
 </Project>

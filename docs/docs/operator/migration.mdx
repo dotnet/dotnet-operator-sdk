@@ -352,3 +352,13 @@ JSON Patch API is now part of `KubeOps.Abstractions` and no longer requires prev
 `Get`, `List`, `Save`, `Create`, `Update`, `UpdateStatus`, `Patch` and `Delete` are gone. They blocked a
 thread on the API call. Use the `...Async` variants, which also accept a `CancellationToken`.
 `GetCurrentNamespace` stays, because it does not call the API, and so does `Watch`.
+
+### New in v14 (non-breaking)
+
+- **Explicit field manager**: every write of the operator carries a `fieldManager`, which defaults to the
+  operator name and is set with `WithFieldManager(...)`. Writes are recorded in `metadata.managedFields` under
+  that name instead of `kubernetes-csharp`; existing entries keep their old manager until their fields are
+  written again. If you register an own `IKubernetes`, add the `FieldManagerHandler` yourself. An operator
+  name that is not a valid field manager (over 128 bytes or with non-printable characters) needs an explicit
+  `WithFieldManager(...)`. The KubeOps CLI writes as `kubeops-cli`. See
+  [Field Manager](./configuration/field-manager).

@@ -22,6 +22,23 @@ public static class OperatorSettingsBuilderExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Sets the field manager under which the operator's writes are recorded in <c>metadata.managedFields</c>.
+    /// Defaults to the operator name.
+    /// </summary>
+    /// <param name="builder">The builder to configure.</param>
+    /// <param name="fieldManager">
+    /// The field manager: not empty, at most <see cref="FieldManagerName.MaxLength"/> bytes and only
+    /// printable characters.
+    /// </param>
+    /// <returns>The same <paramref name="builder"/> instance for chaining.</returns>
+    /// <exception cref="ArgumentException"><paramref name="fieldManager"/> is not a valid field manager.</exception>
+    public static OperatorSettingsBuilder WithFieldManager(this OperatorSettingsBuilder builder, string fieldManager)
+    {
+        builder.FieldManager = fieldManager;
+        return builder;
+    }
+
     /// <summary>Sets the namespace to watch. Pass <c>null</c> to watch all namespaces (the default).</summary>
     /// <param name="builder">The builder to configure.</param>
     /// <param name="ns">The namespace, or <c>null</c> for all namespaces.</param>

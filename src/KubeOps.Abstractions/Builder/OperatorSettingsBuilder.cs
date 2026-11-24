@@ -27,6 +27,28 @@ public sealed partial class OperatorSettingsBuilder
         .ToLowerInvariant();
 
     /// <summary>
+    /// The field manager under which the operator's writes are recorded in <c>metadata.managedFields</c>.
+    /// Defaults to <c>null</c>, which uses <see cref="Name"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException">
+    /// The value is empty, longer than <see cref="FieldManagerName.MaxLength"/> bytes or contains
+    /// non-printable characters.
+    /// </exception>
+    public string? FieldManager
+    {
+        get;
+        set
+        {
+            if (value is not null)
+            {
+                FieldManagerName.ThrowIfInvalid(value);
+            }
+
+            field = value;
+        }
+    }
+
+    /// <summary>
     /// Controls the namespace which is watched by the operator.
     /// If this field is <c>null</c>, all namespaces are watched for CRD instances.
     /// </summary>
@@ -132,24 +154,38 @@ public sealed partial class OperatorSettingsBuilder
     /// Produces an immutable <see cref="OperatorSettings"/> record from the current configuration.
     /// </summary>
     /// <returns>A fully initialised <see cref="OperatorSettings"/> record.</returns>
-    public OperatorSettings Build() => new()
+    /// <exception cref="InvalidOperationException">
+    /// No <see cref="FieldManager"/> is set and <see cref="Name"/> is not a valid field manager.
+    /// </exception>
+    public OperatorSettings Build()
     {
-        Name = Name,
-        Namespace = Namespace,
-        LeaderElectionType = LeaderElectionType,
-        QueueStrategy = QueueStrategy,
-        WatchStrategy = WatchStrategy,
-        LeaderElectionLeaseDuration = LeaderElectionLeaseDuration,
-        LeaderElectionRenewDeadline = LeaderElectionRenewDeadline,
-        LeaderElectionRetryPeriod = LeaderElectionRetryPeriod,
-        ConfigureResourceWatcherEntityCache = ConfigureResourceWatcherEntityCache,
-        AutoAttachFinalizers = AutoAttachFinalizers,
-        AutoDetachFinalizers = AutoDetachFinalizers,
-        ReconcileStrategy = ReconcileStrategy,
-        ParallelReconciliation = ParallelReconciliation.Build(),
-        EnableMetrics = EnableMetrics,
-        ValidateRegistrations = ValidateRegistrations,
-    };
+        if (FieldManager is null && FieldManagerName.GetError(Name) is { } error)
+        {
+            throw new InvalidOperationException(
+                $"The operator name '{Name}' is used as field manager, but is not a valid one: {error} " +
+                "Set a valid field manager with WithFieldManager.");
+        }
+
+        return new()
+        {
+            Name = Name,
+            FieldManager = FieldManager,
+            Namespace = Namespace,
+            LeaderElectionType = LeaderElectionType,
+            QueueStrategy = QueueStrategy,
+            WatchStrategy = WatchStrategy,
+            LeaderElectionLeaseDuration = LeaderElectionLeaseDuration,
+            LeaderElectionRenewDeadline = LeaderElectionRenewDeadline,
+            LeaderElectionRetryPeriod = LeaderElectionRetryPeriod,
+            ConfigureResourceWatcherEntityCache = ConfigureResourceWatcherEntityCache,
+            AutoAttachFinalizers = AutoAttachFinalizers,
+            AutoDetachFinalizers = AutoDetachFinalizers,
+            ReconcileStrategy = ReconcileStrategy,
+            ParallelReconciliation = ParallelReconciliation.Build(),
+            EnableMetrics = EnableMetrics,
+            ValidateRegistrations = ValidateRegistrations,
+        };
+    }
 
     [GeneratedRegex(@"(\W|_)", RegexOptions.CultureInvariant)]
     private static partial Regex OperatorNameRegex();

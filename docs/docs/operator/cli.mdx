@@ -45,6 +45,9 @@ This command:
 - Generates the necessary CRDs
 - Installs them into your current Kubernetes context
 
+The CLI writes with the field manager `kubeops-cli`, so the CRDs it creates or replaces are recorded under that
+name in `metadata.managedFields`.
+
 :::tip[Solution files]
 Instead of a `.csproj` file, you can pass a `.sln` or `.slnx` solution file. The CLI will compile all projects in the solution and search them for custom resources.
 :::

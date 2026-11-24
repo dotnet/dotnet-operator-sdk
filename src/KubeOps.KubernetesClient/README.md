@@ -82,6 +82,22 @@ if (configMap != null)
 
 For advanced configuration (e.g., custom Kubeconfig paths, timeouts), refer to the underlying `k8s.KubernetesClientConfiguration` documentation from the official client library.
 
+### Field Manager
+
+Without a `fieldManager`, the API server records writes in `metadata.managedFields` under the user agent of the
+client (`kubernetes-csharp`). Pass a field manager to the constructor to record every write (`POST`, `PUT` and
+`PATCH`) under your own name:
+
+```csharp
+IKubernetesClient client = new KubernetesClient(KubernetesClientConfiguration.BuildDefaultConfig(), "my-tool");
+```
+
+A request that already carries a `fieldManager` (e.g. a server-side apply through `PatchAsync`) keeps it, and
+requests to the connect subresources (`proxy`, `exec`, `attach`, `portforward`) stay unchanged. The
+constructor uses the public `FieldManagerHandler`, which you can also pass to an own `k8s.Kubernetes` instance:
+`new Kubernetes(config, new FieldManagerHandler("my-tool"))`. Within an operator, the field manager is configured
+through `OperatorSettings.FieldManager` and defaults to the operator name.
+
 ## Examples
 
 ### List Resources
