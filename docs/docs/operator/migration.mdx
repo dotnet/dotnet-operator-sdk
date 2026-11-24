@@ -458,3 +458,11 @@ list response.
 
 **Migration:** set the namespace of a resource before calling `WithOwnerReference`. Use `WithControllerReference`
 for the resources a controller manages, so that foreground deletion waits for them.
+
+### New in v15 (non-breaking)
+
+- **User-Agent with the operator name**: the operator identifies itself to the API server as
+  `<operator-name>/<version> kubeops/<version> kubernetes-csharp/<version>` instead of
+  `kubernetes-csharp/<version>`, e.g. in audit logs. A `KubernetesClientConfiguration` with an own `UserAgent`
+  keeps it; an own `IKubernetes` keeps the user agent of its configuration. The KubeOps CLI identifies itself as
+  `kubeops-cli/<version>`. See [User-Agent](./configuration/user-agent).
