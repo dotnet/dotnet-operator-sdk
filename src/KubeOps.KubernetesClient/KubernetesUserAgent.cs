@@ -3,110 +3,70 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Reflection;
-using System.Text;
 
 using k8s;
 
 namespace KubeOps.KubernetesClient;
 
 /// <summary>
-/// Builds the <c>User-Agent</c> header under which a client identifies itself to the Kubernetes API server.
+/// Builds the <c>User-Agent</c> header under which a client identifies itself to the Kubernetes API server,
+/// instead of the <c>kubernetes-csharp/&lt;version&gt;</c> default of the official C# client.
 /// </summary>
-/// <remarks>
-/// <para>
-/// The API server shows the user agent in its audit logs, and it derives the field manager of a write
-/// without an explicit <c>fieldManager</c> from the part before the first <c>/</c>. Without an own user agent,
-/// every client built on the official C# client identifies itself as <c>kubernetes-csharp/&lt;version&gt;</c>.
-/// </para>
-/// <para>
-/// <see cref="Create"/> returns <c>&lt;product&gt;[/&lt;version&gt;] kubeops/&lt;version&gt;
-/// kubernetes-csharp/&lt;version&gt;</c>, e.g. <c>my-operator/1.2.0 kubeops/15.0.0 kubernetes-csharp/21.0.8</c>.
-/// </para>
-/// </remarks>
 public static class KubernetesUserAgent
 {
-    /// <summary>
-    /// Gets the user agent that the official C# client sends unless one is configured,
-    /// i.e. <c>kubernetes-csharp/&lt;version&gt;</c>.
-    /// </summary>
-    public static string ClientDefault { get; } = new KubernetesClientConfiguration().UserAgent;
+    private const string TokenSymbols = "!#$%&'*+-.^_`|~";
 
-    private static string KubeOpsVersion { get; } = VersionOf(typeof(KubernetesUserAgent).Assembly) ?? "unknown";
+    private static readonly string ClientDefault = new KubernetesClientConfiguration().UserAgent;
+
+    private static readonly string KubeOpsVersion = ToToken(WithoutBuildMetadata(
+        typeof(KubernetesUserAgent).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion ?? "unknown"));
 
     /// <summary>
     /// Creates a user agent for <paramref name="product"/>.
     /// </summary>
     /// <param name="product">The name of the client, e.g. the operator name.</param>
-    /// <param name="version">The version of the client. Omitted from the user agent when empty.</param>
-    /// <returns>The user agent, followed by the KubeOps and the C# client version.</returns>
-    /// <remarks>
+    /// <param name="version">
+    /// The version of the client, e.g. <c>1.2.0</c>. Build metadata (from the first <c>+</c> on) is dropped.
+    /// Omitted from the user agent when empty.
+    /// </param>
+    /// <returns>
+    /// <c>&lt;product&gt;[/&lt;version&gt;] kubeops/&lt;version&gt; kubernetes-csharp/&lt;version&gt;</c>.
     /// Characters that are not allowed in an HTTP product token (RFC 9110), e.g. spaces or <c>/</c>, are replaced
     /// by <c>-</c>.
-    /// </remarks>
+    /// </returns>
     /// <exception cref="ArgumentException"><paramref name="product"/> is empty or whitespace.</exception>
     public static string Create(string product, string? version = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(product);
 
-        var userAgent = new StringBuilder(ToToken(product));
-        if (!string.IsNullOrWhiteSpace(version))
-        {
-            userAgent.Append('/').Append(ToToken(version));
-        }
+        var versionPart = string.IsNullOrWhiteSpace(version)
+            ? string.Empty
+            : $"/{ToToken(WithoutBuildMetadata(version))}";
 
-        return userAgent.Append(" kubeops/").Append(ToToken(KubeOpsVersion)).Append(' ').Append(ClientDefault)
-            .ToString();
+        return $"{ToToken(product)}{versionPart} kubeops/{KubeOpsVersion} {ClientDefault}";
     }
 
     /// <summary>
-    /// Creates a user agent for <paramref name="product"/> with the version of <paramref name="assembly"/>.
+    /// Sets the user agent from <see cref="Create"/> on <paramref name="config"/>, unless the configuration
+    /// already carries an own one. An empty user agent and the default of the C# client count as not configured.
     /// </summary>
+    /// <param name="config">The configuration. Set the user agent before a client is created from it.</param>
     /// <param name="product">The name of the client, e.g. the operator name.</param>
-    /// <param name="assembly">
-    /// The assembly whose informational version (or, without one, assembly version) is the version of the client.
-    /// </param>
-    /// <returns>The user agent, followed by the KubeOps and the C# client version.</returns>
+    /// <param name="version">The version of the client. Omitted from the user agent when empty.</param>
     /// <exception cref="ArgumentException"><paramref name="product"/> is empty or whitespace.</exception>
-    public static string CreateFromAssembly(string product, Assembly? assembly) =>
-        Create(product, assembly is null ? null : VersionOf(assembly));
-
-    /// <summary>
-    /// Sets <paramref name="userAgent"/> on <paramref name="config"/> unless the configuration already carries
-    /// a user agent other than <see cref="ClientDefault"/>.
-    /// </summary>
-    /// <param name="config">The configuration of the client. Must be set before the client is created.</param>
-    /// <param name="userAgent">The user agent, e.g. from <see cref="Create(string, string?)"/>.</param>
-    /// <returns><see langword="true"/> if the user agent was set; otherwise <see langword="false"/>.</returns>
-    public static bool SetIfNotConfigured(KubernetesClientConfiguration config, string userAgent)
+    public static void Apply(KubernetesClientConfiguration config, string product, string? version = null)
     {
         ArgumentNullException.ThrowIfNull(config);
-        ArgumentException.ThrowIfNullOrWhiteSpace(userAgent);
 
-        if (config.UserAgent is not null && config.UserAgent != ClientDefault)
+        if (string.IsNullOrWhiteSpace(config.UserAgent) || config.UserAgent == ClientDefault)
         {
-            return false;
+            config.UserAgent = Create(product, version);
         }
-
-        config.UserAgent = userAgent;
-        return true;
     }
 
-    private static string? VersionOf(Assembly assembly) =>
-        assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-        ?? assembly.GetName().Version?.ToString();
+    private static string WithoutBuildMetadata(string version) => version.Split('+')[0];
 
-    // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
-    private static string ToToken(string value)
-    {
-        var trimmed = value.Trim();
-        return string.Create(trimmed.Length, trimmed, (span, source) =>
-        {
-            for (var i = 0; i < source.Length; i++)
-            {
-                span[i] = IsTokenChar(source[i]) ? source[i] : '-';
-            }
-        });
-    }
-
-    private static bool IsTokenChar(char c) => char.IsAsciiLetterOrDigit(c) || "!#$%&'*+-.^_`|~".Contains(c);
+    private static string ToToken(string value) =>
+        string.Concat(value.Trim().Select(c => char.IsAsciiLetterOrDigit(c) || TokenSymbols.Contains(c) ? c : '-'));
 }

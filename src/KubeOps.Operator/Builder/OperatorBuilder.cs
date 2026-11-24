@@ -335,14 +335,19 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         //
         // The FieldManagerHandler sends every write with the configured field manager. A custom IKubernetes has to add
         // the handler itself. The client identifies itself with the operator name as user agent, unless the
-        // configuration already carries an own one.
+        // configuration already carries an own one; this sets the user agent on the registered configuration.
         Services.TryAddSingleton(_ => KubernetesClientConfiguration.BuildDefaultConfig());
         Services.TryAddSingleton<IKubernetes>(services =>
         {
             var config = services.GetRequiredService<KubernetesClientConfiguration>();
-            KubernetesUserAgent.SetIfNotConfigured(
-                config,
-                KubernetesUserAgent.CreateFromAssembly(Settings.Name, Assembly.GetEntryAssembly()));
+            if (!string.IsNullOrWhiteSpace(Settings.Name))
+            {
+                KubernetesUserAgent.Apply(
+                    config,
+                    Settings.Name,
+                    Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                        ?.InformationalVersion);
+            }
 
             return new Kubernetes(config, new FieldManagerHandler(Settings.FieldManager));
         });

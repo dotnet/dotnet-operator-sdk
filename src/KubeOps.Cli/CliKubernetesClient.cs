@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
+using System.Reflection;
+
 using k8s;
 
 using KubeOps.KubernetesClient;
@@ -27,9 +29,11 @@ internal static class CliKubernetesClient
     public static IKubernetes Create(KubernetesClientConfiguration? config = null)
     {
         config ??= KubernetesClientConfiguration.BuildDefaultConfig();
-        KubernetesUserAgent.SetIfNotConfigured(
+        KubernetesUserAgent.Apply(
             config,
-            KubernetesUserAgent.CreateFromAssembly(FieldManager, typeof(CliKubernetesClient).Assembly));
+            FieldManager,
+            typeof(CliKubernetesClient).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion);
 
         return new Kubernetes(config, new FieldManagerHandler(FieldManager));
     }

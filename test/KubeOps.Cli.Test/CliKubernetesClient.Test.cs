@@ -33,6 +33,6 @@ public sealed class CliKubernetesClientTest
             new KubernetesClientConfiguration { Host = "https://kubernetes.test" });
 
         client.Should().BeOfType<Kubernetes>().Which.HttpClient.DefaultRequestHeaders.UserAgent.ToString()
-            .Should().StartWith("kubeops-cli/").And.EndWith(KubernetesUserAgent.ClientDefault);
+            .Should().StartWith("kubeops-cli/").And.EndWith(new KubernetesClientConfiguration().UserAgent);
     }
 }

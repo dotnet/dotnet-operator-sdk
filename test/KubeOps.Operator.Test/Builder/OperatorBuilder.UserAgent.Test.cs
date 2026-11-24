@@ -7,7 +7,6 @@ using FluentAssertions;
 using k8s;
 
 using KubeOps.Abstractions.Builder;
-using KubeOps.KubernetesClient;
 using KubeOps.Operator.Builder;
 using KubeOps.TestHelpers;
 
@@ -19,17 +18,16 @@ namespace KubeOps.Operator.Test.Builder;
 [Trait(TestTrait.Area, TestArea.Configuration)]
 public sealed class OperatorBuilderUserAgentTest
 {
+    private static readonly string ClientDefault = new KubernetesClientConfiguration().UserAgent;
+
     [Fact]
-    public void Default_Kubernetes_Client_Identifies_Itself_With_The_Operator_Name()
+    public void Default_Kubernetes_Client_Identifies_Itself_With_The_Operator_Name_Not_The_Field_Manager()
     {
         using var provider = BuildProvider(
-            new OperatorSettingsBuilder().WithName("my-operator"),
+            new OperatorSettingsBuilder().WithName("my-operator").WithFieldManager("my-field-manager"),
             new KubernetesClientConfiguration { Host = "https://kubernetes.test" });
 
-        var userAgent = UserAgentOf(provider.GetRequiredService<IKubernetes>());
-
-        userAgent.Should().StartWith("my-operator").And.Contain(" kubeops/")
-            .And.EndWith(KubernetesUserAgent.ClientDefault);
+        UserAgentOf(provider).Should().StartWith("my-operator").And.EndWith(ClientDefault);
     }
 
     [Fact]
@@ -39,17 +37,17 @@ public sealed class OperatorBuilderUserAgentTest
             new OperatorSettingsBuilder().WithName("my-operator"),
             new KubernetesClientConfiguration { Host = "https://kubernetes.test", UserAgent = "own-agent/1.0" });
 
-        UserAgentOf(provider.GetRequiredService<IKubernetes>()).Should().Be("own-agent/1.0");
+        UserAgentOf(provider).Should().Be("own-agent/1.0");
     }
 
     [Fact]
-    public void User_Agent_Is_Independent_Of_The_Field_Manager()
+    public void Default_Kubernetes_Client_Keeps_The_Client_Default_Without_An_Operator_Name()
     {
         using var provider = BuildProvider(
-            new OperatorSettingsBuilder().WithName("my-operator").WithFieldManager("my-field-manager"),
+            new OperatorSettingsBuilder { Name = " ", FieldManager = "my-field-manager" },
             new KubernetesClientConfiguration { Host = "https://kubernetes.test" });
 
-        UserAgentOf(provider.GetRequiredService<IKubernetes>()).Should().StartWith("my-operator");
+        UserAgentOf(provider).Should().Be(ClientDefault);
     }
 
     private static ServiceProvider BuildProvider(
@@ -65,6 +63,8 @@ public sealed class OperatorBuilderUserAgentTest
         return services.BuildServiceProvider();
     }
 
-    private static string UserAgentOf(IKubernetes client) =>
-        client.Should().BeOfType<Kubernetes>().Which.HttpClient.DefaultRequestHeaders.UserAgent.ToString();
+    private static string UserAgentOf(ServiceProvider provider) =>
+        provider.GetRequiredService<IKubernetes>()
+            .Should().BeOfType<Kubernetes>()
+            .Which.HttpClient.DefaultRequestHeaders.UserAgent.ToString();
 }

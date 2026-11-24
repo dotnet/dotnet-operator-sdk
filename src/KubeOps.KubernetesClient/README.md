@@ -100,13 +100,13 @@ through `OperatorSettings.FieldManager` and defaults to the operator name.
 
 ### User-Agent
 
-The official C# client identifies itself as `kubernetes-csharp/<version>`. `KubernetesUserAgent` builds a user
-agent with your own name, followed by the KubeOps and the C# client version, and sets it on the configuration
-unless it already carries an own one:
+The official C# client identifies itself as `kubernetes-csharp/<version>`. `KubernetesUserAgent.Apply` sets a
+user agent with your own name, followed by the KubeOps and the C# client version, on the configuration unless it
+already carries an own one (`KubernetesUserAgent.Create` returns the same value as a string):
 
 ```csharp
 var config = KubernetesClientConfiguration.BuildDefaultConfig();
-KubernetesUserAgent.SetIfNotConfigured(config, KubernetesUserAgent.Create("my-tool", "1.2.0"));
+KubernetesUserAgent.Apply(config, "my-tool", "1.2.0");
 // User-Agent: my-tool/1.2.0 kubeops/<version> kubernetes-csharp/<version>
 
 IKubernetesClient client = new KubernetesClient(config, "my-tool");
