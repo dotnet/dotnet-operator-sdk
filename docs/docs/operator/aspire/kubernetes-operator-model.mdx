@@ -36,7 +36,7 @@ var dev = builder.AddKubernetesEnvironment("dev")
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithHelm(helm => helm.WithNamespace("operator-system"));
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(dev, run =>
     {
         run.WithPersistentCrds();
@@ -53,7 +53,7 @@ builder.Build().Run();
 
 `PublishAsKubernetesOperator(...)` configures the Kubernetes deployment. The operator becomes a Kubernetes workload, and KubeOps-generated CRDs, RBAC, and service-account resources are incorporated into the generated Aspire chart.
 
-If `RunWithKubernetes(...)` is not configured, `AddKubeOps<TProject>(...)` keeps the operator resource in Aspire's explicit-start mode during `aspire run`. The project remains in the AppHost model and publish graph, but the local operator process does not start by default. A KubeOps operator without a Kubernetes run target would otherwise fail against an accidental kube context or mutate the wrong cluster.
+If `RunWithKubernetes(...)` is not configured, `AddKubeOps(...)` keeps the operator resource in Aspire's explicit-start mode during `aspire run`. The project remains in the AppHost model and publish graph, but the local operator process does not start by default. A KubeOps operator without a Kubernetes run target would otherwise fail against an accidental kube context or mutate the wrong cluster.
 
 ## Run Mode
 
@@ -62,7 +62,7 @@ Run mode defaults to a productive inner loop once you opt in:
 ```csharp
 var dev = builder.AddKubernetesEnvironment("dev");
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(dev);
 ```
 
@@ -100,7 +100,7 @@ var k8s = builder.AddKubernetesEnvironment("k8s")
         helm.WithNamespace("operator-system");
     });
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .PublishAsKubernetesOperator(k8s);
 ```
 
@@ -141,7 +141,7 @@ The integration filters KubeOps' generated `Deployment` out of the additional re
 You can also generate KubeOps manifests without an Aspire Kubernetes environment:
 
 ```csharp
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .PublishAsKubernetesOperator(publish =>
     {
         publish.Namespace = "operator-system";
@@ -169,7 +169,7 @@ For local run mode, Azure integrations may provision Azure resources unless conf
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .RunAsExisting(aksName, aksResourceGroup);
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(aks);
 ```
 
@@ -184,7 +184,7 @@ Run the operator as a local process against the selected Kubernetes environment.
 ```csharp
 var dev = builder.AddKubernetesEnvironment("dev");
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(dev, run => run.WithPersistentCrds());
 ```
 
@@ -195,7 +195,7 @@ Deploy the operator into AKS without running it as a local process during `aspir
 ```csharp
 var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .PublishAsKubernetesOperator(aks, publish =>
     {
         publish.Namespace = "operator-system";
@@ -211,7 +211,7 @@ Use a local Kubernetes environment for the development loop and AKS for publish/
 var dev = builder.AddKubernetesEnvironment("dev");
 var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(dev)
     .PublishAsKubernetesOperator(aks, publish => publish.WithServiceAccount("operator"));
 ```
@@ -221,7 +221,7 @@ builder.AddKubeOps<Projects.AspireOperator>("operator")
 Generate standalone KubeOps manifests without registering an Aspire Kubernetes environment.
 
 ```csharp
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .PublishAsKubernetesOperator(publish =>
     {
         publish.Namespace = "operator-system";
@@ -238,7 +238,7 @@ Cluster resources that are not `KubernetesEnvironmentResource`s but expose their
 ```csharp
 var k3s = builder.AddK3sCluster("k3s");
 
-builder.AddKubeOps<Projects.AspireOperator>("operator")
+builder.AddKubeOps("operator", "../AspireOperator")
     .RunWithKubernetes(k3s);
 ```
 
