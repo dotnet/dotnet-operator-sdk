@@ -20,6 +20,8 @@ public static class JsonPatchExtensions
     /// Ignored properties that should not be included (by default) in the JSON Patch diff.
     /// This mainly concerns metadata properties that are not relevant for the diff,
     /// like the UID of the object and resource version.
+    /// An entry matches its own path and the paths below it, e.g. <c>/status</c> matches <c>/status/phase</c>
+    /// but not <c>/statusPolicy</c>.
     /// </para>
     /// <para>Currently, contains the following properties:</para>
     /// <list type="bullet">
@@ -31,6 +33,9 @@ public static class JsonPatchExtensions
     /// <item><term>/metadata/resourceVersion</term></item>
     /// <item><term>/metadata/selfLink</term></item>
     /// <item><term>/metadata/uid</term></item>
+    /// <item><term>/status</term></item>
+    /// <item><term>/kind</term></item>
+    /// <item><term>/apiVersion</term></item>
     /// </list>
     /// </summary>
     public static readonly string[] DefaultIgnoredProperties =
@@ -62,6 +67,9 @@ public static class JsonPatchExtensions
     /// <item><term>/metadata/resourceVersion</term></item>
     /// <item><term>/metadata/selfLink</term></item>
     /// <item><term>/metadata/uid</term></item>
+    /// <item><term>/status</term></item>
+    /// <item><term>/kind</term></item>
+    /// <item><term>/apiVersion</term></item>
     /// </list>
     /// </summary>
     public static readonly Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>> DefaultOperationsFilter =
@@ -84,7 +92,10 @@ public static class JsonPatchExtensions
     /// <typeparam name="TEntity">The entity type.</typeparam>
     /// <param name="from">The source entity to compare from.</param>
     /// <param name="to">The target entity to compare to.</param>
-    /// <param name="operationsFilter">An optional filter action that filters the <see cref="PatchOperation"/>s that are contained in the <see cref="JsonPatch"/>.</param>
+    /// <param name="operationsFilter">
+    /// An optional filter of the <see cref="PatchOperation"/>s that are contained in the <see cref="JsonPatch"/>.
+    /// It replaces <see cref="DefaultOperationsFilter"/>; call that from your filter to keep its behaviour.
+    /// </param>
     /// <returns>A <see cref="JsonNode"/> representing the JSON Patch diff between the two entities.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the diff could not be created.</exception>
     public static JsonPatch CreateJsonPatch<TEntity>(
