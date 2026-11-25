@@ -367,7 +367,8 @@ thread on the API call. Use the `...Async` variants, which also accept a `Cancel
 
 v15 moves `KubeOps.Aspire.Hosting` to Aspire 17. Aspire 17 deprecates `AddProject<TProject>` and the
 `Aspire.AppHost.Sdk` in favour of path-based projects, so `AddKubeOps` now takes the path of the operator
-project. The other packages have no breaking changes.
+project. `KubeOps.KubernetesClient` drops the `force` parameter of the JSON patch overloads of `PatchAsync`,
+where the API server never accepted it. The other packages have no breaking changes.
 
 ### `KubeOps.Aspire.Hosting` requires Aspire 17
 
@@ -405,3 +406,14 @@ builder.AddKubeOps("operator", "../MyOperator")
     .RunWithKubernetes(k8s)
     .PublishAsKubernetesOperator(k8s);
 ```
+
+### `force` removed from the JSON patch overloads of `PatchAsync`
+
+`PatchAsync(entity, operationsFilter, ...)`, `PatchAsync(from, to, operationsFilter, ...)` and
+`PatchAsync(entity, JsonPatch, ...)` send a JSON patch and no longer take `force`. The API server only accepts
+`force` for a server-side apply patch and rejected every other patch with `422 Unprocessable Entity`, even with
+`force: false`.
+
+**Migration:** remove `force` from these calls. To take over fields of other field managers, send a server-side
+apply patch with `PatchAsync<TEntity>(new V1Patch(..., V1Patch.PatchType.ApplyPatch), name, namespace,
+fieldManager, force: true)`.

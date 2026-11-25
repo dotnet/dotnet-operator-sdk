@@ -270,8 +270,10 @@ public interface IKubernetesClient : IDisposable
     /// The remaining operations are sent; without any, nothing is sent. Keep or drop all operations below one array,
     /// since the operations on its elements depend on each other.
     /// </param>
-    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
-    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="fieldManager">
+    /// The field manager to write with instead of the configured one. Required for a server-side apply patch
+    /// outside an operator.
+    /// </param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
@@ -280,7 +282,6 @@ public interface IKubernetesClient : IDisposable
         TEntity entity,
         Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>>? operationsFilter = null,
         string? fieldManager = null,
-        bool? force = null,
         string? dryRun = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
@@ -297,7 +298,6 @@ public interface IKubernetesClient : IDisposable
             entity,
             operationsFilter,
             fieldManager,
-            force,
             dryRun,
             cancellationToken);
     }
@@ -316,8 +316,10 @@ public interface IKubernetesClient : IDisposable
     /// The remaining operations are sent; without any, nothing is sent. Keep or drop all operations below one array,
     /// since the operations on its elements depend on each other.
     /// </param>
-    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
-    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="fieldManager">
+    /// The field manager to write with instead of the configured one. Required for a server-side apply patch
+    /// outside an operator.
+    /// </param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
@@ -326,7 +328,6 @@ public interface IKubernetesClient : IDisposable
         TEntity to,
         Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>>? operationsFilter = null,
         string? fieldManager = null,
-        bool? force = null,
         string? dryRun = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
@@ -338,7 +339,7 @@ public interface IKubernetesClient : IDisposable
                 : operations => operationsFilter(JsonPatchExtensions.DefaultOperationsFilter(operations)));
         return patch.Operations.Count == 0
             ? Task.FromResult(from)
-            : PatchAsync(from, patch, fieldManager, force, dryRun, cancellationToken);
+            : PatchAsync(from, patch, fieldManager, dryRun, cancellationToken);
     }
 
     /// <summary>
@@ -347,8 +348,10 @@ public interface IKubernetesClient : IDisposable
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity to patch.</param>
     /// <param name="patch">The <see cref="JsonPatch"/> representing the changes to apply.</param>
-    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
-    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="fieldManager">
+    /// The field manager to write with instead of the configured one. Required for a server-side apply patch
+    /// outside an operator.
+    /// </param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
@@ -356,11 +359,15 @@ public interface IKubernetesClient : IDisposable
         TEntity entity,
         JsonPatch patch,
         string? fieldManager = null,
-        bool? force = null,
         string? dryRun = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta> =>
-        PatchAsync(entity, patch.ToKubernetesPatch(), fieldManager, force, dryRun, cancellationToken);
+        PatchAsync(
+            entity,
+            patch.ToKubernetesPatch(),
+            fieldManager,
+            dryRun: dryRun,
+            cancellationToken: cancellationToken);
 
     /// <summary>
     /// Patch a given entity on the Kubernetes API using a <see cref="V1Patch"/> object.
@@ -368,8 +375,14 @@ public interface IKubernetesClient : IDisposable
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity to patch.</param>
     /// <param name="patch">The <see cref="V1Patch"/> representing the changes to apply.</param>
-    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
-    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="fieldManager">
+    /// The field manager to write with instead of the configured one. Required for a server-side apply patch
+    /// outside an operator.
+    /// </param>
+    /// <param name="force">
+    /// Force a server-side apply patch, taking ownership of conflicting fields. Only valid for
+    /// <see cref="V1Patch.PatchType.ApplyPatch"/>; the API server rejects it for other patch types.
+    /// </param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>
@@ -390,8 +403,14 @@ public interface IKubernetesClient : IDisposable
     /// <param name="patch">The <see cref="V1Patch"/> representing the changes to apply.</param>
     /// <param name="name">The name of the entity to patch.</param>
     /// <param name="namespace">The namespace of the entity to patch (if applicable).</param>
-    /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
-    /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
+    /// <param name="fieldManager">
+    /// The field manager to write with instead of the configured one. Required for a server-side apply patch
+    /// outside an operator.
+    /// </param>
+    /// <param name="force">
+    /// Force a server-side apply patch, taking ownership of conflicting fields. Only valid for
+    /// <see cref="V1Patch.PatchType.ApplyPatch"/>; the API server rejects it for other patch types.
+    /// </param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
     /// <param name="cancellationToken">Cancellation token to monitor for cancellation requests.</param>
     /// <returns>The patched entity.</returns>

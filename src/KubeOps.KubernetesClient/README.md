@@ -201,10 +201,10 @@ The diff leaves out volatile fields such as `metadata.resourceVersion`, `metadat
 and `status` (see `JsonPatchExtensions.DefaultOperationsFilter`). An `operationsFilter` can remove further
 operations from the patch, e.g. to patch only `/spec`; it cannot add the left-out ones.
 
-PatchAsync also supports Server-Side Apply parameters (fieldManager, force, dryRun) for field-level ownership tracking:
+PatchAsync also accepts a field manager and a dry run. A server-side apply is sent as a `V1Patch` of the type
+`ApplyPatch`; only then can `force` take over fields that other field managers own:
 
 ```csharp
-
 var configMap = new V1ConfigMap
 {
     Metadata = new V1ObjectMeta { Name = "new-map", NamespaceProperty = "default" },
@@ -213,10 +213,10 @@ var configMap = new V1ConfigMap
 
 // Patch with field manager for Server-Side Apply compatibility
 var patch = new V1Patch(configMap, V1Patch.PatchType.ApplyPatch);
-var patchedWithSSA = await client.PatchAsync(
+var patchedWithSSA = await client.PatchAsync<V1ConfigMap>(
     patch,
+    configMap.Metadata.Name,
     configMap.Metadata.NamespaceProperty,
-    configMap.Metadata.Name
     fieldManager: "my-operator",
     force: false);
 ```
