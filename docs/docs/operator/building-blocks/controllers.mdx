@@ -126,12 +126,28 @@ public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
     }
 
     // Update status to reflect current state
-    entity.Status.LastReconciled = DateTime.UtcNow;
-    await client.UpdateStatusAsync(entity, cancellationToken);
+    entity = await client.PatchStatusAsync(
+        entity,
+        e => e.Status.LastReconciled = DateTime.UtcNow,
+        cancellationToken);
 
     return ReconciliationResult<V1DemoEntity>.Success(entity);
 }
 ```
+
+### Writing the Status
+
+`PatchStatusAsync(entity, change)` applies `change` to the entity and writes only the status fields it changed,
+as a JSON merge patch to the `/status` subresource. The patch carries no `resourceVersion`, so it does not fail
+with `409 Conflict` when the entity changed in the meantime, and status fields you did not change stay as
+others wrote them. `PatchStatusAsync(from, to)` does the same for the changes between two entities.
+
+Removed fields are sent as `null`. A changed array, e.g. a list of conditions, is sent as a whole and replaces
+the conditions that others added in the meantime; use a server-side apply patch with
+`PatchStatusAsync<TEntity>(patch, name, namespace, fieldManager, force)` when several writers share a list.
+
+`UpdateStatusAsync(entity)` replaces the whole status. Use it when the write must fail with `409 Conflict` if
+the entity changed since you read it.
 
 ### DeletedAsync
 

@@ -249,6 +249,31 @@ public class KubernetesClient : IKubernetesClient
     }
 
     /// <inheritdoc />
+    public async Task<TEntity> PatchStatusAsync<TEntity>(
+        V1Patch patch,
+        string name,
+        string? @namespace = null,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null,
+        CancellationToken cancellationToken = default)
+        where TEntity : IKubernetesObject<V1ObjectMeta>
+    {
+        ThrowIfDisposed();
+
+        return await StatusPatch.SendAsync<TEntity>(
+            ApiClient,
+            GetMetadata<TEntity>(),
+            patch,
+            name,
+            @namespace,
+            fieldManager,
+            force,
+            dryRun,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<TEntity> PatchAsync<TEntity>(
         V1Patch patch,
         string name,

@@ -2,10 +2,6 @@
 // The .NET Foundation licenses this file to you under the Apache 2.0 License.
 // See the LICENSE file in the project root for more information.
 
-using System.Net;
-using System.Text;
-using System.Web;
-
 using FluentAssertions;
 
 using k8s;
@@ -21,7 +17,7 @@ public sealed class KubernetesClientFieldManagerTest : IDisposable
 {
     private static readonly KubernetesClientConfiguration Config = new() { Host = "https://kubernetes.test" };
 
-    private readonly StubApiServer _apiServer = new();
+    private readonly StubApiServer _apiServer = new() { Response = ConfigMap() };
     private readonly IKubernetesClient _client;
 
     public KubernetesClientFieldManagerTest()
@@ -32,22 +28,26 @@ public sealed class KubernetesClientFieldManagerTest : IDisposable
     }
 
     [Fact]
-    public async Task Create_Update_UpdateStatus_And_Patch_Send_The_Field_Manager()
+    public async Task Create_Update_UpdateStatus_Patch_And_PatchStatus_Send_The_Field_Manager()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var patch = new V1Patch("""{"data":{"key":"value"}}""", V1Patch.PatchType.MergePatch);
 
         await _client.CreateAsync(ConfigMap(), cancellationToken);
         await _client.UpdateAsync(ConfigMap(), cancellationToken);
         await _client.UpdateStatusAsync(ConfigMap(), cancellationToken);
-        await _client.PatchAsync(
-            ConfigMap(),
-            new V1Patch("""{"data":{"key":"value"}}""", V1Patch.PatchType.MergePatch),
+        await _client.PatchAsync(ConfigMap(), patch, cancellationToken: cancellationToken);
+        await _client.PatchStatusAsync<V1ConfigMap>(
+            patch,
+            "my-config",
+            "default",
             cancellationToken: cancellationToken);
 
-        _apiServer.Requests.Should().Equal(
+        _apiServer.Requests.Select(r => (r.Method, r.FieldManager)).Should().Equal(
             ("POST", "my-operator"),
             ("PUT", "my-operator"),
             ("PUT", "my-operator"),
+            ("PATCH", "my-operator"),
             ("PATCH", "my-operator"));
     }
 
@@ -61,7 +61,7 @@ public sealed class KubernetesClientFieldManagerTest : IDisposable
             force: true,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        _apiServer.Requests.Should().ContainSingle()
+        _apiServer.Requests.Select(r => (r.Method, r.FieldManager)).Should().ContainSingle()
             .Which.Should().Be(("PATCH", "server-side-apply"));
     }
 
@@ -71,7 +71,8 @@ public sealed class KubernetesClientFieldManagerTest : IDisposable
         await _client.GetAsync<V1ConfigMap>("my-config", "default", TestContext.Current.CancellationToken);
         await _client.DeleteAsync(ConfigMap(), TestContext.Current.CancellationToken);
 
-        _apiServer.Requests.Should().Equal(("GET", null), ("DELETE", null));
+        _apiServer.Requests.Select(r => (r.Method, r.FieldManager))
+            .Should().Equal(("GET", null), ("DELETE", null));
     }
 
     [Fact]
@@ -99,30 +100,4 @@ public sealed class KubernetesClientFieldManagerTest : IDisposable
         ApiVersion = V1ConfigMap.KubeApiVersion,
         Metadata = new() { Name = "my-config", NamespaceProperty = "default" },
     };
-
-    /// <summary>
-    /// Answers every request with a config map and records the method and the <c>fieldManager</c> it carried.
-    /// </summary>
-    private sealed class StubApiServer : DelegatingHandler
-    {
-        public List<(string Method, string? FieldManager)> Requests { get; } = [];
-
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            Requests.Add((
-                request.Method.Method,
-                HttpUtility.ParseQueryString(request.RequestUri!.Query)["fieldManager"]));
-
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                RequestMessage = request,
-                Content = new StringContent(
-                    KubernetesJson.Serialize(ConfigMap()),
-                    Encoding.UTF8,
-                    "application/json"),
-            });
-        }
-    }
 }

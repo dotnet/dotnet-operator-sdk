@@ -82,6 +82,9 @@ entity = await client.UpdateStatusAsync(entity, cancellationToken); // use the r
 [leader election](./configuration/leader-election)) writing the same object concurrently. Treat
 them as retryable: re-fetch, re-apply, or simply let the failed reconciliation retry.
 
+For the status, `PatchStatusAsync` avoids the conflict: it patches only the changed status fields and
+carries no `resourceVersion`. See [Writing the Status](./building-blocks/controllers#writing-the-status).
+
 ## Entity is stuck in "Terminating"
 
 **Symptom:** A resource has a `DeletionTimestamp` but is never deleted.

@@ -405,3 +405,9 @@ builder.AddKubeOps("operator", "../MyOperator")
     .RunWithKubernetes(k8s)
     .PublishAsKubernetesOperator(k8s);
 ```
+
+### New in v15 (non-breaking)
+
+- **Status patch**: `PatchStatusAsync(entity, change)` and `PatchStatusAsync(from, to)` write only the changed
+  status fields as a JSON merge patch, without a `409 Conflict` on an outdated `resourceVersion`. See
+  [Writing the Status](./building-blocks/controllers#writing-the-status).

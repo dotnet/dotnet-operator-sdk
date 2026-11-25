@@ -7,6 +7,7 @@ using k8s.Models;
 
 using KubeOps.Abstractions.Entities;
 using KubeOps.KubernetesClient.Selectors;
+using KubeOps.Transpiler;
 
 namespace KubeOps.KubernetesClient;
 
@@ -249,14 +250,105 @@ public interface IKubernetesClient : IDisposable
     }
 
     /// <summary>
-    /// Update the status object of a given entity on the Kubernetes API.
+    /// Update (replace) the status object of a given entity on the Kubernetes API.
     /// </summary>
+    /// <remarks>
+    /// The replace carries the <c>resourceVersion</c> of <paramref name="entity"/> and fails with
+    /// <c>409 Conflict</c> if the entity changed in the meantime. To write only the changed status fields
+    /// without that check, use <see cref="PatchStatusAsync{TEntity}(TEntity,Action{TEntity},CancellationToken)"/>.
+    /// </remarks>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity that contains a status object.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
     /// <returns>The entity with the updated status.</returns>
     Task<TEntity> UpdateStatusAsync<TEntity>(TEntity entity, CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>;
+
+    /// <summary>
+    /// Apply <paramref name="change"/> to <paramref name="entity"/> and patch the status fields it changed on the
+    /// Kubernetes API.
+    /// </summary>
+    /// <remarks>
+    /// The changes are sent as a JSON merge patch to the <c>/status</c> subresource. It carries only the changed
+    /// fields (removed fields as <c>null</c>, changed arrays as a whole) and no <c>resourceVersion</c>, so it does
+    /// not fail with <c>409 Conflict</c> if the entity changed in the meantime. A changed array replaces the
+    /// array on the API, including entries that others added.
+    /// </remarks>
+    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
+    /// <param name="entity">The entity, e.g. as it was passed to the reconciler. It is changed in place.</param>
+    /// <param name="change">The change of the status, e.g. <c>e =&gt; e.Status.Phase = "Ready"</c>.</param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>The patched entity, or <paramref name="entity"/> if the status did not change.</returns>
+    Task<TEntity> PatchStatusAsync<TEntity>(
+        TEntity entity,
+        Action<TEntity> change,
+        CancellationToken cancellationToken = default)
+        where TEntity : IKubernetesObject<V1ObjectMeta>
+    {
+        var original = entity.ToNode();
+        change(entity);
+        var patch = StatusPatch.CreateMergePatch(original, entity.ToNode());
+        return PatchStatusIfChangedAsync(patch, entity, cancellationToken);
+    }
+
+    /// <summary>
+    /// Patch the status of a given entity on the Kubernetes API with the changes between the status of
+    /// <paramref name="from"/> and the status of <paramref name="to"/>.
+    /// </summary>
+    /// <remarks>
+    /// Sent like <see cref="PatchStatusAsync{TEntity}(TEntity,Action{TEntity},CancellationToken)"/>.
+    /// </remarks>
+    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
+    /// <param name="from">The entity with the original status.</param>
+    /// <param name="to">The entity with the desired status.</param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>The patched entity, or <paramref name="from"/> if the status did not change.</returns>
+    Task<TEntity> PatchStatusAsync<TEntity>(
+        TEntity from,
+        TEntity to,
+        CancellationToken cancellationToken = default)
+        where TEntity : IKubernetesObject<V1ObjectMeta> =>
+        PatchStatusIfChangedAsync(StatusPatch.CreateMergePatch(from.ToNode(), to.ToNode()), from, cancellationToken);
+
+    /// <summary>
+    /// Patch the status of a given entity on the Kubernetes API by name and namespace using a
+    /// <see cref="V1Patch"/> object, sent to the <c>/status</c> subresource.
+    /// </summary>
+    /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
+    /// <param name="patch">
+    /// The <see cref="V1Patch"/> representing the changes to apply, e.g. a JSON merge patch or a server-side apply
+    /// patch. Only changes to the status are applied.
+    /// </param>
+    /// <param name="name">The name of the entity to patch.</param>
+    /// <param name="namespace">The namespace of the entity to patch (if applicable).</param>
+    /// <param name="fieldManager">
+    /// The field manager to write with. Required for a server-side apply patch outside an operator.
+    /// </param>
+    /// <param name="force">
+    /// Force a server-side apply patch, taking ownership of conflicting fields. Only valid for server-side apply.
+    /// </param>
+    /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    /// <returns>The patched entity.</returns>
+    Task<TEntity> PatchStatusAsync<TEntity>(
+        V1Patch patch,
+        string name,
+        string? @namespace = null,
+        string? fieldManager = null,
+        bool? force = null,
+        string? dryRun = null,
+        CancellationToken cancellationToken = default)
+        where TEntity : IKubernetesObject<V1ObjectMeta> =>
+        StatusPatch.SendAsync<TEntity>(
+            ApiClient,
+            Entities.ToEntityMetadata<TEntity>().Metadata,
+            patch,
+            name,
+            @namespace,
+            fieldManager,
+            force,
+            dryRun,
+            cancellationToken);
 
     /// <summary>
     /// Patch a given entity on the Kubernetes API by calculating the diff between the current entity and the provided entity.
@@ -559,4 +651,17 @@ public interface IKubernetesClient : IDisposable
         bool? allowWatchBookmarks = null,
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>;
+
+    private Task<TEntity> PatchStatusIfChangedAsync<TEntity>(
+        V1Patch? patch,
+        TEntity unchanged,
+        CancellationToken cancellationToken)
+        where TEntity : IKubernetesObject<V1ObjectMeta> =>
+        patch is null
+            ? Task.FromResult(unchanged)
+            : PatchStatusAsync<TEntity>(
+                patch,
+                unchanged.Name(),
+                unchanged.Namespace(),
+                cancellationToken: cancellationToken);
 }

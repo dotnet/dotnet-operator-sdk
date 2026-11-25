@@ -152,14 +152,16 @@ if (existingPod != null)
 ### Update Resource Status
 
 ```csharp
-// Update the status of a custom resource
+// Patch only the changed status fields, without a 409 Conflict on an outdated resourceVersion
 var existingCrd = await client.GetAsync<V1MyCrd>("my-instance", "default");
 if (existingCrd != null)
 {
-    existingCrd.Status.Message = "Processing completed";
-    var updatedCrd = await client.UpdateStatusAsync(existingCrd);
+    var patchedCrd = await client.PatchStatusAsync(existingCrd, crd => crd.Status.Message = "Processing completed");
 }
 ```
+
+`UpdateStatusAsync` replaces the whole status instead and fails with `409 Conflict` on an outdated
+`resourceVersion`. See [Writing the Status](https://dotnet.github.io/dotnet-operator-sdk/docs/operator/building-blocks/controllers#writing-the-status).
 
 ### Watch Resources
 
