@@ -233,4 +233,19 @@ public sealed class JsonPatchExtensionsTest
 
         diff.Operations.Should().HaveCount(0);
     }
+
+    [Fact]
+    public void DefaultOperationsFilter_Keeps_Paths_That_Only_Start_Like_An_Ignored_Path()
+    {
+        var operations = new[]
+        {
+            PatchOperation.Replace("/status/phase", null),
+            PatchOperation.Replace("/statusPolicy", null),
+            PatchOperation.Replace("/kind", null),
+            PatchOperation.Replace("/kindOf", null),
+        };
+
+        JsonPatchExtensions.DefaultOperationsFilter(operations).Select(o => o.Path)
+            .Should().Equal("/statusPolicy", "/kindOf");
+    }
 }

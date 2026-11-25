@@ -20,6 +20,8 @@ public static class JsonPatchExtensions
     /// Ignored properties that should not be included (by default) in the JSON Patch diff.
     /// This mainly concerns metadata properties that are not relevant for the diff,
     /// like the UID of the object and resource version.
+    /// An entry matches its own path and the paths below it, e.g. <c>/status</c> matches <c>/status/phase</c>
+    /// but not <c>/statusPolicy</c>.
     /// </para>
     /// <para>Currently, contains the following properties:</para>
     /// <list type="bullet">
@@ -31,6 +33,9 @@ public static class JsonPatchExtensions
     /// <item><term>/metadata/resourceVersion</term></item>
     /// <item><term>/metadata/selfLink</term></item>
     /// <item><term>/metadata/uid</term></item>
+    /// <item><term>/status</term></item>
+    /// <item><term>/kind</term></item>
+    /// <item><term>/apiVersion</term></item>
     /// </list>
     /// </summary>
     public static readonly string[] DefaultIgnoredProperties =
@@ -49,7 +54,8 @@ public static class JsonPatchExtensions
     ];
 
     /// <summary>
-    /// Default operations filter that filters out operations that are listed in <see cref="DefaultIgnoredProperties"/>.
+    /// Default operations filter that filters out operations on the paths listed in <see cref="DefaultIgnoredProperties"/>
+    /// and below them, e.g. <c>/status/phase</c> but not <c>/statusPolicy</c>.
     /// This filters out most properties in the metadata section of the entity that are not relevant for diffing.
     /// Currently, this filters out the following properties (<see cref="DefaultIgnoredProperties"/>):
     /// <list type="bullet">
@@ -61,11 +67,14 @@ public static class JsonPatchExtensions
     /// <item><term>/metadata/resourceVersion</term></item>
     /// <item><term>/metadata/selfLink</term></item>
     /// <item><term>/metadata/uid</term></item>
+    /// <item><term>/status</term></item>
+    /// <item><term>/kind</term></item>
+    /// <item><term>/apiVersion</term></item>
     /// </list>
     /// </summary>
     public static readonly Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>> DefaultOperationsFilter =
         operations =>
-            operations.Where(o => !DefaultIgnoredProperties.Any(ignored => o.Path.StartsWith(ignored)))
+            operations.Where(o => !DefaultIgnoredProperties.Any(ignored => IsSameOrChildPath(o.Path, ignored)))
                 .ToList();
 
     /// <summary>
@@ -83,7 +92,10 @@ public static class JsonPatchExtensions
     /// <typeparam name="TEntity">The entity type.</typeparam>
     /// <param name="from">The source entity to compare from.</param>
     /// <param name="to">The target entity to compare to.</param>
-    /// <param name="operationsFilter">An optional filter action that filters the <see cref="PatchOperation"/>s that are contained in the <see cref="JsonPatch"/>.</param>
+    /// <param name="operationsFilter">
+    /// An optional filter of the <see cref="PatchOperation"/>s that are contained in the <see cref="JsonPatch"/>.
+    /// It replaces <see cref="DefaultOperationsFilter"/>; call that from your filter to keep its behaviour.
+    /// </param>
     /// <returns>A <see cref="JsonNode"/> representing the JSON Patch diff between the two entities.</returns>
     /// <exception cref="InvalidOperationException">Thrown if the diff could not be created.</exception>
     public static JsonPatch CreateJsonPatch<TEntity>(
@@ -232,6 +244,10 @@ public static class JsonPatchExtensions
             }
         }
     }
+
+    private static bool IsSameOrChildPath(string path, string parent) =>
+        path.StartsWith(parent, StringComparison.Ordinal)
+        && (path.Length == parent.Length || path[parent.Length] == '/');
 
     private static string CombinePath(string path, string key) =>
         $"{path}/{key.Replace("~", "~0").Replace("/", "~1")}";

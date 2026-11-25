@@ -262,11 +262,14 @@ public interface IKubernetesClient : IDisposable
     /// Patch a given entity on the Kubernetes API by calculating the diff between the current entity and the provided entity.
     /// This method fetches the current entity from the API, computes the patch, and applies it.
     /// The patch does return the same object if there were no changes detected.
-    /// If no operationsFilter is provided, the default filter (<see cref="JsonPatchExtensions.DefaultOperationsFilter"/> is applied.
     /// </summary>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity containing the desired updates.</param>
-    /// <param name="operationsFilter">The filter that is applied to the <see cref="PatchOperation"/>s in the <see cref="JsonPatch"/> to determine if changes are present.</param>
+    /// <param name="operationsFilter">
+    /// An additional filter of the <see cref="PatchOperation"/>s after <see cref="JsonPatchExtensions.DefaultOperationsFilter"/>.
+    /// The remaining operations are sent; without any, nothing is sent. Keep or drop all operations below one array,
+    /// since the operations on its elements depend on each other.
+    /// </param>
     /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
     /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
@@ -302,13 +305,17 @@ public interface IKubernetesClient : IDisposable
     /// <summary>
     /// Patch a given entity on the Kubernetes API by calculating the diff between two provided entities.
     /// Returns the patched entity if changes were detected, otherwise returns the original entity.
-    /// Detection of changes is done by creating a <see cref="JsonPatch"/> object
-    /// and then applying the operationsFilter. Defaults to the <see cref="JsonPatchExtensions.DefaultOperationsFilter"/>.
+    /// The patch contains the operations that remain after <see cref="JsonPatchExtensions.DefaultOperationsFilter"/>
+    /// and then the operationsFilter, if any.
     /// </summary>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="from">The current/original entity.</param>
     /// <param name="to">The updated entity with desired changes.</param>
-    /// <param name="operationsFilter">The filter that is applied to the <see cref="PatchOperation"/>s in the <see cref="JsonPatch"/> to determine if changes are present.</param>
+    /// <param name="operationsFilter">
+    /// An additional filter of the <see cref="PatchOperation"/>s after <see cref="JsonPatchExtensions.DefaultOperationsFilter"/>.
+    /// The remaining operations are sent; without any, nothing is sent. Keep or drop all operations below one array,
+    /// since the operations on its elements depend on each other.
+    /// </param>
     /// <param name="fieldManager">The field manager name for Server-Side Apply. When specified, enables field tracking for conflict resolution.</param>
     /// <param name="force">Force apply the patch, taking ownership of conflicting fields. Only valid when fieldManager is specified.</param>
     /// <param name="dryRun">When set (e.g., "All"), the patch is validated but not persisted to storage.</param>
@@ -324,10 +331,14 @@ public interface IKubernetesClient : IDisposable
         CancellationToken cancellationToken = default)
         where TEntity : IKubernetesObject<V1ObjectMeta>
     {
-        var patch = from.CreateJsonPatch(to, operationsFilter);
+        var patch = from.CreateJsonPatch(
+            to,
+            operationsFilter is null
+                ? null
+                : operations => operationsFilter(JsonPatchExtensions.DefaultOperationsFilter(operations)));
         return patch.Operations.Count == 0
             ? Task.FromResult(from)
-            : PatchAsync(from, from.CreateJsonPatch(to), fieldManager, force, dryRun, cancellationToken);
+            : PatchAsync(from, patch, fieldManager, force, dryRun, cancellationToken);
     }
 
     /// <summary>
