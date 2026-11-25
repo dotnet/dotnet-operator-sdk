@@ -12,7 +12,7 @@ namespace KubeOps.Cli.Transpilation;
 internal sealed partial class TargetFrameworkComparer : IComparer<string>
 {
     [GeneratedRegex(
-        "[(]?(?<tfm>(?<n>(netcoreapp|net|netstandard){1})(?<major>[0-9]+)[.](?<minor>[0-9]+))[)]?",
+        "[(]?(?<tfm>(?<platform>(netcoreapp|net|netstandard){1})(?<major>[0-9]+)[.](?<minor>[0-9]+))[)]?",
         RegexOptions.Compiled)]
     public static partial Regex TfmRegex();
 
@@ -28,8 +28,8 @@ internal sealed partial class TargetFrameworkComparer : IComparer<string>
             case ({ Success: false }, _) or (_, { Success: false }):
                 return StringComparer.CurrentCulture.Compare(x, y);
             case ({ } matchX, { } matchY):
-                var platformX = matchX.Groups["name"].Value;
-                var platformY = matchY.Groups["name"].Value;
+                var platformX = matchX.Groups["platform"].Value;
+                var platformY = matchY.Groups["platform"].Value;
                 if (platformX != platformY)
                 {
                     return (platformX, platformY) switch
