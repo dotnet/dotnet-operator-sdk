@@ -55,8 +55,11 @@ leader elector and all internal services write through that instance, so the fie
 Requests to the connect subresources `proxy`, `exec`, `attach` and `portforward` stay unchanged: they do not
 write an object, and the API server forwards the query of a proxy request to the backend.
 
-A request that already carries a `fieldManager` keeps it. A server-side apply, which requires an explicit
-field manager, still writes under the name you pass to `PatchAsync`:
+`UpdateStatusAsync` writes the status with server-side apply, which requires a field manager; it uses the
+field manager of the client.
+
+A request that already carries a `fieldManager` keeps it. A server-side apply through `PatchAsync` still
+writes under the name you pass to it:
 
 ```csharp
 await client.PatchAsync(

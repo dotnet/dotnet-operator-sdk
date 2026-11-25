@@ -368,7 +368,8 @@ thread on the API call. Use the `...Async` variants, which also accept a `Cancel
 v15 moves `KubeOps.Aspire.Hosting` to Aspire 17. Aspire 17 deprecates `AddProject<TProject>` and the
 `Aspire.AppHost.Sdk` in favour of path-based projects, so `AddKubeOps` now takes the path of the operator
 project. `KubeOps.KubernetesClient` drops the `force` parameter of the JSON patch overloads of `PatchAsync`,
-where the API server never accepted it. The other packages have no breaking changes.
+where the API server never accepted it, and `UpdateStatusAsync` writes the status with server-side apply. The
+other packages have no breaking changes.
 
 ### `KubeOps.Aspire.Hosting` requires Aspire 17
 
@@ -417,3 +418,24 @@ builder.AddKubeOps("operator", "../MyOperator")
 **Migration:** remove `force` from these calls. To take over fields of other field managers, send a server-side
 apply patch with `PatchAsync<TEntity>(new V1Patch(..., V1Patch.PatchType.ApplyPatch), name, namespace,
 fieldManager, force: true)`.
+
+### `UpdateStatusAsync` writes the status with server-side apply
+
+`UpdateStatusAsync` replaced the status with a `PUT` that carried the `resourceVersion` and failed with
+`409 Conflict` whenever the resource had changed, e.g. its spec. It now sends the status as a server-side apply
+to the `/status` subresource, without the `resourceVersion` and with `force`, as recommended for controllers:
+
+- It no longer fails with `409 Conflict` on an outdated entity, and it keeps the spec and the status fields it
+  does not send.
+- The status fields belong to the field manager in `managedFields` (operation `Apply`). A field that an earlier
+  `UpdateStatusAsync` sent and the entity no longer carries is removed. Fields written before the upgrade stay
+  with the `Update` entry of the `PUT` and are only taken over when they are sent again; leaving one out does not
+  remove it from existing resources.
+- Server-side apply needs a field manager. An operator sets it (see [Field Manager](./configuration/field-manager)).
+
+**Migration:** nothing within an operator that uses the default `IKubernetes`. An own registered `IKubernetes`
+needs the `FieldManagerHandler` (see [Field Manager](./configuration/field-manager)). A `KubernetesClient`
+outside an operator that writes the status needs a field manager: `new KubernetesClient(config, "my-tool")`. Without one, the API server rejects the write with
+`fieldManager: Required value`. If you relied on `UpdateStatusAsync` failing on an outdated entity, replace the
+status through `client.ApiClient.CustomObjects.ReplaceNamespacedCustomObjectStatusAsync`, which still checks the
+`resourceVersion`.

@@ -4,6 +4,8 @@
 
 using FluentAssertions;
 
+using k8s;
+
 using KubeOps.Abstractions.Reconciliation;
 using KubeOps.Abstractions.Reconciliation.Controller;
 using KubeOps.Abstractions.Reconciliation.Queue;
@@ -21,7 +23,8 @@ namespace KubeOps.Operator.Test.Controller;
 public sealed class ReplaceEntityRequeueIntegrationTest : IntegrationTestBase
 {
     private readonly InvocationCounter<V1OperatorIntegrationTestEntity> _mock = new();
-    private readonly IKubernetesClient _client = new KubernetesClient.KubernetesClient();
+    private readonly IKubernetesClient _client =
+        new KubernetesClient.KubernetesClient(KubernetesClientConfiguration.BuildDefaultConfig(), "kubeops-test");
     private readonly TestNamespaceProvider _ns = new();
 
     [Fact]

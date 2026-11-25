@@ -47,7 +47,7 @@ public sealed class KubernetesClientFieldManagerTest : IDisposable
         _apiServer.Requests.Should().Equal(
             ("POST", "my-operator"),
             ("PUT", "my-operator"),
-            ("PUT", "my-operator"),
+            ("PATCH", "my-operator"),
             ("PATCH", "my-operator"));
     }
 

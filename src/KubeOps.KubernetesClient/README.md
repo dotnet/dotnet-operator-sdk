@@ -161,6 +161,11 @@ if (existingCrd != null)
 }
 ```
 
+`UpdateStatusAsync` applies the status with server-side apply to the `/status` subresource, without the
+`resourceVersion`, so it does not fail with `409 Conflict` when the resource changed in the meantime. Server-side
+apply needs a field manager: create the client with one (see [Field Manager](#field-manager)); within an
+operator it is set automatically.
+
 ### Watch Resources
 
 ```csharp
