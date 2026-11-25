@@ -459,6 +459,17 @@ list response.
 **Migration:** set the namespace of a resource before calling `WithOwnerReference`. Use `WithControllerReference`
 for the resources a controller manages, so that foreground deletion waits for them.
 
+### Kubernetes client checks the API server hostname with an own CA
+
+KubeOps uses `KubernetesClient` 21.0.41. With a CA from the kubeconfig (`certificate-authority` or
+`certificate-authority-data`), the client now also rejects the API server certificate if it does not match the
+server address; before, a valid chain was enough
+([kubernetes-client/csharp#1964](https://github.com/kubernetes-client/csharp/pull/1964)).
+
+**Migration:** nothing for operators in the cluster and for kubeconfigs whose `server` matches the certificate.
+If a connection now fails with a TLS error, point `server` at a name or address in the API server certificate,
+or set `tls-server-name` of the cluster in the kubeconfig to such a name.
+
 ### New in v15 (non-breaking)
 
 - **User-Agent with the operator name**: the operator identifies itself to the API server as
