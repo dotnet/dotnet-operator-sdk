@@ -327,7 +327,7 @@ public interface IKubernetesClient : IDisposable
         var patch = from.CreateJsonPatch(to, operationsFilter);
         return patch.Operations.Count == 0
             ? Task.FromResult(from)
-            : PatchAsync(from, from.CreateJsonPatch(to), fieldManager, force, dryRun, cancellationToken);
+            : PatchAsync(from, patch, fieldManager, force, dryRun, cancellationToken);
     }
 
     /// <summary>
