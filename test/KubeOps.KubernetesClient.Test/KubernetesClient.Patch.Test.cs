@@ -52,6 +52,21 @@ public sealed class KubernetesClientPatchTest : IDisposable
     }
 
     [Fact]
+    public async Task Patch_From_To_With_A_Filter_Does_Not_Send_The_Operations_The_Default_Filter_Removes()
+    {
+        var to = Changed();
+        to.Metadata.ResourceVersion = "2";
+
+        await _client.PatchAsync(
+            ConfigMap(),
+            to,
+            operations => operations,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        _apiServer.Requests.Should().ContainSingle().Which.Body.Should().NotContain("resourceVersion");
+    }
+
+    [Fact]
     public async Task Patch_From_To_Without_Operations_After_The_Filter_Sends_No_Request()
     {
         var from = ConfigMap();

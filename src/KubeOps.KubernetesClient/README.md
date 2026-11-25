@@ -197,6 +197,10 @@ if (existingConfig != null)
 }
 ```
 
+The diff leaves out volatile fields such as `metadata.resourceVersion`, `metadata.uid`, `metadata.managedFields`
+and `status` (see `JsonPatchExtensions.DefaultOperationsFilter`). An `operationsFilter` can remove further
+operations from the patch, e.g. to patch only `/spec`; it cannot add the left-out ones.
+
 PatchAsync also supports Server-Side Apply parameters (fieldManager, force, dryRun) for field-level ownership tracking:
 
 ```csharp

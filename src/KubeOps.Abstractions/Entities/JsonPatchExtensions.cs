@@ -49,7 +49,8 @@ public static class JsonPatchExtensions
     ];
 
     /// <summary>
-    /// Default operations filter that filters out operations that are listed in <see cref="DefaultIgnoredProperties"/>.
+    /// Default operations filter that filters out operations on the paths listed in <see cref="DefaultIgnoredProperties"/>
+    /// and below them, e.g. <c>/status/phase</c> but not <c>/statusPolicy</c>.
     /// This filters out most properties in the metadata section of the entity that are not relevant for diffing.
     /// Currently, this filters out the following properties (<see cref="DefaultIgnoredProperties"/>):
     /// <list type="bullet">
@@ -65,7 +66,7 @@ public static class JsonPatchExtensions
     /// </summary>
     public static readonly Func<IReadOnlyList<PatchOperation>, IReadOnlyList<PatchOperation>> DefaultOperationsFilter =
         operations =>
-            operations.Where(o => !DefaultIgnoredProperties.Any(ignored => o.Path.StartsWith(ignored)))
+            operations.Where(o => !DefaultIgnoredProperties.Any(ignored => IsSameOrChildPath(o.Path, ignored)))
                 .ToList();
 
     /// <summary>
@@ -232,6 +233,10 @@ public static class JsonPatchExtensions
             }
         }
     }
+
+    private static bool IsSameOrChildPath(string path, string parent) =>
+        path.StartsWith(parent, StringComparison.Ordinal)
+        && (path.Length == parent.Length || path[parent.Length] == '/');
 
     private static string CombinePath(string path, string key) =>
         $"{path}/{key.Replace("~", "~0").Replace("/", "~1")}";
