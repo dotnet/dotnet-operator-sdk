@@ -68,15 +68,18 @@ The most common causes, in order of likelihood:
 
 ## HTTP 409 Conflict on updates
 
-**Symptom:** `UpdateAsync`/`UpdateStatusAsync` fails with `Conflict`.
+**Symptom:** `UpdateAsync` fails with `Conflict`.
 
 Every mutating call returns the entity with a **new `resourceVersion`**. Reusing a stale reference
 for a subsequent call fails with 409. Always continue working with the entity instance returned by
 the client:
 
 ```csharp
-entity = await client.UpdateStatusAsync(entity, cancellationToken); // use the returned entity
+entity = await client.UpdateAsync(entity, cancellationToken); // use the returned entity
 ```
+
+`UpdateStatusAsync` does not conflict: it applies the status with server-side apply and without the
+`resourceVersion`.
 
 409s can also come from another actor (or a second operator instance without
 [leader election](./configuration/leader-election)) writing the same object concurrently. Treat

@@ -251,6 +251,13 @@ public interface IKubernetesClient : IDisposable
     /// <summary>
     /// Update the status object of a given entity on the Kubernetes API.
     /// </summary>
+    /// <remarks>
+    /// The status is sent as a server-side apply to the <c>/status</c> subresource, without the
+    /// <c>resourceVersion</c> and with <c>force</c>. It does not fail with <c>409 Conflict</c> if the entity changed
+    /// in the meantime, and status fields that an earlier update set but <paramref name="entity"/> no longer
+    /// carries are removed. The client needs a field manager, which an operator sets; outside an operator, create
+    /// the client with one.
+    /// </remarks>
     /// <typeparam name="TEntity">The type of the Kubernetes entity.</typeparam>
     /// <param name="entity">The entity that contains a status object.</param>
     /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>

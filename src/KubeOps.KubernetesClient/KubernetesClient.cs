@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
 
 using k8s;
 using k8s.Autorest;
@@ -228,22 +229,42 @@ public class KubernetesClient : IKubernetesClient
         ThrowIfDisposed();
 
         var metadata = GetMetadata<TEntity>();
+
+        // A server-side apply of the status only: without resourceVersion it does not conflict with other writes,
+        // and force takes over the status fields from other managers, as recommended for controllers.
+        var objectMeta = new JsonObject { ["name"] = entity.Name() };
+        if (entity.Namespace() is { } @namespace)
+        {
+            objectMeta["namespace"] = @namespace;
+        }
+
+        var status = new JsonObject
+        {
+            ["apiVersion"] = metadata.GroupWithVersion,
+            ["kind"] = metadata.Kind,
+            ["metadata"] = objectMeta,
+            ["status"] = entity.ToNode()?["status"]?.DeepClone(),
+        };
+        var patch = new V1Patch(status.ToJsonString(), V1Patch.PatchType.ApplyPatch);
+
         return entity.Namespace() switch
         {
-            { } ns => ApiClient.CustomObjects.ReplaceNamespacedCustomObjectStatusAsync<TEntity>(
-                entity,
+            { } ns => ApiClient.CustomObjects.PatchNamespacedCustomObjectStatusAsync<TEntity>(
+                patch,
                 metadata.Group ?? string.Empty,
                 metadata.Version,
                 ns,
                 metadata.PluralName,
                 entity.Name(),
+                force: true,
                 cancellationToken: cancellationToken),
-            _ => ApiClient.CustomObjects.ReplaceClusterCustomObjectStatusAsync<TEntity>(
-                entity,
+            _ => ApiClient.CustomObjects.PatchClusterCustomObjectStatusAsync<TEntity>(
+                patch,
                 metadata.Group ?? string.Empty,
                 metadata.Version,
                 metadata.PluralName,
                 entity.Name(),
+                force: true,
                 cancellationToken: cancellationToken),
         };
     }
