@@ -35,6 +35,8 @@ public static class TestArea
 
     public const string Crds = "Crds";
 
+    public const string Entities = "Entities";
+
     public const string Events = "Events";
 
     public const string Finalizers = "Finalizers";

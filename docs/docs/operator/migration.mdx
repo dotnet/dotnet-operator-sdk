@@ -368,8 +368,9 @@ thread on the API call. Use the `...Async` variants, which also accept a `Cancel
 v15 moves `KubeOps.Aspire.Hosting` to Aspire 17. Aspire 17 deprecates `AddProject<TProject>` and the
 `Aspire.AppHost.Sdk` in favour of path-based projects, so `AddKubeOps` now takes the path of the operator
 project. `KubeOps.KubernetesClient` drops the `force` parameter of the JSON patch overloads of `PatchAsync`,
-where the API server never accepted it, and `UpdateStatusAsync` writes the status with server-side apply. The
-other packages have no breaking changes.
+where the API server never accepted it, and `UpdateStatusAsync` writes the status with server-side apply. In
+`KubeOps.Abstractions`, `WithOwnerReference` no longer adds an owner twice and rejects owners in another
+namespace. The other packages have no breaking changes.
 
 ### `KubeOps.Aspire.Hosting` requires Aspire 17
 
@@ -439,3 +440,20 @@ outside an operator that writes the status needs a field manager: `new Kubernete
 `fieldManager: Required value`. If you relied on `UpdateStatusAsync` failing on an outdated entity, replace the
 status through `client.ApiClient.CustomObjects.ReplaceNamespacedCustomObjectStatusAsync`, which still checks the
 `resourceVersion`.
+
+### `WithOwnerReference` replaces the reference to the same owner and checks the namespace
+
+`WithOwnerReference` added a new owner reference on every call, also for an owner that was already referenced.
+It now replaces the reference to the same owner (same API group, kind and name). It also throws an
+`ArgumentException` for a namespaced owner if the resource is cluster-scoped or in another namespace. The garbage
+collector treats such an owner as missing and deletes the resource. An owner without a name or `uid` causes an
+`ArgumentException` as well, instead of a request that the API server rejects. `MakeOwnerReference` and
+`MakeObjectReference` take a missing `apiVersion` or `kind` from the type of the object, e.g. for the items of a
+list response.
+
+`WithControllerReference` and `MakeControllerReference` are new: they set the controller reference with
+`controller: true` and `blockOwnerDeletion: true`. See
+[Owner References](./building-blocks/controllers#owner-references).
+
+**Migration:** set the namespace of a resource before calling `WithOwnerReference`. Use `WithControllerReference`
+for the resources a controller manages, so that foreground deletion waits for them.
