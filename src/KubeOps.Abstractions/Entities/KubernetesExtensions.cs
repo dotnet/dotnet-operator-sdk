@@ -72,7 +72,8 @@ public static class KubernetesExtensions
     /// </summary>
     /// <remarks>
     /// A reference to the same owner (same API group, kind and name; the version is ignored) is replaced instead of
-    /// added again. This also replaces a controller reference to the owner with a plain owner reference.
+    /// added again; its <c>controller</c> and <c>blockOwnerDeletion</c> stay as they are, so a controller reference
+    /// to the owner remains a controller reference.
     /// </remarks>
     /// <param name="resource">The resource that is owned by another resource.</param>
     /// <param name="owner">The owner to add.</param>
@@ -212,6 +213,9 @@ public static class KubernetesExtensions
         {
             if (RefersToSameObject(references[i], reference))
             {
+                // Keep the flags of the existing reference, so that ensuring an owner never drops the controller.
+                reference.Controller ??= references[i].Controller;
+                reference.BlockOwnerDeletion ??= references[i].BlockOwnerDeletion;
                 references[i] = reference;
                 return;
             }

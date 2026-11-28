@@ -125,15 +125,14 @@ public sealed class KubernetesExtensionsOwnerReferencesTest
     }
 
     [Fact]
-    public void WithOwnerReference_Replaces_A_Controller_Reference_To_The_Same_Owner()
+    public void WithOwnerReference_Keeps_A_Controller_Reference_To_The_Same_Owner()
     {
         var resource = ConfigMap()
-            .WithControllerReference(Deployment("owner"))
-            .WithOwnerReference(Deployment("owner"));
+            .WithControllerReference(Deployment("owner", uid: "old"))
+            .WithOwnerReference(Deployment("owner", uid: "new"));
 
         resource.OwnerReferences().Should().ContainSingle()
-            .Which.Controller.Should().BeNull();
-        resource.GetController().Should().BeNull();
+            .Which.Should().BeEquivalentTo(new { Uid = "new", Controller = true, BlockOwnerDeletion = true });
     }
 
     [Fact]

@@ -444,7 +444,8 @@ status through `client.ApiClient.CustomObjects.ReplaceNamespacedCustomObjectStat
 ### `WithOwnerReference` replaces the reference to the same owner and checks the namespace
 
 `WithOwnerReference` added a new owner reference on every call, also for an owner that was already referenced.
-It now replaces the reference to the same owner (same API group, kind and name). It also throws an
+It now replaces the reference to the same owner (same API group, kind and name) and keeps its `controller` and
+`blockOwnerDeletion`. It also throws an
 `ArgumentException` for a namespaced owner if the resource is cluster-scoped or in another namespace. The garbage
 collector treats such an owner as missing and deletes the resource. An owner without a name or `uid` causes an
 `ArgumentException` as well, instead of a request that the API server rejects. `MakeOwnerReference` and

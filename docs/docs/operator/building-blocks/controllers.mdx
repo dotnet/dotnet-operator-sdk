@@ -441,8 +441,9 @@ public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
 - **One controller.** A resource has at most one controller reference. `WithControllerReference` throws an
   `InvalidOperationException` if another owner is already the controller.
 - **No duplicates.** A reference to the same owner (same API group, kind and name; the version is ignored) is
-  replaced instead of added again. `WithOwnerReference` therefore also turns a controller reference to that
-  owner into a plain owner reference.
+  replaced instead of added again, e.g. with the new `uid` of a recreated owner. `controller` and
+  `blockOwnerDeletion` of the existing reference stay as they are, so `WithOwnerReference` keeps a controller
+  reference to that owner.
 - **Existing owner.** The owner needs a name and a `uid`, so it must have been created or read from the API
   server. Both methods throw an `ArgumentException` otherwise. If the owner carries no `apiVersion` or `kind`,
   as the items of a list response, they are taken from its type.
