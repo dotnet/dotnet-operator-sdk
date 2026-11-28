@@ -121,7 +121,7 @@ public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
                     Replicas = entity.Spec.Replicas,
                     // ... other deployment configuration
                 }
-            },
+            }.WithControllerReference(entity), // deleted together with the entity
             cancellationToken);
     }
 
@@ -148,7 +148,8 @@ This method is called when a resource is deleted, but should only be used for:
 If an object is deleted and recreated under the same name, `DeletedAsync` for the old object and
 `ReconcileAsync` for the new one are independent reconciliations and may run in any order or in
 parallel. Do not clean up resources in `DeletedAsync` by a name derived from the entity alone — the
-recreated object may already own them. Use owner references or [finalizers](./finalizer) instead.
+recreated object may already own them. Use [owner references](#owner-references) or
+[finalizers](./finalizer) instead.
 
 ```csharp
 public async Task<ReconciliationResult<V1DemoEntity>> DeletedAsync(
@@ -398,6 +399,66 @@ public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
 - Keep reconciliation logic efficient
 - Avoid long-running operations in the reconciliation loop
 - Use background tasks for time-consuming operations
+
+## Owner References
+
+Give the resources that a controller creates for an entity, such as a `ConfigMap` or a `Deployment`, an
+owner reference to the entity. The Kubernetes garbage collector then deletes them together with the entity.
+`KubeOps.Abstractions` (namespace `KubeOps.Abstractions.Entities`) provides these extensions for every
+`IKubernetesObject<V1ObjectMeta>`:
+
+| Method                                               | Result                                                                    |
+| ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| `WithControllerReference(owner)`                     | Adds `owner` as controller (`controller`, `blockOwnerDeletion`: `true`)   |
+| `WithOwnerReference(owner)`                          | Adds `owner` as plain owner, without `controller` or `blockOwnerDeletion` |
+| `MakeControllerReference()` / `MakeOwnerReference()` | Create the `V1OwnerReference` of an owner without adding it               |
+
+The controller reference of a resource is returned by `GetController()` of the Kubernetes client
+(`k8s.Models.ModelExtensions`), or `null` if there is none.
+
+Use `WithControllerReference` for the resources a controller manages:
+
+```csharp
+public async Task<ReconciliationResult<V1DemoEntity>> ReconcileAsync(
+    V1DemoEntity entity,
+    CancellationToken cancellationToken)
+{
+    var configMap = new V1ConfigMap
+    {
+        Metadata = new()
+        {
+            Name = $"{entity.Name()}-config",
+            NamespaceProperty = entity.Namespace(),
+        },
+        Data = new Dictionary<string, string> { ["username"] = entity.Spec.Username },
+    }.WithControllerReference(entity);
+
+    await client.SaveAsync(configMap, cancellationToken);
+    return ReconciliationResult<V1DemoEntity>.Success(entity);
+}
+```
+
+- **One controller.** A resource has at most one controller reference. `WithControllerReference` throws an
+  `InvalidOperationException` if another owner is already the controller.
+- **No duplicates.** A reference to the same owner (same API group, kind and name; the version is ignored) is
+  replaced instead of added again, e.g. with the new `uid` of a recreated owner. `controller` and
+  `blockOwnerDeletion` of the existing reference stay as they are, so `WithOwnerReference` keeps a controller
+  reference to that owner.
+- **Existing owner.** The owner needs a name and a `uid`, so it must have been created or read from the API
+  server. Both methods throw an `ArgumentException` otherwise. If the owner carries no `apiVersion` or `kind`,
+  as the items of a list response, they are taken from its type.
+- **Same namespace.** An owner must be cluster-scoped or in the namespace of the resource, and a cluster-scoped
+  resource cannot have a namespaced owner. Both methods throw an `ArgumentException` otherwise, because the
+  garbage collector treats such an owner as missing and deletes the resource. Set the namespace of the resource
+  before you add the owner.
+- **Foreground deletion.** Because of `blockOwnerDeletion: true`, a foreground deletion of the entity
+  (`kubectl delete --cascade=foreground`) waits until the resource is gone. On clusters with the
+  `OwnerReferencesPermissionEnforcement` admission plugin, as on OpenShift, setting it requires `update`
+  on the `finalizers` subresource of the owner; the generated RBAC does not include it:
+
+  ```csharp
+  [GenericRbac(Groups = ["demo.kubeops.dev"], Resources = ["demoentities/finalizers"], Verbs = RbacVerb.Update)]
+  ```
 
 ## Filtering Watched Resources
 
