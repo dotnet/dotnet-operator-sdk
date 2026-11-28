@@ -104,6 +104,9 @@ using var client = new KubernetesClient(KubernetesClientConfiguration.BuildDefau
 
 The KubeOps CLI writes as `kubeops-cli`, e.g. when `kubeops install` creates or replaces CRDs.
 
+The operator and the CLI also identify themselves with their name in the `User-Agent` header; see
+[User-Agent](./user-agent).
+
 ## Upgrading
 
 Only the name in `managedFields` changes. Writes after the upgrade are recorded under the operator name

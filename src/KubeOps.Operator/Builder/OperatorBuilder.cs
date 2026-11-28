@@ -4,6 +4,7 @@
 
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Reflection;
 
 using k8s;
 using k8s.Models;
@@ -333,12 +334,23 @@ internal sealed class OperatorBuilder : IOperatorBuilder
         // functionalities led us choosing Singleton as the lifetime.
         //
         // The FieldManagerHandler sends every write with the configured field manager. A custom IKubernetes has to add
-        // the handler itself.
+        // the handler itself. The client identifies itself with the operator name as user agent, unless the
+        // configuration already carries an own one; this sets the user agent on the registered configuration.
         Services.TryAddSingleton(_ => KubernetesClientConfiguration.BuildDefaultConfig());
         Services.TryAddSingleton<IKubernetes>(services =>
-            new Kubernetes(
-                services.GetRequiredService<KubernetesClientConfiguration>(),
-                new FieldManagerHandler(Settings.FieldManager)));
+        {
+            var config = services.GetRequiredService<KubernetesClientConfiguration>();
+            if (!string.IsNullOrWhiteSpace(Settings.Name))
+            {
+                KubernetesUserAgent.Apply(
+                    config,
+                    Settings.Name,
+                    Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                        ?.InformationalVersion);
+            }
+
+            return new Kubernetes(config, new FieldManagerHandler(Settings.FieldManager));
+        });
         Services.TryAddSingleton<IKubernetesClient>(services => new KubernetesClient.KubernetesClient(
             services.GetRequiredService<KubernetesClientConfiguration>(),
             services.GetRequiredService<IKubernetes>()));

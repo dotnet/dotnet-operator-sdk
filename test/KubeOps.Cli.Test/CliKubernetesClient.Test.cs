@@ -25,4 +25,14 @@ public sealed class CliKubernetesClientTest
             .Should().BeOfType<FieldManagerHandler>()
             .Which.FieldManager.Should().Be("kubeops-cli");
     }
+
+    [Fact]
+    public void Create_Returns_A_Client_That_Identifies_Itself_As_KubeOps_Cli()
+    {
+        using var client = CliKubernetesClient.Create(
+            new KubernetesClientConfiguration { Host = "https://kubernetes.test" });
+
+        client.Should().BeOfType<Kubernetes>().Which.HttpClient.DefaultRequestHeaders.UserAgent.ToString()
+            .Should().StartWith("kubeops-cli/").And.EndWith(new KubernetesClientConfiguration().UserAgent);
+    }
 }

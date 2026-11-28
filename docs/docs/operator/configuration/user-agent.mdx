@@ -1,0 +1,54 @@
+---
+title: User-Agent
+description: How the operator identifies itself to the Kubernetes API server
+sidebar_position: 13
+---
+
+# User-Agent
+
+Every request to the Kubernetes API server carries a `User-Agent` header, which the API server records in its
+audit logs. The official C# client sends `kubernetes-csharp/<version>`, so every client built on it looks the
+same to the API server.
+
+The operator replaces that default with its name and the versions of the operator, KubeOps and the C# client:
+
+```text
+my-operator/1.2.0 kubeops/15.0.0 kubernetes-csharp/21.0.41+d05b908e20
+```
+
+- **`my-operator`** is the operator name set with `WithName`, independent of `WithFieldManager`. Characters
+  that are not allowed in an HTTP product token, e.g. spaces or `/`, are replaced by `-`.
+- **`1.2.0`** is the informational version of the entry assembly, i.e. of your operator, without build
+  metadata (`+<commit>`). It is left out when there is no entry assembly.
+- **`kubeops/…`** is the version of KubeOps, again without build metadata, followed by the unchanged default
+  of the C# client.
+
+Requests of the operator can so be told apart from those of other clients in audit logs. Field managers are not
+affected: the operator sends every write with its [field manager](./field-manager).
+
+## Setting an Own User-Agent
+
+The operator sets the user agent on the registered `KubernetesClientConfiguration` when it creates the default
+`IKubernetes`, but only if the configuration carries no own one: an empty user agent and the default of the C#
+client count as not set. Other clients that you create from the same configuration afterwards send the
+operator's user agent as well.
+
+To use an own user agent, register a configuration that carries it:
+
+```csharp
+var config = KubernetesClientConfiguration.BuildDefaultConfig();
+config.UserAgent = "my-operator/1.2.0 (team-a)";
+
+builder.Services.AddSingleton(config);
+builder.Services.AddKubernetesOperator(settings => settings.WithName("my-operator"));
+```
+
+An `IKubernetes` that you register yourself keeps the user agent of its configuration. Call
+`KubernetesUserAgent.Apply` before you create it to give it the operator's user agent:
+
+```csharp
+KubernetesUserAgent.Apply(config, "my-operator", "1.2.0");
+```
+
+The KubeOps CLI identifies itself as `kubeops-cli/<version>`. Tools outside an operator can use
+`KubernetesUserAgent` as well; see the [`KubeOps.KubernetesClient` package](../../packages/kubernetes-client).

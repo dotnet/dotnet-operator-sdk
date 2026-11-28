@@ -98,6 +98,23 @@ constructor uses the public `FieldManagerHandler`, which you can also pass to an
 `new Kubernetes(config, new FieldManagerHandler("my-tool"))`. Within an operator, the field manager is configured
 through `OperatorSettings.FieldManager` and defaults to the operator name.
 
+### User-Agent
+
+The official C# client identifies itself as `kubernetes-csharp/<version>`. `KubernetesUserAgent.Apply` sets a
+user agent with your own name, followed by the KubeOps and the C# client version, on the configuration unless it
+already carries an own one (`KubernetesUserAgent.Create` returns the same value as a string):
+
+```csharp
+var config = KubernetesClientConfiguration.BuildDefaultConfig();
+KubernetesUserAgent.Apply(config, "my-tool", "1.2.0");
+// User-Agent: my-tool/1.2.0 kubeops/<version> kubernetes-csharp/<version>
+
+IKubernetesClient client = new KubernetesClient(config, "my-tool");
+```
+
+Set the user agent before the client is created. Within an operator, the user agent is set automatically and
+starts with the operator name.
+
 ## Examples
 
 ### List Resources
